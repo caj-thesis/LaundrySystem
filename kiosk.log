@@ -1,0 +1,26 @@
+--- Kiosk Script Started: Fri 26 Dec 19:34:16 PST 2025 ---
+Setting display...
+server does not have extension for -dpms option
+Starting unclutter...
+Changing directory to /home/caj/laundry-kiosk...
+Starting React...
+Waiting 15 seconds...
+
+> laundry-kiosk@0.0.0 dev
+> vite
+
+
+  VITE v7.3.0  ready in 3177 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+Launching Chromium...
+[1783:1829:1226/193449.619873:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: QUOTA_EXCEEDED
+Warning: Vulkan shaderUniform*ArrayDynamicIndexing required.
+ - While initializing adapter (backend=BackendType::Vulkan)
+    at InitializeImpl (../../third_party/dawn/src/dawn/native/vulkan/PhysicalDeviceVk.cpp:240)
+
+Warning: maxDynamicUniformBuffersPerPipelineLayout artificially reduced from 1000000 to 16 to fit dynamic offset allocation limit.
+Warning: maxDynamicStorageBuffersPerPipelineLayout artificially reduced from 1000000 to 16 to fit dynamic offset allocation limit.
+[1783:1783:1226/193754.798075:ERROR:services/on_device_model/public/cpp/service_client.cc:36] Unexpected on_device_model service disconnect: Error loading backend.
+--- Script Finished ---
