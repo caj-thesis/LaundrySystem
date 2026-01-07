@@ -1,0 +1,22 @@
+--- Kiosk Script Started: Tue  6 Jan 16:45:22 PST 2026 ---
+Checking system dependencies...
+Package unclutter is already installed.
+Package x11-xserver-utils is already installed.
+Package chromium is already installed.
+Changing directory to /home/caj/laundry-kiosk...
+Starting React App...
+NVM failed to load npm. Using manual fallback path...
+npm found at: /home/caj/.config/nvm/versions/node/v24.12.0/bin/npm
+Waiting 20 seconds for Vite to initialize...
+
+> laundry-kiosk@0.0.0 dev
+> vite
+
+
+  VITE v7.3.0  ready in 3199 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+Launching Chromium in Kiosk mode...
+--- Script Setup Complete ---
+[2032:2070:0106/164612.217309:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: DEPRECATED_ENDPOINT
