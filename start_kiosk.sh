@@ -6,10 +6,10 @@ export NVM_DIR="$HOME/.nvm"
 exec > /home/caj/kiosk.log 2>&1
 echo "--- Kiosk Script Started: $(date) ---"
 
-# --- AUTO-INSTALLER SECTION ---
+# --- AUTO-INSTALLER SECTION (System) ---
 echo "Checking system dependencies..."
-# Use 'chromium' for Debian Trixie compatibility
-DEPENDENCIES=(unclutter x11-xserver-utils chromium)
+# Added 'libudev-dev' which is often needed for Arduino Serial communication
+DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
 
 for pkg in "${DEPENDENCIES[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -20,15 +20,6 @@ for pkg in "${DEPENDENCIES[@]}"; do
     fi
 done
 
-# --- AUTO-DEPENDENCY CHECK ---
-cd /home/caj/laundry-kiosk || exit 1
-
-if [ ! -d "node_modules" ]; then
-    echo "node_modules not found. Automatically installing dependencies..."
-    # Running with --no-audit and --no-fund makes it faster and uses less memory
-    npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
-fi
-
 # --- PROJECT SETUP ---
 KIOSK_APP_DIR="/home/caj/laundry-kiosk"
 
@@ -36,10 +27,16 @@ if [ -d "$KIOSK_APP_DIR" ]; then
     echo "Changing directory to $KIOSK_APP_DIR..."
     cd "$KIOSK_APP_DIR" || exit 1
     
-    # Install node_modules if they are missing
+    # 1. Standard Install (React Dependencies)
     if [ ! -d "node_modules" ]; then
-        echo "node_modules not found. Installing project dependencies..."
-        npm install
+        echo "node_modules not found. Installing..."
+        npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
+    fi
+
+    # 2. Backend Install (Fixes 'Cannot find package express')
+    if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ]; then
+        echo "Backend dependencies missing. Installing express, cors, serialport..."
+        npm install express cors serialport
     fi
 else
     echo "ERROR: Could not find folder at $KIOSK_APP_DIR"
@@ -52,43 +49,43 @@ xset s off
 xset -dpms
 xset s noblank
 
-# --- STARTUP ---
+# --- STARTUP UTILS ---
 unclutter -idle 0.5 &
 
+# --- START BACKEND SERVER ---
+echo "Starting Backend Server..."
+# Run server in background & save logs
+node server.js > /home/caj/backend.log 2>&1 &
+BACKEND_PID=$!
+echo "Backend started with PID: $BACKEND_PID"
+
+# --- START REACT APP ---
 echo "Starting React App..."
 
-# --- OPTION A: Try to load NVM ---
-export NVM_DIR="$HOME/.nvm"
-# This weird syntax (\.) is required for scripts
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 
-
-# --- OPTION B: Fallback if NVM failed ---
-# If 'npm' is still not found, add the specific path manually
+# Fallback: If npm isn't found via NVM, try manual path
 if ! command -v npm &> /dev/null; then
-    echo "NVM failed to load npm. Using manual fallback path..."
-    
-    # !!! IMPORTANT: RUN 'which npm' IN TERMINAL AND PASTE THE RESULT BELOW !!!
-    # It should look like: /home/caj/.nvm/versions/node/vXX.X.X/bin/npm
+    echo "NVM failed to load. Using manual fallback..."
     MANUAL_NPM_PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin/npm"
-    
-    # This adds the folder containing npm to the system PATH
     export PATH="$PATH:$(dirname "$MANUAL_NPM_PATH")"
 fi
 
-# --- VERIFY & RUN ---
 if command -v npm &> /dev/null; then
     echo "npm found at: $(which npm)"
     npm run dev &
+    FRONTEND_PID=$!
 else
-    echo "CRITICAL ERROR: npm could not be found via NVM or Manual Path."
+    echo "CRITICAL ERROR: npm could not be found."
     exit 1
 fi
 
 echo "Waiting 20 seconds for Vite to initialize..."
 sleep 20
 
+# --- LAUNCH CHROMIUM ---
 echo "Launching Chromium in Kiosk mode..."
-# Added GPU/Vulkan fix flags based on your crash logs
 chromium --password-store=basic --kiosk --disable-restore-session-state --noerrdialogs --disable-gpu --disable-software-rasterizer http://localhost:5173 &
 
-echo "--- Script Setup Complete ---"
+echo "--- Setup Complete. Waiting for processes... ---"
+
+# --- KEEP SCRIPT ALIVE ---
+wait $FRONTEND_PID

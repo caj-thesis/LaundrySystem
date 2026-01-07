@@ -1,11 +1,41 @@
---- Kiosk Script Started: Tue  6 Jan 16:45:22 PST 2026 ---
+--- Kiosk Script Started: Wed  7 Jan 18:03:24 PST 2026 ---
 Checking system dependencies...
 Package unclutter is already installed.
 Package x11-xserver-utils is already installed.
 Package chromium is already installed.
+Installing missing package: libudev-dev
+Hit:1 http://deb.debian.org/debian trixie InRelease
+Hit:2 http://deb.debian.org/debian trixie-updates InRelease
+Hit:3 http://deb.debian.org/debian-security trixie-security InRelease
+Hit:4 http://archive.raspberrypi.com/debian trixie InRelease
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following additional packages will be installed:
+  libcap-dev
+The following NEW packages will be installed:
+  libcap-dev libudev-dev
+0 upgraded, 2 newly installed, 0 to remove and 0 not upgraded.
+Need to get 545 kB of archives.
+After this operation, 3,141 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian trixie/main arm64 libcap-dev arm64 1:2.75-10+b1 [471 kB]
+Get:2 http://deb.debian.org/debian trixie/main arm64 libudev-dev arm64 257.9-1~deb13u1 [74.9 kB]
+Fetched 545 kB in 1s (410 kB/s)
+Selecting previously unselected package libcap-dev:arm64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 141423 files and directories currently installed.)
+Preparing to unpack .../libcap-dev_1%3a2.75-10+b1_arm64.deb ...
+Unpacking libcap-dev:arm64 (1:2.75-10+b1) ...
+Selecting previously unselected package libudev-dev:arm64.
+Preparing to unpack .../libudev-dev_257.9-1~deb13u1_arm64.deb ...
+Unpacking libudev-dev:arm64 (257.9-1~deb13u1) ...
+Setting up libcap-dev:arm64 (1:2.75-10+b1) ...
+Setting up libudev-dev:arm64 (257.9-1~deb13u1) ...
+Processing triggers for man-db (2.13.1-1) ...
 Changing directory to /home/caj/laundry-kiosk...
+Starting Backend Server...
+Backend started with PID: 2396
 Starting React App...
-NVM failed to load npm. Using manual fallback path...
 npm found at: /home/caj/.config/nvm/versions/node/v24.12.0/bin/npm
 Waiting 20 seconds for Vite to initialize...
 
@@ -13,10 +43,10 @@ Waiting 20 seconds for Vite to initialize...
 > vite
 
 
-  VITE v7.3.0  ready in 3199 ms
+  VITE v7.3.0  ready in 1472 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
 Launching Chromium in Kiosk mode...
---- Script Setup Complete ---
-[2032:2070:0106/164612.217309:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: DEPRECATED_ENDPOINT
+--- Setup Complete. Waiting for processes... ---
+[2439:2477:0107/180421.143128:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: QUOTA_EXCEEDED

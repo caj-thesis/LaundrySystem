@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Scale, DollarSign, Loader2, ArrowLeft } from 'lucide-react';
 
 interface DropOffInstructionsPageProps {
@@ -12,28 +12,71 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
   const [weight, setWeight] = useState(0);
   const [isWeighing, setIsWeighing] = useState(false);
   
+  // Polling interval ref
+  const pollInterval = useRef<number | null>(null);
+
   const pricePerKg = 25;
   const totalPrice = weight * pricePerKg;
 
-  const handleOpenLocker = () => {
-    setStep('weighing');
-    setIsWeighing(true);
-    
-    setTimeout(() => {
-      let currentWeight = 0;
-      const interval = setInterval(() => {
-        currentWeight += 0.5;
-        setWeight(parseFloat(currentWeight.toFixed(1)));
-        
-        if (currentWeight >= 7.5) {
-          clearInterval(interval);
-          setIsWeighing(false);
-          setTimeout(() => {
-            setStep('summary');
-          }, 1000);
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollInterval.current) clearInterval(pollInterval.current);
+    };
+  }, []);
+
+  const handleOpenLocker = async () => {
+    try {
+      // 1. Send Command to Backend
+      await fetch('http://localhost:3000/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId }),
+      });
+
+      setStep('weighing');
+      setIsWeighing(true);
+
+      // 2. Start Polling for Weight
+      pollInterval.current = window.setInterval(async () => {
+        try {
+          const res = await fetch('http://localhost:3000/api/status');
+          const data = await res.json();
+          
+          let currentWeight = 0;
+          
+          // MAP REACT IDs TO ARDUINO DATA
+          if (lockerId === 6) currentWeight = data.l1.weight;
+          if (lockerId === 8) currentWeight = data.l2.weight;
+
+          setWeight(currentWeight);
+
+          // Logic: If weight is stable/valid, you might want a "Done" button 
+          // or auto-detect. For now, we'll wait for user to click "Confirm" 
+          // or simulated completion logic if specific weight is reached.
+          
+          // OPTIONAL: Auto-advance if weight > 0 and stable for x seconds
+          // For now, let's keep it simple: stop spinner if weight > 0.5
+          if (currentWeight > 0.5) {
+             setIsWeighing(false); 
+             // Stop polling and go to summary after short delay?
+             // Or add a "Done Weighing" button. 
+             // Let's mimic the previous auto-advance logic:
+             setTimeout(() => {
+                if (pollInterval.current) clearInterval(pollInterval.current);
+                setStep('summary');
+             }, 3000); 
+          }
+
+        } catch (error) {
+          console.error("Error fetching status:", error);
         }
-      }, 300);
-    }, 2000);
+      }, 500); // Poll every 500ms
+
+    } catch (err) {
+      console.error("Failed to unlock:", err);
+      alert("Hardware connection failed");
+    }
   };
 
   if (step === 'instructions') {
@@ -77,7 +120,7 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
           </div>
 
           <button onClick={handleOpenLocker} className="btn-full">
-            Open Locker {lockerId}
+            Open Locker {lockerId} (Hardware)
           </button>
         </div>
       </div>
@@ -91,25 +134,24 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
           <Scale size={80} className="animate-bounce" />
           
           <div>
-            <h2 className="weighing-title">Weighing...</h2>
+            <h2 className="weighing-title">Reading Scale...</h2>
             
             <div className="weight-display">
-              <div className="weight-label">Current Weight</div>
-              <div className="weight-value">{weight} <span>kg</span></div>
+              <div className="weight-label">Current Weight (Live)</div>
+              <div className="weight-value">{weight.toFixed(1)} <span>kg</span></div>
               
               <div className="weight-price">
                 <div className="price-row">
                   <DollarSign size={20} />
                   <span>Estimated: ₱{totalPrice.toFixed(2)}</span>
                 </div>
-                <div className="price-note">₱{pricePerKg.toFixed(2)} per kg</div>
               </div>
             </div>
 
             {isWeighing && (
               <div className="weighing-status">
                 <Loader2 className="animate-spin" size={20} />
-                <span>Please close the locker door...</span>
+                <span>Waiting for laundry...</span>
               </div>
             )}
           </div>
@@ -129,7 +171,7 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
           <div className="summary-card">
             <div className="summary-weight">
               <div className="summary-weight-label">Total Weight</div>
-              <div className="summary-weight-value">{weight} kg</div>
+              <div className="summary-weight-value">{weight.toFixed(1)} kg</div>
             </div>
             
             <div className="summary-pricing">
