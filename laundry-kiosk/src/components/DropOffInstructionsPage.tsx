@@ -46,9 +46,8 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
           let currentWeight = 0;
           
           // MAP REACT IDs TO ARDUINO DATA
-          if (lockerId === 6) currentWeight = data.l1.weight;
-          if (lockerId === 8) currentWeight = data.l2.weight;
-
+          if (lockerId === 1) currentWeight = data.l1.weight;
+          if (lockerId === 2) currentWeight = data.l2.weight;
           setWeight(currentWeight);
 
           // Logic: If weight is stable/valid, you might want a "Done" button 
