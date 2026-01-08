@@ -1,21 +1,13 @@
 import { Lock, ArrowLeft } from 'lucide-react';
+import type { Locker } from '../App'; // <--- FIX: Added 'type' keyword
 
 interface AvailableLockersPageProps {
+  lockers: Locker[];
   onSelectLocker: (lockerId: number) => void;
   onBack: () => void;
 }
 
-const availableLockers = [
-  { id: 1, size: 'Small', capacity: '5 kg' },
-  { id: 2, size: 'Small', capacity: '5 kg' },
-  { id: 3, size: 'Medium', capacity: '10 kg' },
-  { id: 4, size: 'Medium', capacity: '10 kg' },
-  { id: 5, size: 'Large', capacity: '15 kg' },
-  { id: 7, size: 'Small', capacity: '5 kg' },
-  { id: 9, size: 'Large', capacity: '15 kg' },
-];
-
-export function AvailableLockersPage({ onSelectLocker, onBack }: AvailableLockersPageProps) {
+export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: AvailableLockersPageProps) {
   return (
     <div className="lockers-page">
       <div className="page-header">
@@ -30,18 +22,24 @@ export function AvailableLockersPage({ onSelectLocker, onBack }: AvailableLocker
 
       <div className="lockers-grid">
         <div className="lockers-grid-container">
-          {availableLockers.map((locker) => (
-            <button
-              key={locker.id}
-              onClick={() => onSelectLocker(locker.id)}
-              className="locker-button"
-            >
-              <Lock size={32} className="locker-icon" />
-              <div className="locker-number">Locker {locker.id}</div>
-              <div className="locker-size">{locker.size}</div>
-              <div className="locker-capacity">Max: {locker.capacity}</div>
-            </button>
-          ))}
+          {lockers.length === 0 ? (
+            <div className="no-data-message" style={{textAlign: 'center', gridColumn: '1/-1', padding: '2rem'}}>
+              No lockers available for drop-off at the moment.
+            </div>
+          ) : (
+            lockers.map((locker) => (
+              <button
+                key={locker.id}
+                onClick={() => onSelectLocker(locker.id)}
+                className="locker-button"
+              >
+                <Lock size={32} className="locker-icon" />
+                <div className="locker-number">Locker {locker.id}</div>
+                <div className="locker-size">{locker.size}</div>
+                <div className="locker-capacity">Max: {locker.capacity}</div>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -3,18 +3,12 @@ import { Lock, Delete, AlertCircle } from 'lucide-react';
 
 interface PinCodePageProps {
   lockerId: number;
+  correctPin: string; // New Prop
   onVerified: () => void;
   onCancel: () => void;
 }
 
-const lockerPins: Record<number, string> = {
-  6: '1234',
-  8: '5678',
-  10: '9012',
-  12: '3456',
-};
-
-export function PinCodePage({ lockerId, onVerified, onCancel }: PinCodePageProps) {
+export function PinCodePage({ lockerId, correctPin, onVerified, onCancel }: PinCodePageProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
 
@@ -26,7 +20,8 @@ export function PinCodePage({ lockerId, onVerified, onCancel }: PinCodePageProps
 
       if (newPin.length === 4) {
         setTimeout(() => {
-          if (newPin === lockerPins[lockerId]) {
+          // Compare against the dynamic correctPin prop instead of hardcoded list
+          if (newPin === correctPin) {
             onVerified();
           } else {
             setError(true);
@@ -57,7 +52,8 @@ export function PinCodePage({ lockerId, onVerified, onCancel }: PinCodePageProps
           <Lock size={64} className="pin-icon" />
           <h2 className="pin-title">Enter PIN Code</h2>
           <p className="pin-locker">Locker {lockerId}</p>
-          <p className="pin-demo">(Demo PIN: {lockerPins[lockerId]})</p>
+          {/* Displays the dynamic PIN so you can access it for testing */}
+          <p className="pin-demo">(Demo PIN: {correctPin})</p>
           
           <div className="pin-display">
             <div className="pin-dots">

@@ -16,12 +16,8 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURATION ---
-const ARDUINO_PORT = '/dev/ttyUSB0'; // Ensure this matches your ls /dev/tty*
+const ARDUINO_PORT = '/dev/ttyUSB0';
 const BAUD_RATE = 9600;
-
-// --- SERIAL CONNECTION ---
-const port = new SerialPort({ path: ARDUINO_PORT, baudRate: BAUD_RATE });
-const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -34,66 +30,81 @@ let systemState = {
 function logHardware(data) {
   const timestamp = new Date().toLocaleTimeString();
   const logEntry = `[${timestamp}] ${data}\n`;
-  
-  // Append to the file
   fs.appendFile(LOG_FILE, logEntry, (err) => {
     if (err) console.error(`Failed to write to log: ${err.message}`);
   });
 }
 
-// --- FORCE CREATE LOG ON STARTUP ---
+// --- SERIAL CONNECTION ---
+let port;
 try {
-  const startMessage = `\n--- SERVER RESTARTED at ${new Date().toLocaleString()} ---\n`;
-  fs.appendFileSync(LOG_FILE, startMessage);
-  console.log(`✅ Log file created at: ${LOG_FILE}`);
+  port = new SerialPort({ path: ARDUINO_PORT, baudRate: BAUD_RATE });
+  const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
+
+  parser.on('data', (line) => {
+    const text = line.trim();
+    console.log(`Arduino: ${text}`); 
+    logHardware(text);
+
+    // --- IMPROVED PARSER ---
+    
+    // 1. Parse Credit: Look specifically for "CREDIT:" followed by a number
+    // This regex matches "CREDIT:" optionally followed by space, then captures the number
+    if (text.includes('CREDIT')) {
+      const creditMatch = text.match(/CREDIT:?\s*([\d\.]+)/);
+      if (creditMatch && creditMatch[1]) {
+        const val = parseFloat(creditMatch[1]);
+        if (!isNaN(val)) {
+          systemState.credit = val;
+        }
+      }
+    }
+
+    // 2. Parse Locker 1
+    if (text.startsWith('L1:')) {
+      const doorMatch = text.match(/\[(.*?)\]/);
+      const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
+      if (doorMatch) systemState.l1.door = doorMatch[1].trim();
+      if (weightMatch) systemState.l1.weight = parseFloat(weightMatch[1]);
+    }
+
+    // 3. Parse Locker 2
+    if (text.startsWith('L2:')) {
+      const doorMatch = text.match(/\[(.*?)\]/);
+      const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
+      if (doorMatch) systemState.l2.door = doorMatch[1].trim();
+      if (weightMatch) systemState.l2.weight = parseFloat(weightMatch[1]);
+    }
+  });
+
+  port.on('error', (err) => {
+    console.error('Serial Port Error: ', err.message);
+  });
+
 } catch (err) {
-  console.error(`❌ CRITICAL ERROR: Could not create log file. Check permissions! \n${err.message}`);
+  console.error("FAILED TO OPEN SERIAL PORT:", err.message);
 }
-
-// --- PARSER LOGIC ---
-parser.on('data', (line) => {
-  const text = line.trim();
-  console.log(`Arduino: ${text}`); 
-  logHardware(text);
-
-  // Parse Credit (Fast & Slow)
-  if (text.includes('TOTAL CREDIT:') || text.startsWith('CREDIT:')) {
-    const match = text.match(/[\d\.]+/);
-    if (match) systemState.credit = parseFloat(match[0]);
-  }
-
-  // Parse Locker 1 (L6)
-  if (text.startsWith('L1:')) {
-    const doorMatch = text.match(/\[(.*?)\]/);
-    const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
-    if (doorMatch) systemState.l1.door = doorMatch[1].trim();
-    if (weightMatch) systemState.l1.weight = parseFloat(weightMatch[1]);
-  }
-
-  // Parse Locker 2 (L8)
-  if (text.startsWith('L2:')) {
-    const doorMatch = text.match(/\[(.*?)\]/);
-    const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
-    if (doorMatch) systemState.l2.door = doorMatch[1].trim();
-    if (weightMatch) systemState.l2.weight = parseFloat(weightMatch[1]);
-  }
-});
 
 // --- API ---
 app.get('/api/status', (req, res) => res.json(systemState));
 
 app.post('/api/unlock', (req, res) => {
   const { lockerId } = req.body;
-  if (lockerId === 6) {
+  
+  if (!port) {
+    return res.status(500).json({ error: "Hardware not connected" });
+  }
+
+  if (lockerId === 1) {
     port.write('1\n');
-    logHardware('SENT COMMAND: 1 (Unlock L6)');
+    logHardware('SENT COMMAND: 1 (Unlock L1)');
     res.json({ success: true });
-  } else if (lockerId === 8) {
+  } else if (lockerId === 2) {
     port.write('2\n');
-    logHardware('SENT COMMAND: 2 (Unlock L8)');
+    logHardware('SENT COMMAND: 2 (Unlock L2)');
     res.json({ success: true });
   } else {
-    res.status(400).json({ error: "Invalid Locker" });
+    res.status(400).json({ error: "Invalid Locker ID" });
   }
 });
 
