@@ -52,6 +52,13 @@ xset s noblank
 # --- STARTUP UTILS ---
 unclutter -idle 0.5 &
 
+# Fallback: If npm isn't found via NVM, try manual path
+if ! command -v npm &> /dev/null; then
+    echo "NVM failed to load. Using manual fallback..."
+    MANUAL_NPM_PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin/npm"
+    export PATH="$PATH:$(dirname "$MANUAL_NPM_PATH")"
+fi
+
 # --- START BACKEND SERVER ---
 echo "Starting Backend Server..."
 # Run server in background & save logs
@@ -61,13 +68,6 @@ echo "Backend started with PID: $BACKEND_PID"
 
 # --- START REACT APP ---
 echo "Starting React App..."
-
-# Fallback: If npm isn't found via NVM, try manual path
-if ! command -v npm &> /dev/null; then
-    echo "NVM failed to load. Using manual fallback..."
-    MANUAL_NPM_PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin/npm"
-    export PATH="$PATH:$(dirname "$MANUAL_NPM_PATH")"
-fi
 
 if command -v npm &> /dev/null; then
     echo "npm found at: $(which npm)"

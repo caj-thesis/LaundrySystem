@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WelcomePage } from './components/WelcomePage';
 import { ProcessSelectionPage } from './components/ProcessSelectionPage';
 import { AvailableLockersPage } from './components/AvailableLockersPage';
@@ -11,7 +11,6 @@ import './styles/app.css';
 
 export interface Locker {
   id: number;
-  size: 'Small' | 'Medium' | 'Large';
   capacity: string;
   status: 'available' | 'occupied';
   weight?: number; 
@@ -24,8 +23,8 @@ export interface Locker {
 // --- INITIAL STATE ---
 // We keep this structure, but "weight" and "doorStatus" will be overwritten by live data
 const INITIAL_LOCKERS: Locker[] = [
-  { id: 1, size: 'Medium', capacity: '10 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
-  { id: 2, size: 'Medium', capacity: '10 kg', status: 'occupied', weight: 3, price: 75, readyTime: '2 hours ago', pin: '1234', doorStatus: 'CLOSED' },
+  { id: 1,  capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
+  { id: 2,  capacity: '20 kg', status: 'occupied', weight: 3, price: 75, readyTime: '2 hours ago', pin: '1234', doorStatus: 'CLOSED' },
 ];
 
 type Screen = 
@@ -114,8 +113,6 @@ export default function App() {
           return {
             ...locker,
             status: 'occupied',
-            // Note: We don't hardcode weight here anymore because the polling updates it,
-            // but we save the price calculated at this moment.
             price: finalPrice,   
             readyTime: 'Processing...',
             pin: newPin
@@ -172,12 +169,12 @@ export default function App() {
     setCurrentScreen('thank-you');
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setCurrentScreen('welcome');
     setSelectedLockerId(null);
     setProcessType(null);
     setLastGeneratedPin(null);
-  };
+  }, []);
 
   return (
     <div className="app-container">
