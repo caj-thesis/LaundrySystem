@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WelcomePage } from './components/WelcomePage';
 import { ProcessSelectionPage } from './components/ProcessSelectionPage';
 import { AvailableLockersPage } from './components/AvailableLockersPage';
@@ -18,14 +18,14 @@ export interface Locker {
   price?: number;  
   readyTime?: string;
   pin?: string; 
+  doorStatus?: string; // Added to track physical door state
 }
 
 // --- INITIAL STATE ---
-// Locker 1: Available
-// Locker 2: Occupied (Default PIN "1234")
+// We keep this structure, but "weight" and "doorStatus" will be overwritten by live data
 const INITIAL_LOCKERS: Locker[] = [
-  { id: 1, size: 'Medium', capacity: '10 kg', status: 'available' },
-  { id: 2, size: 'Medium', capacity: '10 kg', status: 'occupied', weight: 4.5, price: 112.5, readyTime: '2 hours ago', pin: '1234' },
+  { id: 1, size: 'Medium', capacity: '10 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
+  { id: 2, size: 'Medium', capacity: '10 kg', status: 'occupied', weight: 3, price: 75, readyTime: '2 hours ago', pin: '1234', doorStatus: 'CLOSED' },
 ];
 
 type Screen = 
@@ -47,6 +47,47 @@ export default function App() {
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
+  // --- POLLING EFFECT (THE FIX) ---
+  useEffect(() => {
+    const fetchHardwareStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/status');
+        const data = await response.json();
+        
+        // Example data structure from server:
+        // { l1: { door: 'OPEN', weight: 0.5 }, l2: { door: 'CLOSED', weight: 0.0 }, credit: 10 }
+
+        setLockers(prevLockers => prevLockers.map(locker => {
+          // Map backend data to frontend locker IDs
+          let hardwareData = null;
+          if (locker.id === 1) hardwareData = data.l1;
+          if (locker.id === 2) hardwareData = data.l2;
+
+          if (hardwareData) {
+            return {
+              ...locker,
+              // Always update weight from sensor
+              weight: hardwareData.weight, 
+              // Always update door status
+              doorStatus: hardwareData.door 
+            };
+          }
+          return locker;
+        }));
+      } catch (error) {
+        console.error("Hardware disconnected:", error);
+      }
+    };
+
+    // Run immediately then every 1 second
+    fetchHardwareStatus();
+    const intervalId = setInterval(fetchHardwareStatus, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []); // Empty dependency array = runs on mount
+
+  // --- NAVIGATION HANDLERS ---
+
   const handleWelcomeNext = () => setCurrentScreen('process-selection');
 
   const handleProcessSelection = (process: 'dropoff' | 'pickup') => {
@@ -63,7 +104,6 @@ export default function App() {
 
   const handleAvailableLockersBack = () => setCurrentScreen('process-selection');
 
-  // UPDATED: Now accepts dynamic Price and Weight
   const handleDropOffComplete = (finalPrice: number, finalWeight: number) => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setLastGeneratedPin(newPin);
@@ -74,8 +114,9 @@ export default function App() {
           return {
             ...locker,
             status: 'occupied',
-            weight: finalWeight, // Use actual weight
-            price: finalPrice,   // Use actual calculated price
+            // Note: We don't hardcode weight here anymore because the polling updates it,
+            // but we save the price calculated at this moment.
+            price: finalPrice,   
             readyTime: 'Processing...',
             pin: newPin
           };
@@ -104,18 +145,19 @@ export default function App() {
   const handlePaymentComplete = async () => {
     if (selectedLockerId) {
       try {
+        // Send unlock command to Arduino
         await fetch('http://localhost:3000/api/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lockerId: selectedLockerId })
         }).catch(err => console.error("Unlock failed:", err));
 
+        // Reset locker status in UI
         setLockers(prev => prev.map(locker => {
           if (locker.id === selectedLockerId) {
             return {
               ...locker,
               status: 'available',
-              weight: undefined, 
               price: undefined,
               readyTime: undefined,
               pin: undefined
@@ -157,7 +199,9 @@ export default function App() {
         {currentScreen === 'dropoff-instructions' && selectedLockerId && (
           <DropOffInstructionsPage 
             lockerId={selectedLockerId} 
-            onComplete={handleDropOffComplete} // Connects to the updated function
+            // Pass the live weight from polling so the user sees it update
+            currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
+            onComplete={handleDropOffComplete} 
             onBack={handleDropOffBack}
           />
         )}
