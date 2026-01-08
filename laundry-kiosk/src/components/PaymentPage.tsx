@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, WifiOff } from 'lucide-react';
 
 interface PaymentPageProps {
   lockerId: number;
@@ -11,50 +11,65 @@ interface PaymentPageProps {
 
 export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: PaymentPageProps) {
   const [cashInserted, setCashInserted] = useState(0);
+  const [isHardwareConnected, setIsHardwareConnected] = useState(true);
   const pollInterval = useRef<number | null>(null);
   
   const remainingBalance = price - cashInserted;
   const isPaymentComplete = cashInserted >= price;
 
   useEffect(() => {
+    let isMounted = true;
+
     const startPaymentSession = async () => {
       try {
         // 1. Get Baseline Credit
-        const res = await fetch('http://localhost:3000/api/status');
-        const data = await res.json();
+        const res = await fetch('http://localhost:3000/api/status').catch(() => null);
         
+        if (!res || !res.ok) {
+           console.error("Backend unreachable for payment session init");
+           if (isMounted) setIsHardwareConnected(false);
+           return;
+        }
+
+        const data = await res.json();
         // Ensure baseline is a number, default to 0 if missing
         const baselineCredit = typeof data.credit === 'number' ? data.credit : 0;
         console.log(`Payment Session Started. Baseline Credit: ₱${baselineCredit}`);
+
+        if (isMounted) setIsHardwareConnected(true);
 
         // 2. Start Polling
         pollInterval.current = window.setInterval(async () => {
           try {
             const pollRes = await fetch('http://localhost:3000/api/status');
+            if (!pollRes.ok) throw new Error("Status fetch failed");
+            
             const pollData = await pollRes.json();
             
             const currentTotal = typeof pollData.credit === 'number' ? pollData.credit : 0;
             const sessionCredit = currentTotal - baselineCredit;
             
-            console.log(`Polling: Total=${currentTotal}, Baseline=${baselineCredit}, Session=${sessionCredit}`);
-
-            // Only update if positive and changed
-            if (sessionCredit >= 0) {
+            // Only update if positive (handling hardware resets gracefully)
+            if (isMounted && sessionCredit >= 0) {
               setCashInserted(sessionCredit);
+              setIsHardwareConnected(true);
             }
           } catch (e) {
             console.error("Polling error", e);
+            if (isMounted) setIsHardwareConnected(false);
           }
         }, 500);
 
       } catch (err) {
-        console.error("Payment system error - make sure server is running", err);
+        console.error("Payment system error", err);
+        if (isMounted) setIsHardwareConnected(false);
       }
     };
 
     startPaymentSession();
 
     return () => {
+      isMounted = false;
       if (pollInterval.current) clearInterval(pollInterval.current);
     };
   }, []);
@@ -82,6 +97,13 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
           Return
         </button>
       </div>
+
+      {!isHardwareConnected && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 flex items-center gap-2" role="alert">
+          <WifiOff size={18} />
+          <span>Hardware disconnected. Please check coin acceptor.</span>
+        </div>
+      )}
 
       <div className="payment-content">
         <div className="payment-left">

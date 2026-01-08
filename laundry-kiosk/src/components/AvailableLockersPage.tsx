@@ -1,6 +1,7 @@
 import { Lock, ArrowLeft } from 'lucide-react';
-import type { Locker } from '../App'; // <--- FIX: Added 'type' keyword
+import type { Locker } from '../types'; // <--- CHANGED IMPORT
 
+// ... rest of the file stays exactly the same
 interface AvailableLockersPageProps {
   lockers: Locker[];
   onSelectLocker: (lockerId: number) => void;
@@ -35,7 +36,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
               >
                 <Lock size={32} className="locker-icon" />
                 <div className="locker-number">Locker {locker.id}</div>
-                <div className="locker-size">{locker.size}</div>
+                <div className="locker-size">{locker.size || 'Standard'}</div> {/* Fallback for safety */}
                 <div className="locker-capacity">Max: {locker.capacity}</div>
               </button>
             ))

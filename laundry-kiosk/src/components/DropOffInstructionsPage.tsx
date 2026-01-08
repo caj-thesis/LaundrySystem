@@ -1,29 +1,27 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Scale, DollarSign, Loader2, ArrowLeft } from 'lucide-react';
 
 interface DropOffInstructionsPageProps {
   lockerId: number;
-  onComplete: () => void;
+  currentWeight: number; // Receive live weight from App.tsx
+  onComplete: (price: number, weight: number) => void; // FIX: Must accept args
   onBack: () => void;
 }
 
-export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOffInstructionsPageProps) {
+export function DropOffInstructionsPage({ 
+  lockerId, 
+  currentWeight, 
+  onComplete, 
+  onBack 
+}: DropOffInstructionsPageProps) {
   const [step, setStep] = useState<'instructions' | 'weighing' | 'summary'>('instructions');
-  const [weight, setWeight] = useState(0);
   const [isWeighing, setIsWeighing] = useState(false);
-  
-  // Polling interval ref
-  const pollInterval = useRef<number | null>(null);
+  const [finalWeight, setFinalWeight] = useState(0);
 
   const pricePerKg = 25;
-  const totalPrice = weight * pricePerKg;
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollInterval.current) clearInterval(pollInterval.current);
-    };
-  }, []);
+  // Calculate price based on the captured final weight, or live weight if weighing
+  const displayWeight = step === 'summary' ? finalWeight : currentWeight;
+  const totalPrice = displayWeight * pricePerKg;
 
   const handleOpenLocker = async () => {
     try {
@@ -37,46 +35,26 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
       setStep('weighing');
       setIsWeighing(true);
 
-      // 2. Start Polling for Weight
-      pollInterval.current = window.setInterval(async () => {
-        try {
-          const res = await fetch('http://localhost:3000/api/status');
-          const data = await res.json();
-          
-          let currentWeight = 0;
-          
-          // MAP REACT IDs TO ARDUINO DATA
-          if (lockerId === 1) currentWeight = data.l1.weight;
-          if (lockerId === 2) currentWeight = data.l2.weight;
-          setWeight(currentWeight);
-
-          // Logic: If weight is stable/valid, you might want a "Done" button 
-          // or auto-detect. For now, we'll wait for user to click "Confirm" 
-          // or simulated completion logic if specific weight is reached.
-          
-          // OPTIONAL: Auto-advance if weight > 0 and stable for x seconds
-          // For now, let's keep it simple: stop spinner if weight > 0.5
-          if (currentWeight > 0.5) {
-             setIsWeighing(false); 
-             // Stop polling and go to summary after short delay?
-             // Or add a "Done Weighing" button. 
-             // Let's mimic the previous auto-advance logic:
-             setTimeout(() => {
-                if (pollInterval.current) clearInterval(pollInterval.current);
-                setStep('summary');
-             }, 3000); 
-          }
-
-        } catch (error) {
-          console.error("Error fetching status:", error);
-        }
-      }, 500); // Poll every 500ms
-
     } catch (err) {
       console.error("Failed to unlock:", err);
-      alert("Hardware connection failed");
+      // Proceed anyway in simulation mode
+      setStep('weighing');
+      setIsWeighing(true);
     }
   };
+
+  // Monitor weight to auto-advance
+  useEffect(() => {
+    if (isWeighing && currentWeight > 0.5) {
+      // Small delay to let weight settle
+      const timer = setTimeout(() => {
+        setIsWeighing(false);
+        setFinalWeight(currentWeight);
+        setStep('summary');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isWeighing, currentWeight]);
 
   if (step === 'instructions') {
     return (
@@ -119,7 +97,7 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
           </div>
 
           <button onClick={handleOpenLocker} className="btn-full">
-            Open Locker {lockerId} (Hardware)
+            Open Locker {lockerId}
           </button>
         </div>
       </div>
@@ -137,7 +115,7 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
             
             <div className="weight-display">
               <div className="weight-label">Current Weight (Live)</div>
-              <div className="weight-value">{weight.toFixed(1)} <span>kg</span></div>
+              <div className="weight-value">{currentWeight.toFixed(1)} <span>kg</span></div>
               
               <div className="weight-price">
                 <div className="price-row">
@@ -147,12 +125,18 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
               </div>
             </div>
 
-            {isWeighing && (
-              <div className="weighing-status">
-                <Loader2 className="animate-spin" size={20} />
-                <span>Waiting for laundry...</span>
-              </div>
-            )}
+            <div className="weighing-status">
+              <Loader2 className="animate-spin" size={20} />
+              <span>Waiting for laundry (Place {'>'} 0.5kg)...</span>
+            </div>
+            
+            {/* Fail-safe button in case sensor is broken */}
+            <button 
+                onClick={() => { setFinalWeight(currentWeight || 1.0); setStep('summary'); }}
+                style={{marginTop: '2rem', background: 'transparent', border: '1px solid #666', color: '#666', padding: '0.5rem 1rem', borderRadius: '4px', fontSize: '0.8rem'}}
+            >
+                Skip / Manual Override
+            </button>
           </div>
         </div>
       </div>
@@ -170,7 +154,7 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
           <div className="summary-card">
             <div className="summary-weight">
               <div className="summary-weight-label">Total Weight</div>
-              <div className="summary-weight-value">{weight.toFixed(1)} kg</div>
+              <div className="summary-weight-value">{finalWeight.toFixed(1)} kg</div>
             </div>
             
             <div className="summary-pricing">
@@ -187,12 +171,11 @@ export function DropOffInstructionsPage({ lockerId, onComplete, onBack }: DropOf
 
           <div className="summary-actions">
             <div className="info-box">
-              <p>
-                Your laundry has been received and will be processed
-              </p>
+              <p>Your laundry has been received and will be processed</p>
             </div>
 
-            <button onClick={onComplete} className="btn-full success">
+            {/* FIX: Pass arguments to onComplete */}
+            <button onClick={() => onComplete(totalPrice, finalWeight)} className="btn-full success">
               Confirm Drop Off
             </button>
           </div>
