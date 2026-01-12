@@ -1,4 +1,4 @@
---- Kiosk Script Started: Thu  8 Jan 16:46:44 PST 2026 ---
+--- Kiosk Script Started: Mon 12 Jan 13:49:28 PST 2026 ---
 Checking system dependencies...
 Package unclutter is already installed.
 Package x11-xserver-utils is already installed.
@@ -6,20 +6,20 @@ Package chromium is already installed.
 Package libudev-dev is already installed.
 Changing directory to /home/caj/laundry-kiosk...
 Starting Backend Server...
-Backend started with PID: 1798
+Backend started with PID: 5741
 Starting React App...
-NVM failed to load. Using manual fallback...
 npm found at: /home/caj/.config/nvm/versions/node/v24.12.0/bin/npm
 Waiting 20 seconds for Vite to initialize...
 
 > laundry-kiosk@0.0.0 dev
 > vite
 
+Port 5173 is in use, trying another one...
 
-  VITE v7.3.1  ready in 3438 ms
+  VITE v7.3.1  ready in 609 ms
 
-  ➜  Local:   http://localhost:5173/
+  ➜  Local:   http://localhost:5174/
   ➜  Network: use --host to expose
 Launching Chromium in Kiosk mode...
 --- Setup Complete. Waiting for processes... ---
-[2049:2087:0108/164733.859521:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: QUOTA_EXCEEDED
+[5783:5821:0112/134953.327684:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: DEPRECATED_ENDPOINT

@@ -1,1 +1,59 @@
-/home/caj/start_kiosk.sh: line 58: node: command not found
+Server running on port 3000
+Arduino: >>> THESIS LOCKER SYSTEM STARTED <<<
+Arduino: >>> SYSTEM READY. Insert Coins. <<<
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] Wt: -0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
