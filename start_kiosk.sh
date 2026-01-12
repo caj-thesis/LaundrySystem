@@ -61,8 +61,20 @@ fi
 
 # --- START BACKEND SERVER ---
 echo "Starting Backend Server..."
-# Run server in background & save logs
-node server.js > /home/caj/backend.log 2>&1 &
+
+# Define Node path explicitly based on the manual fallback path you found
+NODE_EXEC="/home/caj/.config/nvm/versions/node/v24.12.0/bin/node"
+
+# Check if explicit node exists, otherwise try default 'node'
+if [ -x "$NODE_EXEC" ]; then
+    echo "Using explicit Node path: $NODE_EXEC"
+else
+    echo "Explicit Node not found, trying system default..."
+    NODE_EXEC="node"
+fi
+
+# Run server using the defined executable
+$NODE_EXEC server.js > /home/caj/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend started with PID: $BACKEND_PID"
 
