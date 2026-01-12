@@ -80,9 +80,6 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
              <div className="payment-amount-label">Total Due</div>
              <div className="payment-amount-value">₱{price.toFixed(2)}</div>
           </div>
-          <button onClick={simulateCoin} style={{marginTop:'1rem', padding:'10px', background:'#eee'}}>
-            <Coins size={16} /> DEBUG: Insert ₱5
-          </button>
         </div>
 
         <div className="payment-right">
