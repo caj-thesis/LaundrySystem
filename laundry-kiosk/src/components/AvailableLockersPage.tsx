@@ -1,5 +1,5 @@
 import { Lock, ArrowLeft } from 'lucide-react';
-import type { Locker } from '../App'; // <--- FIX: Added 'type' keyword
+import type { Locker } from '../types'; // IMPORT FROM TYPES.TS
 
 interface AvailableLockersPageProps {
   lockers: Locker[];
@@ -35,7 +35,6 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
               >
                 <Lock size={32} className="locker-icon" />
                 <div className="locker-number">Locker {locker.id}</div>
-                <div className="locker-size">{locker.size}</div>
                 <div className="locker-capacity">Max: {locker.capacity}</div>
               </button>
             ))

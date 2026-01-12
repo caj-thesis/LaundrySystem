@@ -1,5 +1,5 @@
 import { PackageCheck, Clock, ArrowLeft } from 'lucide-react';
-import type { Locker } from '../App'; // <--- FIX: Added 'type' keyword
+import type { Locker } from '../types'; // IMPORT FROM TYPES.TS
 
 interface PickupLockersPageProps {
   lockers: Locker[];

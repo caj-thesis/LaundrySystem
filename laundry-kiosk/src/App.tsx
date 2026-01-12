@@ -7,21 +7,12 @@ import { PickupLockersPage } from './components/PickupLockersPage';
 import { PinCodePage } from './components/PinCodePage';
 import { PaymentPage } from './components/PaymentPage';
 import { ThankYouPage } from './components/ThankYouPage';
+// IMPORT FROM TYPES.TS to fix circular dependency
+import type { Locker } from './types'; 
 import './styles/app.css';
 
-export interface Locker {
-  id: number;
-  capacity: string;
-  status: 'available' | 'occupied';
-  weight?: number; 
-  price?: number;  
-  readyTime?: string;
-  pin?: string; 
-  doorStatus?: string; // Added to track physical door state
-}
-
 // --- INITIAL STATE ---
-// We keep this structure, but "weight" and "doorStatus" will be overwritten by live data
+// Removed 'size' property to match the updated type
 const INITIAL_LOCKERS: Locker[] = [
   { id: 1,  capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
   { id: 2,  capacity: '20 kg', status: 'occupied', weight: 3, price: 75, readyTime: '2 hours ago', pin: '1234', doorStatus: 'CLOSED' },
@@ -46,7 +37,7 @@ export default function App() {
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
-  // --- POLLING EFFECT (THE FIX) ---
+  // --- POLLING EFFECT ---
   useEffect(() => {
     const fetchHardwareStatus = async () => {
       try {

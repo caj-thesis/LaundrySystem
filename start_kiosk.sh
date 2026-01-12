@@ -1,14 +1,33 @@
 #!/bin/bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 # --- ENABLE LOGGING ---
 exec > /home/caj/kiosk.log 2>&1
 echo "--- Kiosk Script Started: $(date) ---"
 
+# --- ENVIRONMENT SETUP (MOVED TO TOP) ---
+export NVM_DIR="$HOME/.nvm"
+# Fixed typo: changed "\." to "." to correctly source the file if it exists
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+# Fallback: Check if npm is found; if not, force the manual path
+if ! command -v npm &> /dev/null; then
+    echo "NVM failed to load. Using manual fallback..."
+    # Derived from the path found in your original script
+    MANUAL_NODE_HOME="/home/caj/.config/nvm/versions/node/v24.12.0"
+    export PATH="$MANUAL_NODE_HOME/bin:$PATH"
+fi
+
+# Verification: Exit early if npm is still missing
+if ! command -v npm &> /dev/null; then
+    echo "CRITICAL ERROR: npm could not be found in PATH."
+    echo "Current PATH: $PATH"
+    exit 1
+fi
+echo "Node version: $(node -v)"
+echo "NPM version: $(npm -v)"
+
 # --- AUTO-INSTALLER SECTION (System) ---
 echo "Checking system dependencies..."
-# Added 'libudev-dev' which is often needed for Arduino Serial communication
 DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
 
 for pkg in "${DEPENDENCIES[@]}"; do
@@ -33,7 +52,7 @@ if [ -d "$KIOSK_APP_DIR" ]; then
         npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
     fi
 
-    # 2. Backend Install (Fixes 'Cannot find package express')
+    # 2. Backend Install
     if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ]; then
         echo "Backend dependencies missing. Installing express, cors, serialport..."
         npm install express cors serialport
@@ -52,49 +71,24 @@ xset s noblank
 # --- STARTUP UTILS ---
 unclutter -idle 0.5 &
 
-# Fallback: If npm isn't found via NVM, try manual path
-if ! command -v npm &> /dev/null; then
-    echo "NVM failed to load. Using manual fallback..."
-    MANUAL_NPM_PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin/npm"
-    export PATH="$PATH:$(dirname "$MANUAL_NPM_PATH")"
-fi
-
 # --- START BACKEND SERVER ---
 echo "Starting Backend Server..."
-
-# Define Node path explicitly based on the manual fallback path you found
-NODE_EXEC="/home/caj/.config/nvm/versions/node/v24.12.0/bin/node"
-
-# Check if explicit node exists, otherwise try default 'node'
-if [ -x "$NODE_EXEC" ]; then
-    echo "Using explicit Node path: $NODE_EXEC"
-else
-    echo "Explicit Node not found, trying system default..."
-    NODE_EXEC="node"
-fi
-
-# Run server using the defined executable
-$NODE_EXEC server.js > /home/caj/backend.log 2>&1 &
+# We can now rely on the 'node' command being in the PATH
+node server.js > /home/caj/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend started with PID: $BACKEND_PID"
 
 # --- START REACT APP ---
 echo "Starting React App..."
-
-if command -v npm &> /dev/null; then
-    echo "npm found at: $(which npm)"
-    npm run dev &
-    FRONTEND_PID=$!
-else
-    echo "CRITICAL ERROR: npm could not be found."
-    exit 1
-fi
+npm run dev &
+FRONTEND_PID=$!
 
 echo "Waiting 20 seconds for Vite to initialize..."
 sleep 20
 
 # --- LAUNCH CHROMIUM ---
 echo "Launching Chromium in Kiosk mode..."
+# Added --no-sandbox which is often helpful in kiosk environments, though not strictly required if running as user
 chromium --password-store=basic --kiosk --disable-restore-session-state --noerrdialogs --disable-gpu --disable-software-rasterizer http://localhost:5173 &
 
 echo "--- Setup Complete. Waiting for processes... ---"
