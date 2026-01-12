@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, WifiOff, Coins } from 'lucide-react';
 
 interface PaymentPageProps {
   lockerId: number;
@@ -11,117 +11,100 @@ interface PaymentPageProps {
 
 export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: PaymentPageProps) {
   const [cashInserted, setCashInserted] = useState(0);
+  const [connectionError, setConnectionError] = useState(false);
   const pollInterval = useRef<number | null>(null);
-  
+  const baselineCreditRef = useRef<number>(0);
+
   const remainingBalance = price - cashInserted;
   const isPaymentComplete = cashInserted >= price;
 
   useEffect(() => {
     const startPaymentSession = async () => {
       try {
-        // 1. Get Baseline Credit
+        // 1. Get Baseline Credit (credit currently on device)
         const res = await fetch('http://localhost:3000/api/status');
+        if (!res.ok) throw new Error('Failed to connect');
         const data = await res.json();
         
-        // Ensure baseline is a number, default to 0 if missing
-        const baselineCredit = typeof data.credit === 'number' ? data.credit : 0;
-        console.log(`Payment Session Started. Baseline Credit: ₱${baselineCredit}`);
+        baselineCreditRef.current = typeof data.credit === 'number' ? data.credit : 0;
+        setConnectionError(false);
 
-        // 2. Start Polling
+        // 2. Start Polling for new credit
         pollInterval.current = window.setInterval(async () => {
           try {
             const pollRes = await fetch('http://localhost:3000/api/status');
             const pollData = await pollRes.json();
             
             const currentTotal = typeof pollData.credit === 'number' ? pollData.credit : 0;
-            const sessionCredit = currentTotal - baselineCredit;
-            
-            console.log(`Polling: Total=${currentTotal}, Baseline=${baselineCredit}, Session=${sessionCredit}`);
+            // Cash Inserted = Current Total - Baseline
+            const sessionCredit = currentTotal - baselineCreditRef.current;
 
-            // Only update if positive and changed
-            if (sessionCredit >= 0) {
-              setCashInserted(sessionCredit);
-            }
+            if (sessionCredit >= 0) setCashInserted(sessionCredit);
+            setConnectionError(false);
           } catch (e) {
-            console.error("Polling error", e);
+            setConnectionError(true);
           }
         }, 500);
 
       } catch (err) {
-        console.error("Payment system error - make sure server is running", err);
+        console.error("Payment init error", err);
+        setConnectionError(true);
       }
     };
 
     startPaymentSession();
-
-    return () => {
-      if (pollInterval.current) clearInterval(pollInterval.current);
-    };
+    return () => { if (pollInterval.current) clearInterval(pollInterval.current); };
   }, []);
 
   const handleConfirm = () => {
-    if (isPaymentComplete) {
-      onComplete();
-    }
+    if (isPaymentComplete) onComplete();
   };
 
-  const handleCancel = () => {
-    setCashInserted(0);
-    onCancel();
-  };
+  // DEBUG TOOL: Use this if hardware isn't responding
+  const simulateCoin = () => setCashInserted(prev => prev + 5);
 
   return (
     <div className="payment-page">
       <div className="payment-header-section">
-        <div className="payment-header">
-          <h2 className="payment-title">Cash Payment</h2>
-          <p className="payment-locker">Locker {lockerId}</p>
-        </div>
-        <button onClick={handleCancel} className="btn-return">
-          <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-          Return
+        <h2 className="payment-title">Cash Payment - Locker {lockerId}</h2>
+        <button onClick={onCancel} className="btn-return">
+          <ArrowLeft size={20} style={{ marginRight: '8px' }} /> Return
         </button>
       </div>
 
       <div className="payment-content">
+        {connectionError && <div style={{color: 'red', marginBottom: '10px'}}>⚠️ Hardware Disconnected</div>}
+        
         <div className="payment-left">
           <div className="payment-amount-card">
-            <div className="payment-amount-label">Total Amount</div>
-            <div className="payment-amount-value">₱{price.toFixed(2)}</div>
-            <div className="payment-amount-detail">
-              Weight: {weight.toFixed(1)} kg @ ₱25/kg
-            </div>
+             <div className="payment-amount-label">Total Due</div>
+             <div className="payment-amount-value">₱{price.toFixed(2)}</div>
           </div>
+          <button onClick={simulateCoin} style={{marginTop:'1rem', padding:'10px', background:'#eee'}}>
+            <Coins size={16} /> DEBUG: Insert ₱5
+          </button>
         </div>
 
         <div className="payment-right">
-          <div className="cash-payment-container">
-            <div className="cash-inserted-card">
-              <div className="cash-inserted-label">Cash Inserted (Hardware)</div>
-              <div className="cash-inserted-amount">₱{cashInserted.toFixed(2)}</div>
-              <div className="cash-balance">
-                <span className="cash-balance-label">
-                  {isPaymentComplete ? 'Change:' : 'Remaining:'}
-                </span>
-                <span className={`cash-balance-value ${isPaymentComplete ? 'complete' : ''}`}>
-                  ₱{Math.abs(remainingBalance).toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            <div className="payment-actions">
-              <button onClick={handleCancel} className="btn-cancel">
-                Cancel
-              </button>
-              <button 
-                onClick={handleConfirm} 
-                className="btn-confirm"
-                disabled={!isPaymentComplete}
-              >
-                {isPaymentComplete ? 'Complete Payment' : 'Insert Coins in Slot'}
-              </button>
+          <div className="cash-inserted-card">
+            <div className="cash-inserted-label">Cash Inserted</div>
+            <div className="cash-inserted-amount">₱{cashInserted.toFixed(2)}</div>
+            <div className="cash-balance">
+              <span>{isPaymentComplete ? 'Change:' : 'Remaining:'}</span>
+              <span className={isPaymentComplete ? 'complete' : ''}>
+                ₱{Math.abs(remainingBalance).toFixed(2)}
+              </span>
             </div>
           </div>
+
+          <button 
+            onClick={handleConfirm} 
+            className="btn-confirm"
+            disabled={!isPaymentComplete}
+            style={{ opacity: isPaymentComplete ? 1 : 0.5 }}
+          >
+            {isPaymentComplete ? 'Complete Payment' : 'Insert Coins'}
+          </button>
         </div>
       </div>
     </div>
