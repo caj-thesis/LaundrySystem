@@ -52,10 +52,11 @@ if [ -d "$KIOSK_APP_DIR" ]; then
         npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
     fi
 
-    # 2. Backend Install
-    if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ]; then
-        echo "Backend dependencies missing. Installing express, cors, serialport..."
-        npm install express cors serialport
+    # 2. Backend Install (UPDATED: Added firebase)
+    # Checks if express, serialport OR firebase are missing
+    if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ] || [ ! -d "node_modules/firebase" ]; then
+        echo "Backend dependencies missing. Installing express, cors, serialport, firebase..."
+        npm install express cors serialport firebase
     fi
 else
     echo "ERROR: Could not find folder at $KIOSK_APP_DIR"

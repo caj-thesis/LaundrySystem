@@ -7,12 +7,11 @@ import { PickupLockersPage } from './components/PickupLockersPage';
 import { PinCodePage } from './components/PinCodePage';
 import { PaymentPage } from './components/PaymentPage';
 import { ThankYouPage } from './components/ThankYouPage';
-// IMPORT FROM TYPES.TS to fix circular dependency
 import type { Locker } from './types'; 
 import './styles/app.css';
+import { db } from '../firebaseConfig'; 
+import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore'; 
 
-// --- INITIAL STATE ---
-// Removed 'size' property to match the updated type
 const INITIAL_LOCKERS: Locker[] = [
   { id: 1,  capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
   { id: 2,  capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
@@ -34,6 +33,8 @@ export default function App() {
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
   const [lockers, setLockers] = useState<Locker[]>(INITIAL_LOCKERS);
   const [lastGeneratedPin, setLastGeneratedPin] = useState<string | null>(null);
+  // NEW: State to hold the transaction ID
+  const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
@@ -43,12 +44,8 @@ export default function App() {
       try {
         const response = await fetch('http://localhost:3000/api/status');
         const data = await response.json();
-        
-        // Example data structure from server:
-        // { l1: { door: 'OPEN', weight: 0.5 }, l2: { door: 'CLOSED', weight: 0.0 }, credit: 10 }
 
         setLockers(prevLockers => prevLockers.map(locker => {
-          // Map backend data to frontend locker IDs
           let hardwareData = null;
           if (locker.id === 1) hardwareData = data.l1;
           if (locker.id === 2) hardwareData = data.l2;
@@ -56,9 +53,7 @@ export default function App() {
           if (hardwareData) {
             return {
               ...locker,
-              // Always update weight from sensor
               weight: hardwareData.weight, 
-              // Always update door status
               doorStatus: hardwareData.door 
             };
           }
@@ -69,15 +64,12 @@ export default function App() {
       }
     };
 
-    // Run immediately then every 1 second
     fetchHardwareStatus();
     const intervalId = setInterval(fetchHardwareStatus, 1000);
-
     return () => clearInterval(intervalId);
-  }, []); // Empty dependency array = runs on mount
+  }, []);
 
   // --- NAVIGATION HANDLERS ---
-
   const handleWelcomeNext = () => setCurrentScreen('process-selection');
 
   const handleProcessSelection = (process: 'dropoff' | 'pickup') => {
@@ -94,11 +86,30 @@ export default function App() {
 
   const handleAvailableLockersBack = () => setCurrentScreen('process-selection');
 
-  const handleDropOffComplete = (finalPrice: number, finalWeight: number) => {
+  const handleDropOffComplete = async (finalPrice: number, finalWeight: number) => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+    // NEW: Generate Transaction ID (e.g., TRX-173684123)
+    const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
+    
     setLastGeneratedPin(newPin);
+    setLastTransactionId(newTransactionId);
 
     if (selectedLockerId) {
+      try {
+        await addDoc(collection(db, "transactions"), {
+          transactionId: newTransactionId, // Save to DB
+          lockerId: selectedLockerId,
+          pin: newPin,
+          price: finalPrice,
+          weight: finalWeight,
+          type: 'dropoff',
+          status: 'paid_pending',
+          timestamp: new Date()
+        });
+      } catch (e) {
+        console.error("Error saving transaction:", e);
+      }
+
       setLockers(prev => prev.map(locker => {
         if (locker.id === selectedLockerId) {
           return {
@@ -131,16 +142,39 @@ export default function App() {
   const handlePaymentCancel = () => setCurrentScreen('pickup-lockers');
 
   const handlePaymentComplete = async () => {
+    // NEW: Generate Payment Receipt ID
+    const paymentId = `PAY-${Math.floor(Date.now() / 1000)}`;
+    setLastTransactionId(paymentId);
+
     if (selectedLockerId) {
       try {
-        // Send unlock command to Arduino
         await fetch('http://localhost:3000/api/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lockerId: selectedLockerId })
         }).catch(err => console.error("Unlock failed:", err));
 
-        // Reset locker status in UI
+        // Update Firebase
+        try {
+          const q = query(
+            collection(db, "transactions"),
+            where("lockerId", "==", selectedLockerId),
+            where("status", "==", "paid_pending")
+          );
+
+          const querySnapshot = await getDocs(q);
+          querySnapshot.forEach(async (document) => {
+            const transactionRef = doc(db, "transactions", document.id);
+            await updateDoc(transactionRef, {
+              status: 'completed',
+              pickedUpAt: new Date(),
+              paymentId: paymentId // Save payment reference
+            });
+          });
+        } catch (dbError) {
+          console.error("Error updating Firebase status:", dbError);
+        }
+
         setLockers(prev => prev.map(locker => {
           if (locker.id === selectedLockerId) {
             return {
@@ -165,6 +199,7 @@ export default function App() {
     setSelectedLockerId(null);
     setProcessType(null);
     setLastGeneratedPin(null);
+    setLastTransactionId(null); // Reset ID
   }, []);
 
   return (
@@ -187,7 +222,6 @@ export default function App() {
         {currentScreen === 'dropoff-instructions' && selectedLockerId && (
           <DropOffInstructionsPage 
             lockerId={selectedLockerId} 
-            // Pass the live weight from polling so the user sees it update
             currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
             onComplete={handleDropOffComplete} 
             onBack={handleDropOffBack}
@@ -225,6 +259,7 @@ export default function App() {
           <ThankYouPage 
             processType={processType!}
             generatedPin={lastGeneratedPin}
+            transactionId={lastTransactionId} // Pass to component
             onReset={handleReset}
           />
         )}

@@ -6,6 +6,10 @@ import { fileURLToPath } from 'url';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 
+// --- FIREBASE IMPORTS ---
+import { db } from './firebaseConfig.js';
+import { doc, setDoc } from "firebase/firestore";
+
 // --- PATH SETUP ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,8 +20,9 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURATION ---
-const ARDUINO_PORT = '/dev/ttyUSB0';
+const ARDUINO_PORT = '/dev/ttyUSB0'; 
 const BAUD_RATE = 9600;
+const WEIGHT_THRESHOLD = 0.1; // Amount of weight (kg) to assume door is closed
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -35,6 +40,25 @@ function logHardware(data) {
   });
 }
 
+// --- FIREBASE SYNC FUNCTION ---
+let lastUploadTime = 0;
+const UPLOAD_INTERVAL = 2000; 
+
+async function syncToFirebase() {
+  const now = Date.now();
+  if (now - lastUploadTime > UPLOAD_INTERVAL) {
+    try {
+      await setDoc(doc(db, "kiosks", "main_unit"), {
+        ...systemState,
+        lastUpdated: new Date()
+      });
+      lastUploadTime = now;
+    } catch (e) {
+      console.error("Firebase Sync Error:", e.message);
+    }
+  }
+}
+
 // --- SERIAL CONNECTION ---
 let port;
 try {
@@ -46,16 +70,16 @@ try {
     console.log(`Arduino: ${text}`); 
     logHardware(text);
 
-    // --- IMPROVED PARSER ---
-    
-    // 1. Parse Credit: Look specifically for "CREDIT:" followed by a number
-    // This regex matches "CREDIT:" optionally followed by space, then captures the number
+    let stateChanged = false;
+
+    // 1. Parse Credit
     if (text.includes('CREDIT')) {
       const creditMatch = text.match(/CREDIT:?\s*([\d\.]+)/);
       if (creditMatch && creditMatch[1]) {
         const val = parseFloat(creditMatch[1]);
-        if (!isNaN(val)) {
+        if (!isNaN(val) && systemState.credit !== val) {
           systemState.credit = val;
+          stateChanged = true;
         }
       }
     }
@@ -64,16 +88,65 @@ try {
     if (text.startsWith('L1:')) {
       const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
-      if (doorMatch) systemState.l1.door = doorMatch[1].trim();
-      if (weightMatch) systemState.l1.weight = parseFloat(weightMatch[1]);
+      
+      // Update Weight
+      if (weightMatch) {
+        const w = parseFloat(weightMatch[1]);
+        if (Math.abs(systemState.l1.weight - w) > 0.01) {
+          systemState.l1.weight = w;
+          stateChanged = true;
+        }
+      }
+
+      // Update Door (With Override)
+      if (doorMatch) {
+        let rawDoorStatus = doorMatch[1].trim();
+        
+        // LOGIC OVERRIDE: If weight is present, force status to CLOSED
+        if (systemState.l1.weight > WEIGHT_THRESHOLD) {
+            rawDoorStatus = 'CLOSED';
+        }
+
+        if (systemState.l1.door !== rawDoorStatus) {
+          systemState.l1.door = rawDoorStatus;
+          stateChanged = true;
+        }
+      }
     }
 
     // 3. Parse Locker 2
     if (text.startsWith('L2:')) {
       const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
-      if (doorMatch) systemState.l2.door = doorMatch[1].trim();
-      if (weightMatch) systemState.l2.weight = parseFloat(weightMatch[1]);
+      
+      // Update Weight
+      if (weightMatch) {
+        const w = parseFloat(weightMatch[1]);
+        if (Math.abs(systemState.l2.weight - w) > 0.01) {
+          systemState.l2.weight = w;
+          stateChanged = true;
+        }
+      }
+
+      // Update Door (With Override)
+      if (doorMatch) {
+        let rawDoorStatus = doorMatch[1].trim();
+        
+        // LOGIC OVERRIDE: If weight is present, force status to CLOSED
+        if (systemState.l2.weight > WEIGHT_THRESHOLD) {
+            rawDoorStatus = 'CLOSED';
+        }
+
+        if (systemState.l2.door !== rawDoorStatus) {
+          systemState.l2.door = rawDoorStatus;
+          stateChanged = true;
+        }
+      }
+    }
+
+    // Sync to Firebase if state changed
+    if (stateChanged) {
+      syncToFirebase();
     }
   });
 
