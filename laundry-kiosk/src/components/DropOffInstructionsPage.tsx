@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Scale, DollarSign, Loader2, ArrowLeft } from 'lucide-react';
 
 interface DropOffInstructionsPageProps {
   lockerId: number;
-  currentWeight: number; // Added to match App.tsx
-  onComplete: (price: number, weight: number) => void; // Updated to match App.tsx
+  currentWeight: number; 
+  onComplete: (price: number, weight: number) => void;
   onBack: () => void;
 }
 
@@ -12,13 +12,28 @@ export function DropOffInstructionsPage({ lockerId, currentWeight, onComplete, o
   const [step, setStep] = useState<'instructions' | 'weighing' | 'summary'>('instructions');
   const [isWeighing, setIsWeighing] = useState(false);
 
-  // Use the live weight passed from App.tsx
   const pricePerKg = 25;
   const totalPrice = currentWeight * pricePerKg;
+
+  // --- FIX: Auto-advance ONLY if weight > 0 ---
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    // Only start the countdown if we are weighing AND we detect weight
+    if (isWeighing && currentWeight > 0) {
+      timer = setTimeout(() => {
+        setIsWeighing(false);
+        setStep('summary');
+      }, 3000); // Wait 3 seconds of stable weight before finishing
+    }
+
+    return () => clearTimeout(timer);
+  }, [isWeighing, currentWeight]);
 
   const handleOpenLocker = async () => {
     try {
       setIsWeighing(true);
+      
       // 1. Send Command to Backend to unlock
       await fetch('http://localhost:3000/api/unlock', {
         method: 'POST',
@@ -27,13 +42,9 @@ export function DropOffInstructionsPage({ lockerId, currentWeight, onComplete, o
       }).catch(err => console.error("Unlock error:", err));
 
       setStep('weighing');
-
-      // 2. Wait for user to put clothes in (simulated delay for UX)
-      // In a real scenario, you might wait for weight > 0
-      setTimeout(() => {
-        setIsWeighing(false);
-        setStep('summary');
-      }, 4000); 
+      
+      // NOTE: Removed the "setTimeout" that blindly advanced after 4 seconds.
+      // Now it waits for the useEffect above to detect weight.
 
     } catch (err) {
       console.error("Failed to unlock:", err);
@@ -93,7 +104,6 @@ export function DropOffInstructionsPage({ lockerId, currentWeight, onComplete, o
             
             <div className="weight-display">
               <div className="weight-label">Current Weight</div>
-              {/* Uses the prop from App.tsx which is updated by the global poller */}
               <div className="weight-value">{currentWeight.toFixed(1)} <span>kg</span></div>
               
               <div className="weight-price">
@@ -106,7 +116,11 @@ export function DropOffInstructionsPage({ lockerId, currentWeight, onComplete, o
 
             <div className="weighing-status">
               <Loader2 className="animate-spin" size={20} />
-              <span>Please place items and close door...</span>
+              {currentWeight <= 0 ? (
+                <span>Waiting for items... (Place laundry inside)</span>
+              ) : (
+                <span>Weight detected. processing...</span>
+              )}
             </div>
           </div>
         </div>
@@ -142,11 +156,16 @@ export function DropOffInstructionsPage({ lockerId, currentWeight, onComplete, o
 
           <div className="summary-actions">
             <button 
-              // CRITICAL FIX: Pass the calculated values back to App.tsx
+              // --- FIX: Disable button if weight is 0 ---
+              disabled={currentWeight <= 0}
               onClick={() => onComplete(totalPrice, currentWeight)} 
               className="btn-full success"
+              style={{ 
+                opacity: currentWeight > 0 ? 1 : 0.5, 
+                cursor: currentWeight > 0 ? 'pointer' : 'not-allowed' 
+              }}
             >
-              Confirm Drop Off
+              {currentWeight > 0 ? 'Confirm Drop Off' : 'No Weight Detected'}
             </button>
           </div>
         </div>

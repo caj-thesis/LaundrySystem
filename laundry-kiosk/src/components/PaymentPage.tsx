@@ -60,9 +60,6 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
     if (isPaymentComplete) onComplete();
   };
 
-  // DEBUG TOOL: Use this if hardware isn't responding
-  const simulateCoin = () => setCashInserted(prev => prev + 5);
-
   return (
     <div className="payment-page">
       <div className="payment-header-section">
