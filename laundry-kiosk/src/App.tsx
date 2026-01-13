@@ -15,7 +15,7 @@ import './styles/app.css';
 // Removed 'size' property to match the updated type
 const INITIAL_LOCKERS: Locker[] = [
   { id: 1,  capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
-  { id: 2,  capacity: '20 kg', status: 'occupied', weight: 3, price: 75, readyTime: '2 hours ago', pin: '1234', doorStatus: 'CLOSED' },
+  { id: 2,  capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
 ];
 
 type Screen = 
