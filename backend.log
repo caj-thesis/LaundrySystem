@@ -1,17 +1,517 @@
-file:///home/caj/laundry-kiosk/server.js:11
-import { db } from './firebaseAdminConfig.js';
-         ^^
-
-SyntaxError: Identifier 'db' has already been declared
-    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
-    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:111:18)
-    at #translate (node:internal/modules/esm/loader:473:20)
-    at afterLoad (node:internal/modules/esm/loader:529:29)
-    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:534:12)
-    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:571:36)
-    at afterResolve (node:internal/modules/esm/loader:624:52)
-    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:630:12)
-    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:649:32)
-    at TracingChannel.tracePromise (node:diagnostics_channel:350:14)
-
-Node.js v24.12.0
+Server running on port 3000
+Arduino: >>> THESIS LOCKER SYSTEM STARTED (3 LOCKERS) <<<
+Arduino: >>> SYSTEM READY. Insert Coins. <<<
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: >>> UNLOCKING L1 <<<
+Arduino: >>> DOOR OPENED. SOLENOID OFF. <<<
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.1 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.2 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: CREDIT: 0.00 PHP
+Arduino: >>> COIN DETECTED: 2
+Arduino: [!] ERROR: Unregistered Pulse.
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.3 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.2 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.3 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.2 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.2 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 1.4 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Firebase Sync Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP

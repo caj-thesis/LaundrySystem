@@ -7,7 +7,6 @@ import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 
 // --- FIREBASE IMPORTS (Admin Version) ---
-import { db } from './firebaseConfig.js';
 import { db } from './firebaseAdminConfig.js';
 
 // --- PATH SETUP ---

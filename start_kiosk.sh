@@ -4,6 +4,16 @@
 exec > /home/caj/kiosk.log 2>&1
 echo "--- Kiosk Script Started: $(date) ---"
 
+# ==========================================
+# [NEW] CLEANUP OLD PROCESSES
+# ==========================================
+echo "Killing old processes..."
+pkill -f "node" || true
+pkill -f "chromium" || true
+# Wait a moment for ports to free up
+sleep 2
+# ==========================================
+
 # --- ENVIRONMENT SETUP ---
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
