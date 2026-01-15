@@ -3,7 +3,6 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
-// REPLACE THE PLACEHOLDERS WITH YOUR ACTUAL KEYS FROM FIREBASE CONSOLE
 const firebaseConfig = {
   apiKey: "AIzaSyAg9_Om1OD_zzI09ncFqBpmXJbLtygnuZM",
   authDomain: "caj-laundry-management.firebaseapp.com",

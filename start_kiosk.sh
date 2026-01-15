@@ -4,23 +4,20 @@
 exec > /home/caj/kiosk.log 2>&1
 echo "--- Kiosk Script Started: $(date) ---"
 
-# --- ENVIRONMENT SETUP (MOVED TO TOP) ---
+# --- ENVIRONMENT SETUP ---
 export NVM_DIR="$HOME/.nvm"
-# Fixed typo: changed "\." to "." to correctly source the file if it exists
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 # Fallback: Check if npm is found; if not, force the manual path
 if ! command -v npm &> /dev/null; then
     echo "NVM failed to load. Using manual fallback..."
-    # Derived from the path found in your original script
     MANUAL_NODE_HOME="/home/caj/.config/nvm/versions/node/v24.12.0"
     export PATH="$MANUAL_NODE_HOME/bin:$PATH"
 fi
 
-# Verification: Exit early if npm is still missing
+# Verification
 if ! command -v npm &> /dev/null; then
     echo "CRITICAL ERROR: npm could not be found in PATH."
-    echo "Current PATH: $PATH"
     exit 1
 fi
 echo "Node version: $(node -v)"
@@ -52,11 +49,12 @@ if [ -d "$KIOSK_APP_DIR" ]; then
         npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
     fi
 
-    # 2. Backend Install (UPDATED: Added firebase)
-    # Checks if express, serialport OR firebase are missing
-    if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ] || [ ! -d "node_modules/firebase" ]; then
-        echo "Backend dependencies missing. Installing express, cors, serialport, firebase..."
-        npm install express cors serialport firebase
+    # 2. Backend Install (UPDATED: Added firebase-admin)
+    # Checks if express, serialport OR firebase-admin are missing
+    if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ] || [ ! -d "node_modules/firebase-admin" ]; then
+        echo "Backend dependencies missing. Installing express, cors, serialport, firebase-admin..."
+        # Note: We install both 'firebase' (for frontend) and 'firebase-admin' (for backend) just in case
+        npm install express cors serialport firebase firebase-admin
     fi
 else
     echo "ERROR: Could not find folder at $KIOSK_APP_DIR"
@@ -74,8 +72,8 @@ unclutter -idle 0.5 &
 
 # --- START BACKEND SERVER ---
 echo "Starting Backend Server..."
-# We can now rely on the 'node' command being in the PATH
-node server.js > /home/caj/backend.log 2>&1 &
+# UPDATED: Using the hardcoded path to Node to ensure it finds the command
+/home/caj/.config/nvm/versions/node/v24.12.0/bin/node server.js > /home/caj/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend started with PID: $BACKEND_PID"
 
@@ -89,7 +87,6 @@ sleep 20
 
 # --- LAUNCH CHROMIUM ---
 echo "Launching Chromium in Kiosk mode..."
-# Added --no-sandbox which is often helpful in kiosk environments, though not strictly required if running as user
 chromium --password-store=basic --kiosk --disable-restore-session-state --noerrdialogs --disable-gpu --disable-software-rasterizer http://localhost:5173 &
 
 echo "--- Setup Complete. Waiting for processes... ---"

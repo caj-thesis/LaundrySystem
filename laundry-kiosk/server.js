@@ -6,9 +6,9 @@ import { fileURLToPath } from 'url';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 
-// --- FIREBASE IMPORTS ---
+// --- FIREBASE IMPORTS (Admin Version) ---
 import { db } from './firebaseConfig.js';
-import { doc, setDoc } from "firebase/firestore";
+import { db } from './firebaseAdminConfig.js';
 
 // --- PATH SETUP ---
 const __filename = fileURLToPath(import.meta.url);
@@ -22,7 +22,7 @@ app.use(express.json());
 // --- CONFIGURATION ---
 const ARDUINO_PORT = '/dev/ttyUSB0'; 
 const BAUD_RATE = 9600;
-const WEIGHT_THRESHOLD = 0.1; // Amount of weight (kg) to assume door is closed
+const WEIGHT_THRESHOLD = 0.1; 
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -40,7 +40,7 @@ function logHardware(data) {
   });
 }
 
-// --- FIREBASE SYNC FUNCTION ---
+// --- FIREBASE SYNC FUNCTION (Admin Syntax) ---
 let lastUploadTime = 0;
 const UPLOAD_INTERVAL = 2000; 
 
@@ -48,10 +48,13 @@ async function syncToFirebase() {
   const now = Date.now();
   if (now - lastUploadTime > UPLOAD_INTERVAL) {
     try {
-      await setDoc(doc(db, "kiosks", "main_unit"), {
+      // UPDATED FOR ADMIN SDK:
+      // Uses db.collection().doc().set()
+      await db.collection("kiosks").doc("main_unit").set({
         ...systemState,
         lastUpdated: new Date()
       });
+      
       lastUploadTime = now;
     } catch (e) {
       console.error("Firebase Sync Error:", e.message);
@@ -89,7 +92,6 @@ try {
       const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
       
-      // Update Weight
       if (weightMatch) {
         const w = parseFloat(weightMatch[1]);
         if (Math.abs(systemState.l1.weight - w) > 0.01) {
@@ -97,16 +99,11 @@ try {
           stateChanged = true;
         }
       }
-
-      // Update Door (With Override)
       if (doorMatch) {
         let rawDoorStatus = doorMatch[1].trim();
-        
-        // LOGIC OVERRIDE: If weight is present, force status to CLOSED
         if (systemState.l1.weight > WEIGHT_THRESHOLD) {
             rawDoorStatus = 'CLOSED';
         }
-
         if (systemState.l1.door !== rawDoorStatus) {
           systemState.l1.door = rawDoorStatus;
           stateChanged = true;
@@ -119,7 +116,6 @@ try {
       const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
       
-      // Update Weight
       if (weightMatch) {
         const w = parseFloat(weightMatch[1]);
         if (Math.abs(systemState.l2.weight - w) > 0.01) {
@@ -127,16 +123,11 @@ try {
           stateChanged = true;
         }
       }
-
-      // Update Door (With Override)
       if (doorMatch) {
         let rawDoorStatus = doorMatch[1].trim();
-        
-        // LOGIC OVERRIDE: If weight is present, force status to CLOSED
         if (systemState.l2.weight > WEIGHT_THRESHOLD) {
             rawDoorStatus = 'CLOSED';
         }
-
         if (systemState.l2.door !== rawDoorStatus) {
           systemState.l2.door = rawDoorStatus;
           stateChanged = true;
@@ -144,7 +135,6 @@ try {
       }
     }
 
-    // Sync to Firebase if state changed
     if (stateChanged) {
       syncToFirebase();
     }
@@ -163,10 +153,7 @@ app.get('/api/status', (req, res) => res.json(systemState));
 
 app.post('/api/unlock', (req, res) => {
   const { lockerId } = req.body;
-  
-  if (!port) {
-    return res.status(500).json({ error: "Hardware not connected" });
-  }
+  if (!port) return res.status(500).json({ error: "Hardware not connected" });
 
   if (lockerId === 1) {
     port.write('1\n');
