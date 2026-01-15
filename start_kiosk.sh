@@ -5,7 +5,7 @@ exec > /home/caj/kiosk.log 2>&1
 echo "--- Kiosk Script Started: $(date) ---"
 
 # ==========================================
-# [NEW] CLEANUP OLD PROCESSES
+# CLEANUP OLD PROCESSES
 # ==========================================
 echo "Killing old processes..."
 pkill -f "node" || true
@@ -59,11 +59,10 @@ if [ -d "$KIOSK_APP_DIR" ]; then
         npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
     fi
 
-    # 2. Backend Install (UPDATED: Added firebase-admin)
-    # Checks if express, serialport OR firebase-admin are missing
+    # 2. Backend Install (Safety Check)
+    # Explicitly checks if firebase-admin is present. If not, installs it.
     if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ] || [ ! -d "node_modules/firebase-admin" ]; then
-        echo "Backend dependencies missing. Installing express, cors, serialport, firebase-admin..."
-        # Note: We install both 'firebase' (for frontend) and 'firebase-admin' (for backend) just in case
+        echo "Backend dependencies missing. Installing express, cors, serialport, firebase, firebase-admin..."
         npm install express cors serialport firebase firebase-admin
     fi
 else
@@ -82,7 +81,7 @@ unclutter -idle 0.5 &
 
 # --- START BACKEND SERVER ---
 echo "Starting Backend Server..."
-# UPDATED: Using the hardcoded path to Node to ensure it finds the command
+# Using the hardcoded path to Node to ensure it finds the command
 /home/caj/.config/nvm/versions/node/v24.12.0/bin/node server.js > /home/caj/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "Backend started with PID: $BACKEND_PID"
