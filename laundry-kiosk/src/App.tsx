@@ -33,7 +33,6 @@ export default function App() {
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
   const [lockers, setLockers] = useState<Locker[]>(INITIAL_LOCKERS);
   const [lastGeneratedPin, setLastGeneratedPin] = useState<string | null>(null);
-  // NEW: State to hold the transaction ID
   const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
@@ -88,7 +87,6 @@ export default function App() {
 
   const handleDropOffComplete = async (finalPrice: number, finalWeight: number) => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-    // NEW: Generate Transaction ID (e.g., TRX-173684123)
     const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
     
     setLastGeneratedPin(newPin);
@@ -97,13 +95,14 @@ export default function App() {
     if (selectedLockerId) {
       try {
         await addDoc(collection(db, "transactions"), {
-          transactionId: newTransactionId, // Save to DB
+          transactionId: newTransactionId,
           lockerId: selectedLockerId,
           pin: newPin,
           price: finalPrice,
           weight: finalWeight,
           type: 'dropoff',
           status: 'paid_pending',
+          laundryStatus: 'dropped', // <--- IMPORTANT: Initial Status for Admin
           timestamp: new Date()
         });
       } catch (e) {
@@ -142,7 +141,6 @@ export default function App() {
   const handlePaymentCancel = () => setCurrentScreen('pickup-lockers');
 
   const handlePaymentComplete = async () => {
-    // NEW: Generate Payment Receipt ID
     const paymentId = `PAY-${Math.floor(Date.now() / 1000)}`;
     setLastTransactionId(paymentId);
 
@@ -168,7 +166,7 @@ export default function App() {
             await updateDoc(transactionRef, {
               status: 'completed',
               pickedUpAt: new Date(),
-              paymentId: paymentId // Save payment reference
+              paymentId: paymentId
             });
           });
         } catch (dbError) {
@@ -199,7 +197,7 @@ export default function App() {
     setSelectedLockerId(null);
     setProcessType(null);
     setLastGeneratedPin(null);
-    setLastTransactionId(null); // Reset ID
+    setLastTransactionId(null);
   }, []);
 
   return (
@@ -259,7 +257,7 @@ export default function App() {
           <ThankYouPage 
             processType={processType!}
             generatedPin={lastGeneratedPin}
-            transactionId={lastTransactionId} // Pass to component
+            transactionId={lastTransactionId} 
             onReset={handleReset}
           />
         )}
