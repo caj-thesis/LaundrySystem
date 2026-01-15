@@ -1,1 +1,511 @@
-/home/caj/start_kiosk.sh: line 58: node: command not found
+Server running on port 3000
+Arduino: >>> THESIS LOCKER SYSTEM STARTED (3 LOCKERS) <<<
+Arduino: >>> SYSTEM READY. Insert Coins. <<<
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+[2026-01-15T06:57:48.314Z]  @firebase/firestore: Firestore (12.8.0): GrpcConnection RPC 'Write' stream 0x6ad6461e error. Code: 7 Message: 7 PERMISSION_DENIED: Missing or insufficient permissions.
+Firebase Sync Error: 7 PERMISSION_DENIED: Missing or insufficient permissions.
+[2026-01-15T06:57:48.646Z]  @firebase/firestore: Firestore (12.8.0): GrpcConnection RPC 'Write' stream 0x6ad6461f error. Code: 7 Message: 7 PERMISSION_DENIED: Missing or insufficient permissions.
+Firebase Sync Error: 7 PERMISSION_DENIED: Missing or insufficient permissions.
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: >>> UNLOCKING L1 <<<
+Arduino: >>> D
+Arduino: >>> THESIS LOCKER SYSTEM STARTED (3 LOCKERS) <<<
+Arduino: >>> SYSTEM READY. Insert Coins. <<<
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: -0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
+Arduino: --- SYSTEM MONITOR ---
+Arduino: L1: [OPEN  ] [EMPTY ] Wt: -2.7 kg
+Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+Arduino: CREDIT: 0.00 PHP
