@@ -1,4 +1,4 @@
---- Kiosk Script Started: Thu 15 Jan 14:57:25 PST 2026 ---
+--- Kiosk Script Started: Thu 15 Jan 15:26:47 PST 2026 ---
 NVM failed to load. Using manual fallback...
 Node version: v24.12.0
 NPM version: 11.6.2
@@ -8,8 +8,19 @@ Package x11-xserver-utils is already installed.
 Package chromium is already installed.
 Package libudev-dev is already installed.
 Changing directory to /home/caj/laundry-kiosk...
+node_modules not found. Installing...
+
+added 400 packages in 44s
+Backend dependencies missing. Installing express, cors, serialport, firebase...
+
+added 79 packages, and audited 480 packages in 44s
+
+89 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
 Starting Backend Server...
-Backend started with PID: 1702
+Backend started with PID: 1892
 Starting React App...
 Waiting 20 seconds for Vite to initialize...
 
@@ -17,10 +28,10 @@ Waiting 20 seconds for Vite to initialize...
 > vite
 
 
-  VITE v7.3.1  ready in 2657 ms
+  VITE v7.3.1  ready in 846 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
 Launching Chromium in Kiosk mode...
 --- Setup Complete. Waiting for processes... ---
-[1795:1832:0115/145821.653263:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: QUOTA_EXCEEDED
+[1936:1973:0115/152908.688877:ERROR:google_apis/gcm/engine/registration_request.cc:292] Registration response error message: QUOTA_EXCEEDED
