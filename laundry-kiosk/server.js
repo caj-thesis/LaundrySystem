@@ -7,8 +7,9 @@ import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 
 // --- FIREBASE IMPORTS ---
-import { db } from './firebaseConfig.js';
+import { db, auth } from './firebaseConfig.js'; // <--- Import auth
 import { doc, setDoc } from "firebase/firestore";
+import { signInAnonymously } from "firebase/auth"; // <--- Import sign in
 
 // --- PATH SETUP ---
 const __filename = fileURLToPath(import.meta.url);
@@ -22,7 +23,7 @@ app.use(express.json());
 // --- CONFIGURATION ---
 const ARDUINO_PORT = '/dev/ttyUSB0'; 
 const BAUD_RATE = 9600;
-const WEIGHT_THRESHOLD = 0.1; // Amount of weight (kg) to assume door is closed
+const WEIGHT_THRESHOLD = 0.1;
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -45,6 +46,12 @@ let lastUploadTime = 0;
 const UPLOAD_INTERVAL = 2000; 
 
 async function syncToFirebase() {
+  // Ensure we are authenticated before writing
+  if (!auth.currentUser) { 
+    console.log("Waiting for auth to sync...");
+    return;
+  }
+
   const now = Date.now();
   if (now - lastUploadTime > UPLOAD_INTERVAL) {
     try {
@@ -58,6 +65,16 @@ async function syncToFirebase() {
     }
   }
 }
+
+// --- AUTHENTICATION INIT ---
+// Start the listener immediately
+signInAnonymously(auth)
+  .then(() => {
+    console.log("✅ Firebase: Signed in anonymously");
+  })
+  .catch((error) => {
+    console.error("❌ Firebase Auth Error:", error.message);
+  });
 
 // --- SERIAL CONNECTION ---
 let port;
@@ -89,7 +106,6 @@ try {
       const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
       
-      // Update Weight
       if (weightMatch) {
         const w = parseFloat(weightMatch[1]);
         if (Math.abs(systemState.l1.weight - w) > 0.01) {
@@ -97,16 +113,11 @@ try {
           stateChanged = true;
         }
       }
-
-      // Update Door (With Override)
       if (doorMatch) {
         let rawDoorStatus = doorMatch[1].trim();
-        
-        // LOGIC OVERRIDE: If weight is present, force status to CLOSED
         if (systemState.l1.weight > WEIGHT_THRESHOLD) {
             rawDoorStatus = 'CLOSED';
         }
-
         if (systemState.l1.door !== rawDoorStatus) {
           systemState.l1.door = rawDoorStatus;
           stateChanged = true;
@@ -119,7 +130,6 @@ try {
       const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
       
-      // Update Weight
       if (weightMatch) {
         const w = parseFloat(weightMatch[1]);
         if (Math.abs(systemState.l2.weight - w) > 0.01) {
@@ -127,16 +137,11 @@ try {
           stateChanged = true;
         }
       }
-
-      // Update Door (With Override)
       if (doorMatch) {
         let rawDoorStatus = doorMatch[1].trim();
-        
-        // LOGIC OVERRIDE: If weight is present, force status to CLOSED
         if (systemState.l2.weight > WEIGHT_THRESHOLD) {
             rawDoorStatus = 'CLOSED';
         }
-
         if (systemState.l2.door !== rawDoorStatus) {
           systemState.l2.door = rawDoorStatus;
           stateChanged = true;
@@ -144,7 +149,6 @@ try {
       }
     }
 
-    // Sync to Firebase if state changed
     if (stateChanged) {
       syncToFirebase();
     }

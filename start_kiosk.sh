@@ -56,7 +56,8 @@ if [ -d "$KIOSK_APP_DIR" ]; then
     # Checks if express, serialport OR firebase are missing
     if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ] || [ ! -d "node_modules/firebase" ]; then
         echo "Backend dependencies missing. Installing express, cors, serialport, firebase..."
-        npm install express cors serialport firebase
+        # ADDED --save to update package.json
+        npm install express cors serialport firebase --save
     fi
 else
     echo "ERROR: Could not find folder at $KIOSK_APP_DIR"
@@ -89,8 +90,8 @@ sleep 20
 
 # --- LAUNCH CHROMIUM ---
 echo "Launching Chromium in Kiosk mode..."
-# Added --no-sandbox which is often helpful in kiosk environments, though not strictly required if running as user
-chromium --password-store=basic --kiosk --disable-restore-session-state --noerrdialogs --disable-gpu --disable-software-rasterizer http://localhost:5173 &
+# Added --disable-background-networking --disable-sync to fix QUOTA_EXCEEDED error
+chromium --password-store=basic --kiosk --disable-restore-session-state --noerrdialogs --disable-gpu --disable-software-rasterizer --disable-background-networking --disable-sync http://localhost:5173 &
 
 echo "--- Setup Complete. Waiting for processes... ---"
 
