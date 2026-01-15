@@ -97,13 +97,14 @@ export default function App() {
     if (selectedLockerId) {
       try {
         await addDoc(collection(db, "transactions"), {
-          transactionId: newTransactionId, // Save to DB
+          transactionId: newTransactionId, 
           lockerId: selectedLockerId,
           pin: newPin,
           price: finalPrice,
           weight: finalWeight,
           type: 'dropoff',
           status: 'paid_pending',
+          laundryStatus: 'Dropped', // <--- ADDED: Sets initial laundry status
           timestamp: new Date()
         });
       } catch (e) {
@@ -168,7 +169,9 @@ export default function App() {
             await updateDoc(transactionRef, {
               status: 'completed',
               pickedUpAt: new Date(),
-              paymentId: paymentId // Save payment reference
+              paymentId: paymentId 
+              // Note: We do NOT set laundryStatus here, 
+              // as it should already be 'Done' (set by staff) before pickup.
             });
           });
         } catch (dbError) {
