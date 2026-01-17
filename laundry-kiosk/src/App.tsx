@@ -13,14 +13,14 @@ import './styles/app.css';
 // Logic and Types
 import { db } from '../firebaseConfig'; 
 import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore'; 
-import { useLockerSystem } from './lockerSystem';
+import { useLockerSystem } from './lockerSystem'; // IMPORTING THE NEW HOOK
 
 type Screen = 
   | 'welcome'
   | 'process-selection'
-  | 'dropoff-instructions' 
+  | 'dropoff-instructions' // Now comes BEFORE available lockers
   | 'available-lockers'
-  | 'weighing-process'     
+  | 'weighing-process'     // New screen for the hardware interaction
   | 'pickup-lockers'
   | 'pin-entry'
   | 'payment'

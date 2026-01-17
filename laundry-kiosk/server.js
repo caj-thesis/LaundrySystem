@@ -7,9 +7,9 @@ import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 
 // --- FIREBASE IMPORTS ---
-import { db, auth } from './firebaseConfig.js'; // <--- Import auth
+import { db, auth } from './firebaseConfig.js'; 
 import { doc, setDoc } from "firebase/firestore";
-import { signInAnonymously } from "firebase/auth"; // <--- Import sign in
+import { signInAnonymously } from "firebase/auth"; 
 
 // --- PATH SETUP ---
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +21,7 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURATION ---
+// CHANGE THIS TO YOUR ACTUAL PORT (e.g., 'COM3' on Windows, '/dev/ttyUSB0' on Linux)
 const ARDUINO_PORT = '/dev/ttyUSB0'; 
 const BAUD_RATE = 9600;
 const WEIGHT_THRESHOLD = 0.1;
@@ -32,10 +33,15 @@ let systemState = {
   credit: 0.0
 };
 
+// --- SIMULATION MODE STATE ---
+// If hardware fails to connect, we use this to simulate weight for UI testing
+let isSimulationMode = false;
+
 // --- LOGGING FUNCTION ---
 function logHardware(data) {
   const timestamp = new Date().toLocaleTimeString();
   const logEntry = `[${timestamp}] ${data}\n`;
+  console.log(logEntry.trim()); // Also log to console
   fs.appendFile(LOG_FILE, logEntry, (err) => {
     if (err) console.error(`Failed to write to log: ${err.message}`);
   });
@@ -46,11 +52,7 @@ let lastUploadTime = 0;
 const UPLOAD_INTERVAL = 2000; 
 
 async function syncToFirebase() {
-  // Ensure we are authenticated before writing
-  if (!auth.currentUser) { 
-    console.log("Waiting for auth to sync...");
-    return;
-  }
+  if (!auth.currentUser) return;
 
   const now = Date.now();
   if (now - lastUploadTime > UPLOAD_INTERVAL) {
@@ -67,14 +69,7 @@ async function syncToFirebase() {
 }
 
 // --- AUTHENTICATION INIT ---
-// Start the listener immediately
-signInAnonymously(auth)
-  .then(() => {
-    console.log("✅ Firebase: Signed in anonymously");
-  })
-  .catch((error) => {
-    console.error("❌ Firebase Auth Error:", error.message);
-  });
+signInAnonymously(auth).catch((error) => console.error("Firebase Auth Error:", error.message));
 
 // --- SERIAL CONNECTION ---
 let port;
@@ -82,10 +77,11 @@ try {
   port = new SerialPort({ path: ARDUINO_PORT, baudRate: BAUD_RATE });
   const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
 
+  console.log(`✅ CONNECTED TO HARDWARE ON ${ARDUINO_PORT}`);
+
   parser.on('data', (line) => {
     const text = line.trim();
-    console.log(`Arduino: ${text}`); 
-    logHardware(text);
+    logHardware(`Arduino: ${text}`);
 
     let stateChanged = false;
 
@@ -93,73 +89,60 @@ try {
     if (text.includes('CREDIT')) {
       const creditMatch = text.match(/CREDIT:?\s*([\d\.]+)/);
       if (creditMatch && creditMatch[1]) {
-        const val = parseFloat(creditMatch[1]);
-        if (!isNaN(val) && systemState.credit !== val) {
-          systemState.credit = val;
-          stateChanged = true;
-        }
+        systemState.credit = parseFloat(creditMatch[1]);
+        stateChanged = true;
       }
     }
 
     // 2. Parse Locker 1
     if (text.startsWith('L1:')) {
-      const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
+      const doorMatch = text.match(/\[(.*?)\]/);
       
       if (weightMatch) {
-        const w = parseFloat(weightMatch[1]);
-        if (Math.abs(systemState.l1.weight - w) > 0.01) {
-          systemState.l1.weight = w;
-          stateChanged = true;
-        }
+        systemState.l1.weight = parseFloat(weightMatch[1]);
+        stateChanged = true;
       }
       if (doorMatch) {
-        let rawDoorStatus = doorMatch[1].trim();
-        if (systemState.l1.weight > WEIGHT_THRESHOLD) {
-            rawDoorStatus = 'CLOSED';
-        }
-        if (systemState.l1.door !== rawDoorStatus) {
-          systemState.l1.door = rawDoorStatus;
-          stateChanged = true;
-        }
+        systemState.l1.door = doorMatch[1].trim();
+        stateChanged = true;
       }
     }
 
     // 3. Parse Locker 2
     if (text.startsWith('L2:')) {
-      const doorMatch = text.match(/\[(.*?)\]/);
       const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
+      const doorMatch = text.match(/\[(.*?)\]/);
       
       if (weightMatch) {
-        const w = parseFloat(weightMatch[1]);
-        if (Math.abs(systemState.l2.weight - w) > 0.01) {
-          systemState.l2.weight = w;
-          stateChanged = true;
-        }
+        systemState.l2.weight = parseFloat(weightMatch[1]);
+        stateChanged = true;
       }
       if (doorMatch) {
-        let rawDoorStatus = doorMatch[1].trim();
-        if (systemState.l2.weight > WEIGHT_THRESHOLD) {
-            rawDoorStatus = 'CLOSED';
-        }
-        if (systemState.l2.door !== rawDoorStatus) {
-          systemState.l2.door = rawDoorStatus;
-          stateChanged = true;
-        }
+        systemState.l2.door = doorMatch[1].trim();
+        stateChanged = true;
       }
     }
 
-    if (stateChanged) {
-      syncToFirebase();
-    }
+    if (stateChanged) syncToFirebase();
   });
 
   port.on('error', (err) => {
-    console.error('Serial Port Error: ', err.message);
+    console.error('Serial Port Error:', err.message);
+    startSimulationMode();
   });
 
 } catch (err) {
-  console.error("FAILED TO OPEN SERIAL PORT:", err.message);
+  console.error("❌ HARDWARE CONNECTION FAILED:", err.message);
+  startSimulationMode();
+}
+
+function startSimulationMode() {
+  if (isSimulationMode) return;
+  isSimulationMode = true;
+  console.log("⚠️  STARTING SIMULATION MODE (For UI Testing) ⚠️");
+  console.log("   - Use POST /api/debug/weight to set weight manually");
+  console.log("   - Or wait for auto-simulation");
 }
 
 // --- API ---
@@ -168,21 +151,33 @@ app.get('/api/status', (req, res) => res.json(systemState));
 app.post('/api/unlock', (req, res) => {
   const { lockerId } = req.body;
   
-  if (!port) {
-    return res.status(500).json({ error: "Hardware not connected" });
+  if (isSimulationMode) {
+    console.log(`[SIMULATION] Unlocking Locker ${lockerId}...`);
+    // Simulate someone putting clothes in after unlocking
+    setTimeout(() => {
+        if (lockerId === 1) systemState.l1.weight = 3.5; // Simulate 3.5kg
+        if (lockerId === 2) systemState.l2.weight = 4.2; // Simulate 4.2kg
+        console.log(`[SIMULATION] Weight detected in Locker ${lockerId}`);
+    }, 2000);
+    return res.json({ success: true, mode: 'simulation' });
   }
 
-  if (lockerId === 1) {
-    port.write('1\n');
-    logHardware('SENT COMMAND: 1 (Unlock L1)');
-    res.json({ success: true });
-  } else if (lockerId === 2) {
-    port.write('2\n');
-    logHardware('SENT COMMAND: 2 (Unlock L2)');
-    res.json({ success: true });
-  } else {
-    res.status(400).json({ error: "Invalid Locker ID" });
-  }
+  if (!port) return res.status(500).json({ error: "Hardware not connected" });
+
+  if (lockerId === 1) port.write('1\n');
+  else if (lockerId === 2) port.write('2\n');
+  else return res.status(400).json({ error: "Invalid Locker ID" });
+
+  res.json({ success: true });
+});
+
+// DEBUG ENDPOINT: Manually set weight for UI testing
+// Usage: curl -X POST -H "Content-Type: application/json" -d '{"lockerId": 1, "weight": 5.5}' http://localhost:3000/api/debug/weight
+app.post('/api/debug/weight', (req, res) => {
+    const { lockerId, weight } = req.body;
+    if (lockerId === 1) systemState.l1.weight = parseFloat(weight);
+    if (lockerId === 2) systemState.l2.weight = parseFloat(weight);
+    res.json({ success: true, newState: systemState });
 });
 
 app.listen(3000, () => console.log('Server running on port 3000'));

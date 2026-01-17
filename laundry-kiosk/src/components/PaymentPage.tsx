@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 
 interface PaymentPageProps {
   lockerId: number;
@@ -15,14 +15,21 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
   const pollInterval = useRef<number | null>(null);
   const baselineCreditRef = useRef<number>(0);
 
-  // Math.max(0, ...) ensures we never calculate a negative number (change)
+  // Use a Ref to keep the latest onComplete function stable across re-renders
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  // Math.max ensures we don't show negative numbers
   const remainingBalance = Math.max(0, price - cashInserted);
   const isPaymentComplete = cashInserted >= price;
 
+  // 1. Initialize Hardware Polling
   useEffect(() => {
     const startPaymentSession = async () => {
       try {
-        // 1. Get Baseline Credit (credit currently on device)
+        // Get Baseline Credit
         const res = await fetch('http://localhost:3000/api/status');
         if (!res.ok) throw new Error('Failed to connect');
         const data = await res.json();
@@ -30,14 +37,13 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
         baselineCreditRef.current = typeof data.credit === 'number' ? data.credit : 0;
         setConnectionError(false);
 
-        // 2. Start Polling for new credit
+        // Poll for changes
         pollInterval.current = window.setInterval(async () => {
           try {
             const pollRes = await fetch('http://localhost:3000/api/status');
             const pollData = await pollRes.json();
             
             const currentTotal = typeof pollData.credit === 'number' ? pollData.credit : 0;
-            // Cash Inserted = Current Total - Baseline
             const sessionCredit = currentTotal - baselineCreditRef.current;
 
             if (sessionCredit >= 0) setCashInserted(sessionCredit);
@@ -57,9 +63,16 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
     return () => { if (pollInterval.current) clearInterval(pollInterval.current); };
   }, []);
 
-  const handleConfirm = () => {
-    if (isPaymentComplete) onComplete();
-  };
+  // 2. AUTO-REDIRECT: Watch for payment completion
+  useEffect(() => {
+    if (isPaymentComplete) {
+      // Timer waits 1.5s, then calls the STABLE ref function
+      const timer = setTimeout(() => {
+        onCompleteRef.current(); 
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isPaymentComplete]); // IMPORTANT: Do NOT include onComplete here
 
   return (
     <div className="payment-page">
@@ -92,14 +105,26 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
             </div>
           </div>
 
-          <button 
-            onClick={handleConfirm} 
-            className="btn-confirm"
-            disabled={!isPaymentComplete}
-            style={{ opacity: isPaymentComplete ? 1 : 0.5 }}
-          >
-            {isPaymentComplete ? 'Complete Payment' : 'Insert Coins'}
-          </button>
+          {/* STATUS DISPLAY (No Button) */}
+          <div style={{ 
+            marginTop: '24px', 
+            height: '80px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            {isPaymentComplete ? (
+              <div className="flex flex-col items-center text-green-600 animate-bounce">
+                 <CheckCircle size={32} />
+                 <span className="text-xl font-bold">Payment Complete!</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center text-gray-400 animate-pulse">
+                 <span className="text-lg font-medium">Please insert coins...</span>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>

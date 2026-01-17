@@ -35,6 +35,14 @@ export function DropOffInstructionsPage({ onNext, onBack }: DropOffInstructionsP
               <p>Place items inside. The smart scale will calculate the price.</p>
             </div>
           </div>
+
+          <div className="instruction-item">
+            <div className="instruction-number">3</div>
+            <div className="instruction-content">
+              <h3>Confirmation</h3>
+              <p>Press confirm to finish transaction.</p>
+            </div>
+          </div>
         </div>
 
         <button onClick={onNext} className="btn-full">
