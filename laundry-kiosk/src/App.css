@@ -12,6 +12,27 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.centered-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 2rem;
+}
+
+.status-circle {
+  width: 96px;
+  height: 96px;
+  background-color: #eff6ff; /* blue-50 */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
 .app-container {
   display: flex;
   align-items: center;
@@ -921,5 +942,4 @@ body {
 .thankyou-footer p {
   font-size: 18px;
   opacity: 0.75;
-}
 }
