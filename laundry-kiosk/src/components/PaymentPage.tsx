@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, WifiOff, Coins } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 interface PaymentPageProps {
   lockerId: number;
-  price: number;  
+  price: number;   
   weight: number; 
   onComplete: () => void;
   onCancel: () => void;
@@ -15,7 +15,8 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
   const pollInterval = useRef<number | null>(null);
   const baselineCreditRef = useRef<number>(0);
 
-  const remainingBalance = price - cashInserted;
+  // Math.max(0, ...) ensures we never calculate a negative number (change)
+  const remainingBalance = Math.max(0, price - cashInserted);
   const isPaymentComplete = cashInserted >= price;
 
   useEffect(() => {
@@ -84,9 +85,9 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
             <div className="cash-inserted-label">Cash Inserted</div>
             <div className="cash-inserted-amount">₱{cashInserted.toFixed(2)}</div>
             <div className="cash-balance">
-              <span>{isPaymentComplete ? 'Change:' : 'Remaining:'}</span>
+              <span>Remaining:</span>
               <span className={isPaymentComplete ? 'complete' : ''}>
-                ₱{Math.abs(remainingBalance).toFixed(2)}
+                ₱{remainingBalance.toFixed(2)}
               </span>
             </div>
           </div>
