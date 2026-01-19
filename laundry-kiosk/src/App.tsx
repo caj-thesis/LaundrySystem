@@ -13,14 +13,14 @@ import './styles/app.css';
 // Logic and Types
 import { db } from '../firebaseConfig'; 
 import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore'; 
-import { useLockerSystem } from './lockerSystem'; // IMPORTING THE NEW HOOK
+import { useLockerSystem } from './lockerSystem'; 
 
 type Screen = 
   | 'welcome'
   | 'process-selection'
-  | 'dropoff-instructions' // Now comes BEFORE available lockers
+  | 'dropoff-instructions'
   | 'available-lockers'
-  | 'weighing-process'     // New screen for the hardware interaction
+  | 'weighing-process'
   | 'pickup-lockers'
   | 'pin-entry'
   | 'payment'
@@ -45,7 +45,6 @@ export default function App() {
   const handleProcessSelection = (process: 'dropoff' | 'pickup') => {
     setProcessType(process);
     if (process === 'dropoff') {
-      // NEW FLOW: Instructions FIRST
       setCurrentScreen('dropoff-instructions');
     } else {
       setCurrentScreen('pickup-lockers');
@@ -54,7 +53,6 @@ export default function App() {
 
   const handleProcessBack = () => setCurrentScreen('welcome');
 
-  // New handler for moving from instructions to locker selection
   const handleInstructionsNext = () => {
     setCurrentScreen('available-lockers');
   };
@@ -65,13 +63,13 @@ export default function App() {
 
   const handleLockerSelect = (lockerId: number) => {
     setSelectedLockerId(lockerId);
-    // Move to the weighing/hardware interaction page
     setCurrentScreen('weighing-process');
   };
 
   const handleAvailableLockersBack = () => setCurrentScreen('dropoff-instructions');
 
-  const handleDropOffComplete = async (finalPrice: number, finalWeight: number) => {
+  // --- UPDATED: Now accepts customerPhone ---
+  const handleDropOffComplete = async (finalPrice: number, finalWeight: number, customerPhone?: string) => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
     
@@ -86,6 +84,7 @@ export default function App() {
           pin: newPin,
           price: finalPrice,
           weight: finalWeight,
+          customerPhone: customerPhone || "N/A", // <--- SAVED TO DATABASE HERE
           type: 'dropoff',
           status: 'paid_pending',
           laundryStatus: 'Dropped', 
@@ -165,7 +164,6 @@ export default function App() {
           <ProcessSelectionPage onSelect={handleProcessSelection} onBack={handleProcessBack} />
         )}
         
-        {/* NEW FLOW STEP 1: General Instructions */}
         {currentScreen === 'dropoff-instructions' && (
            <DropOffInstructionsPage 
              onNext={handleInstructionsNext}
@@ -173,7 +171,6 @@ export default function App() {
            />
         )}
         
-        {/* NEW FLOW STEP 2: Pick Locker */}
         {currentScreen === 'available-lockers' && (
           <AvailableLockersPage 
             lockers={lockers.filter(l => l.status === 'available')} 
@@ -182,11 +179,12 @@ export default function App() {
           />
         )}
         
-        {/* NEW FLOW STEP 3: Weighing/Action (renamed from DropOffInstructionsPage usage) */}
+        {/* WEIGHING PROCESS - Passes the updated handler */}
         {currentScreen === 'weighing-process' && selectedLockerId && (
           <WeighingPage 
             lockerId={selectedLockerId} 
             currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
+            // @ts-ignore - Ignoring type check if WeighingPage definition hasn't been updated yet
             onComplete={handleDropOffComplete} 
             onBack={handleWeighingBack}
           />

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info } from 'lucide-react';
+import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, X } from 'lucide-react';
 
 interface WeighingPageProps {
   lockerId: number;
   currentWeight: number; 
-  onComplete: (price: number, weight: number) => void;
+  onComplete: (price: number, weight: number, customerPhone: string) => void;
   onBack: () => void;
 }
 
@@ -51,6 +51,26 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
     }
     return () => clearTimeout(timer);
   }, [step]);
+
+  // --- STATE & HANDLERS FOR SMS ---
+  const [customerPhone, setCustomerPhone] = useState('');
+
+  // Validate: Must be exactly 11 digits and numeric
+  const isValidPhone = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
+
+  const handleKeypadPress = (digit: string) => {
+    if (customerPhone.length < 11) {
+      setCustomerPhone(prev => prev + digit);
+    }
+  };
+
+  const handleBackspace = () => {
+    setCustomerPhone(prev => prev.slice(0, -1));
+  };
+
+  const handleClear = () => {
+    setCustomerPhone('');
+  };
 
   // --- RENDER: STEP 1 - OPENING ---
   if (step === 'opening') {
@@ -102,12 +122,12 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
             <span>Door Unlocked & Scale Active</span>
           </div>
 
-          {/* HIGHLIGHTED CARDS SECTION - Using Inline Styles for Guaranteed Size/Color */}
+          {/* HIGHLIGHTED CARDS SECTION */}
           <div style={{ display: 'flex', width: '100%', maxWidth: '900px', gap: '24px', alignItems: 'stretch' }}>
              
-             {/* Weight Card - Solid Blue Background */}
+             {/* Weight Card */}
              <div style={{ 
-                 backgroundColor: '#2563eb', // Solid Blue
+                 backgroundColor: '#2563eb', 
                  color: 'white',
                  borderRadius: '24px',
                  padding: '24px',
@@ -122,15 +142,14 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                    <Scale size={28} />
                    <span>Current Weight</span>
                 </div>
-                {/* Massive Text */}
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    {currentWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
                 </div>
              </div>
 
-             {/* Price Card - Solid Amber/Orange Background */}
+             {/* Price Card */}
              <div style={{ 
-                 backgroundColor: '#d97706', // Solid Amber
+                 backgroundColor: '#d97706', 
                  color: 'white',
                  borderRadius: '24px',
                  padding: '24px',
@@ -145,7 +164,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                    <PhilippinePeso size={28} />
                    <span>Total Price</span>
                 </div>
-                {/* Massive Text */}
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    ₱{totalPrice.toFixed(2)}
                 </div>
@@ -200,52 +218,53 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
     );
   }
 
-// --- RENDER: STEP 4 - SUMMARY (Fixed Layout) ---
+  // --- RENDER: STEP 4 - SUMMARY (Receipt + Keypad) ---
   return (
     <div className="summary-page" style={{ 
       flexDirection: 'column', 
       height: '100%', 
       padding: '0', 
       backgroundColor: '#f3f4f6',
-      overflow: 'hidden' // Prevent full page scroll
+      overflow: 'hidden' 
     }}>
       
-      {/* Header - Very Compact */}
+      {/* Header */}
       <div className="page-header" style={{ 
-         padding: '12px 0 8px', // Reduced top padding
+         padding: '12px 0 8px', 
          marginBottom: '0',
          textAlign: 'center',
          flexShrink: 0
       }}>
         <h2 className="text-xl font-bold text-gray-800">Drop Off Summary</h2>
-        <p className="text-sm text-gray-500">Review your transaction</p>
+        <p className="text-sm text-gray-500">Review transaction & enter contact details</p>
       </div>
 
-      {/* Main Content - Receipt Card */}
+      {/* Main Content - Split Layout */}
       <div style={{ 
-         flex: 1, 
-         display: 'flex', 
-         alignItems: 'center', 
-         justifyContent: 'center', 
-         padding: '8px 24px', // Reduced vertical padding
-         overflowY: 'auto' // Allow card to scroll internally if screen is extremely short
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'row', 
+          alignItems: 'stretch',
+          justifyContent: 'center', 
+          gap: '24px', 
+          padding: '8px 24px', 
+          overflowY: 'auto' 
       }}>
         
+        {/* LEFT CARD: Receipt */}
         <div style={{ 
             backgroundColor: 'white',
-            width: '100%',
-            maxWidth: '600px',
+            flex: 1, 
+            maxWidth: '500px', 
             borderRadius: '12px',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            borderTop: '6px solid #2563eb', // Slightly thinner bar
+            borderTop: '6px solid #2563eb', 
             display: 'flex',
             flexDirection: 'column',
             fontFamily: '"Courier New", Courier, monospace'
         }}>
-           
-           {/* Receipt Header */}
            <div style={{ 
-               padding: '16px 24px', // Reduced padding
+               padding: '16px 24px', 
                borderBottom: '2px dashed #e5e7eb',
                backgroundColor: '#f8fafc',
                display: 'flex', 
@@ -262,10 +281,7 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
               </div>
            </div>
 
-           {/* Receipt Body */}
-           <div style={{ padding: '20px 24px', flex: 1 }}> {/* Reduced padding */}
-              
-              {/* Item Row */}
+           <div style={{ padding: '20px 24px', flex: 1 }}> 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
                  <div>
                     <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
@@ -274,35 +290,117 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                  <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{currentWeight.toFixed(1)} kg</span>
               </div>
 
-              {/* Divider - Compact */}
               <div style={{ width: '100%', height: '2px', borderTop: '2px dashed #cbd5e1', margin: '16px 0' }}></div>
 
-              {/* Total Row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                  <span style={{ fontSize: '20px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a' }}>Total Due</span>
-                 {/* Slightly reduced total size to ensure fit */}
                  <span style={{ fontSize: '48px', fontWeight: '800', color: '#2563eb', lineHeight: '1' }}>₱{totalPrice.toFixed(2)}</span>
               </div>
-
            </div>
-           
         </div>
+
+        {/* RIGHT CARD: SMS Input with Keypad */}
+        <div style={{ 
+            backgroundColor: 'white',
+            flex: 1, 
+            maxWidth: '500px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            borderTop: '6px solid #16a34a',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '16px 24px' // Slightly tighter padding to fit keypad
+        }}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">SMS Notification</h3>
+            
+            {/* Display Screen */}
+            <div className="relative mb-4">
+              <input
+                type="text"
+                readOnly
+                value={customerPhone}
+                placeholder="09XXXXXXXXX"
+                className="w-full text-2xl font-bold text-center p-3 border-2 rounded-lg bg-gray-50 text-gray-800 focus:outline-none"
+                style={{
+                  letterSpacing: '3px',
+                  borderColor: isValidPhone ? '#16a34a' : '#e5e7eb'
+                }}
+              />
+              <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)' }}>
+                {isValidPhone && <span style={{ color: '#16a34a', fontSize: '24px' }}>✔</span>}
+              </div>
+            </div>
+
+            {/* Keypad Grid */}
+            <div style={{ 
+               flex: 1, 
+               display: 'grid', 
+               gridTemplateColumns: 'repeat(3, 1fr)', 
+               gap: '12px',
+               marginBottom: '8px' 
+            }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => handleKeypadPress(num.toString())}
+                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-lg text-xl font-bold shadow-sm transition-colors"
+                  style={{ height: '100%' }}
+                >
+                  {num}
+                </button>
+              ))}
+              
+              {/* Bottom Row */}
+              <button 
+                onClick={handleClear}
+                className="bg-red-50 hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center font-bold"
+              >
+                <X size={24} />
+              </button>
+              
+              <button 
+                onClick={() => handleKeypadPress('0')}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xl font-bold"
+              >
+                0
+              </button>
+              
+              <button 
+                onClick={handleBackspace}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center"
+              >
+                <Delete size={24} />
+              </button>
+            </div>
+            
+            <div className="h-6 text-center">
+               {!isValidPhone && customerPhone.length > 0 && (
+                 <span className="text-red-500 text-xs font-medium">11 Digits Required</span>
+               )}
+            </div>
+        </div>
+
       </div>
 
-      {/* Footer Action Button - Fixed Height */}
+      {/* Footer Action Button */}
       <div style={{ 
-         padding: '16px 24px', 
-         width: '100%', 
-         borderTop: '1px solid #e5e7eb', 
-         backgroundColor: 'white',
-         flexShrink: 0 // Prevent shrinking
+          padding: '16px 24px', 
+          width: '100%', 
+          borderTop: '1px solid #e5e7eb', 
+          backgroundColor: 'white',
+          flexShrink: 0 
       }}>
         <button 
-          onClick={() => onComplete(totalPrice, currentWeight)} 
-          className="btn-full bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-100"
-          style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold' }}
+          onClick={() => onComplete(totalPrice, currentWeight, customerPhone)} 
+          disabled={!isValidPhone}
+          className={`btn-full shadow-lg text-white ${
+            isValidPhone 
+              ? 'bg-green-600 hover:bg-green-700 shadow-green-100' 
+              : 'bg-gray-300 cursor-not-allowed shadow-none'
+          }`}
+          style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', transition: 'all 0.2s' }}
         >
-          CONFIRM
+          {isValidPhone ? 'CONFIRM & DROP OFF' : 'ENTER PHONE NUMBER'}
         </button>
       </div>
     </div>

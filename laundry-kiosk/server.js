@@ -21,10 +21,8 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURATION ---
-// CHANGE THIS TO YOUR ACTUAL PORT (e.g., 'COM3' on Windows, '/dev/ttyUSB0' on Linux)
 const ARDUINO_PORT = '/dev/ttyUSB0'; 
 const BAUD_RATE = 9600;
-const WEIGHT_THRESHOLD = 0.1;
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -34,14 +32,13 @@ let systemState = {
 };
 
 // --- SIMULATION MODE STATE ---
-// If hardware fails to connect, we use this to simulate weight for UI testing
 let isSimulationMode = false;
 
 // --- LOGGING FUNCTION ---
 function logHardware(data) {
   const timestamp = new Date().toLocaleTimeString();
   const logEntry = `[${timestamp}] ${data}\n`;
-  console.log(logEntry.trim()); // Also log to console
+  console.log(logEntry.trim()); 
   fs.appendFile(LOG_FILE, logEntry, (err) => {
     if (err) console.error(`Failed to write to log: ${err.message}`);
   });
@@ -53,7 +50,6 @@ const UPLOAD_INTERVAL = 2000;
 
 async function syncToFirebase() {
   if (!auth.currentUser) return;
-
   const now = Date.now();
   if (now - lastUploadTime > UPLOAD_INTERVAL) {
     try {
@@ -140,9 +136,8 @@ try {
 function startSimulationMode() {
   if (isSimulationMode) return;
   isSimulationMode = true;
-  console.log("⚠️  STARTING SIMULATION MODE (For UI Testing) ⚠️");
-  console.log("   - Use POST /api/debug/weight to set weight manually");
-  console.log("   - Or wait for auto-simulation");
+  console.log("⚠️  STARTING SIMULATION MODE (UI Testing) ⚠️");
+  console.log("   - Weights will simulate IMMEDIATELY upon unlock.");
 }
 
 // --- API ---
@@ -151,14 +146,15 @@ app.get('/api/status', (req, res) => res.json(systemState));
 app.post('/api/unlock', (req, res) => {
   const { lockerId } = req.body;
   
+  // --- UPDATED: IMMEDIATE SIMULATION ---
   if (isSimulationMode) {
     console.log(`[SIMULATION] Unlocking Locker ${lockerId}...`);
-    // Simulate someone putting clothes in after unlocking
-    setTimeout(() => {
-        if (lockerId === 1) systemState.l1.weight = 3.5; // Simulate 3.5kg
-        if (lockerId === 2) systemState.l2.weight = 4.2; // Simulate 4.2kg
-        console.log(`[SIMULATION] Weight detected in Locker ${lockerId}`);
-    }, 2000);
+    
+    // NO DELAY (setTimeout removed)
+    if (lockerId === 1) systemState.l1.weight = 3.5; 
+    if (lockerId === 2) systemState.l2.weight = 4.2; 
+    
+    console.log(`[SIMULATION] Weight detected immediately in Locker ${lockerId}`);
     return res.json({ success: true, mode: 'simulation' });
   }
 
@@ -171,8 +167,6 @@ app.post('/api/unlock', (req, res) => {
   res.json({ success: true });
 });
 
-// DEBUG ENDPOINT: Manually set weight for UI testing
-// Usage: curl -X POST -H "Content-Type: application/json" -d '{"lockerId": 1, "weight": 5.5}' http://localhost:3000/api/debug/weight
 app.post('/api/debug/weight', (req, res) => {
     const { lockerId, weight } = req.body;
     if (lockerId === 1) systemState.l1.weight = parseFloat(weight);
