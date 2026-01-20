@@ -37,20 +37,46 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
   }, [lockerId, step]);
 
   // 2. Handle User Confirmation ("Lock & Pay")
-  const handleLock = () => {
-    setStep('weighing');
+const handleLock = async () => {
+  setStep('weighing'); // Show the "Locking..." loading state
+  
+  try {
+    // Call the new lock API
+    await fetch('http://localhost:3000/api/lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lockerId }),
+    });
+    
+    // The useEffect already handles moving from 'weighing' to 'summary' after 2.5s
+  } catch (err) {
+    console.error("Locking failed:", err);
+    // Even if it fails, you might want to move to summary or show an error
+    setStep('summary');
+  }
   };
+  
+   // 3. Simulate Locking & Final Weighing
 
-  // 3. Simulate Locking & Final Weighing
   useEffect(() => {
+
     let timer: NodeJS.Timeout;
+
     if (step === 'weighing') {
+
       timer = setTimeout(() => {
+
         setStep('summary');
-      }, 2500); 
+
+      }, 2500);
+
     }
+
     return () => clearTimeout(timer);
+
   }, [step]);
+
+
 
   // --- STATE & HANDLERS FOR SMS ---
   const [customerPhone, setCustomerPhone] = useState('');

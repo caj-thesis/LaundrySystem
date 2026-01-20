@@ -22,7 +22,7 @@ app.use(express.json());
 
 // --- CONFIGURATION ---
 const ARDUINO_PORT = '/dev/ttyUSB0'; 
-const BAUD_RATE = 9600;
+const BAUD_RATE = 115200; // Changed from 9600
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -75,53 +75,38 @@ try {
 
   console.log(`✅ CONNECTED TO HARDWARE ON ${ARDUINO_PORT}`);
 
-  parser.on('data', (line) => {
+ 
+// --- Updated Serial Parsing in server.js ---
+parser.on('data', (line) => {
     const text = line.trim();
     logHardware(`Arduino: ${text}`);
 
-    let stateChanged = false;
+    // If the line starts with "DATA", it contains our locker info
+    if (text.startsWith('DATA')) {
+        const parts = text.split('|'); // Splits into ["DATA", "L1:0.0:CLOSED", "L2:0.0:CLOSED"...]
+        
+        parts.forEach(part => {
+            // Check for Locker 1
+            if (part.startsWith('L1:')) {
+                const data = part.split(':'); // ["L1", "0.0", "CLOSED"]
+                systemState.l1.weight = parseFloat(data[1]) || 0;
+                systemState.l1.door = data[2];
+            }
+            // Check for Locker 2
+            if (part.startsWith('L2:')) {
+                const data = part.split(':');
+                systemState.l2.weight = parseFloat(data[1]) || 0;
+                systemState.l2.door = data[2];
+            }
+            // Check for Credit
+            if (part.startsWith('CREDIT:')) {
+                systemState.credit = parseFloat(part.split(':')[1]) || 0;
+            }
+        });
 
-    // 1. Parse Credit
-    if (text.includes('CREDIT')) {
-      const creditMatch = text.match(/CREDIT:?\s*([\d\.]+)/);
-      if (creditMatch && creditMatch[1]) {
-        systemState.credit = parseFloat(creditMatch[1]);
-        stateChanged = true;
-      }
+        syncToFirebase(); // Send the real weight to your database
     }
-
-    // 2. Parse Locker 1
-    if (text.startsWith('L1:')) {
-      const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
-      const doorMatch = text.match(/\[(.*?)\]/);
-      
-      if (weightMatch) {
-        systemState.l1.weight = parseFloat(weightMatch[1]);
-        stateChanged = true;
-      }
-      if (doorMatch) {
-        systemState.l1.door = doorMatch[1].trim();
-        stateChanged = true;
-      }
-    }
-
-    // 3. Parse Locker 2
-    if (text.startsWith('L2:')) {
-      const weightMatch = text.match(/Wt:\s*([\d\.]+)/);
-      const doorMatch = text.match(/\[(.*?)\]/);
-      
-      if (weightMatch) {
-        systemState.l2.weight = parseFloat(weightMatch[1]);
-        stateChanged = true;
-      }
-      if (doorMatch) {
-        systemState.l2.door = doorMatch[1].trim();
-        stateChanged = true;
-      }
-    }
-
-    if (stateChanged) syncToFirebase();
-  });
+});
 
   port.on('error', (err) => {
     console.error('Serial Port Error:', err.message);
@@ -173,5 +158,25 @@ app.post('/api/debug/weight', (req, res) => {
     if (lockerId === 2) systemState.l2.weight = parseFloat(weight);
     res.json({ success: true, newState: systemState });
 });
+
+// Add this to your server.js to handle the locking command
+// server.js
+app.post('/api/lock', (req, res) => {
+  const { lockerId } = req.body;
+  
+  // These characters 'a', 'b', 'c' match your Arduino 'LOCK' logic
+  const lockCommands = { 1: 'a', 2: 'b', 3: 'c' };
+  const cmd = lockCommands[lockerId];
+
+  if (port && cmd) {
+    port.write(`${cmd}\n`); 
+    console.log(`Sent LOCK command to Arduino: ${cmd}`);
+    res.json({ success: true });
+  } else {
+    // If hardware isn't connected, still return success for UI testing
+    res.json({ success: true, warning: "Hardware not connected" });
+  }
+});
+
 
 app.listen(3000, () => console.log('Server running on port 3000'));
