@@ -1,3 +1,6 @@
+import escpos from 'escpos';
+import escposUSB from 'escpos-usb';
+escpos.USB = escposUSB;
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -23,6 +26,10 @@ app.use(express.json());
 // --- CONFIGURATION ---
 const ARDUINO_PORT = '/dev/ttyUSB0'; 
 const BAUD_RATE = 115200; // Changed from 9600
+
+// --- PRINTER SETUP ---
+const device = new escpos.USB(0x0483, 0x070b); 
+const printer = new escpos.Printer(device);
 
 // --- STATE STORAGE ---
 let systemState = {
@@ -178,5 +185,51 @@ app.post('/api/lock', (req, res) => {
   }
 });
 
+// Create the /api/print endpoint
+app.post('/api/print', (req, res) => {
+  const { transactionId, pin, processType, weight, price } = req.body;
+
+  device.open((error) => {
+    if (error) {
+      console.error("Printer Error:", error);
+      return res.status(500).json({ error: "Printer not found" });
+    }
+
+    printer
+      .font('a')
+      .align('ct')
+      .style('bu')
+      .size(1, 1)
+      .text('LAUNDRY KIOSK')
+      .size(0, 0)
+      .text('--------------------------------')
+      .align('lt')
+      .text(`Date: ${new Date().toLocaleString()}`)
+      .text(`Trans #: ${transactionId || 'N/A'}`)
+      .text(`Service: ${processType.toUpperCase()}`)
+      .text('--------------------------------');
+
+    if (processType === 'dropoff') {
+      printer
+        .size(1, 1)
+        .text(`PICKUP PIN: ${pin}`)
+        .size(0, 0)
+        .text('Keep this PIN to claim your items.');
+    } else {
+      printer
+        .text(`Weight: ${weight || 0} kg`)
+        .text(`Paid: PHP ${price || 0}`);
+    }
+
+    printer
+      .text('--------------------------------')
+      .align('ct')
+      .text('Thank you!')
+      .feed(3)
+      .close();
+      
+    res.json({ success: true });
+  });
+});
 
 app.listen(3000, () => console.log('Server running on port 3000'));

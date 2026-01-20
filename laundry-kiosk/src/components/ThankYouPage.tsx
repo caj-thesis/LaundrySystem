@@ -21,7 +21,9 @@ useEffect(() => {
         body: JSON.stringify({
           transactionId: transactionId,
           pin: generatedPin,
-          processType: processType
+          processType: processType,
+          weight: weight, // Ensure these props are passed to ThankYouPage
+          price: price
         }),
       });
     } catch (error) {
