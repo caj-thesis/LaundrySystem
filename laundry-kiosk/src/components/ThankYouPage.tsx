@@ -4,19 +4,44 @@ import { useEffect } from 'react';
 interface ThankYouPageProps {
   processType: 'dropoff' | 'pickup';
   generatedPin?: string | null;
-  transactionId?: string | null; // NEW PROP
+  transactionId?: string | null;
+  price?: number;  // Added
+  weight?: number; // Added
   onReset: () => void;
 }
 
 export function ThankYouPage({ processType, generatedPin, transactionId, onReset }: ThankYouPageProps) {
-  useEffect(() => {
-    // Timer to reset page
-    const timer = setTimeout(() => {
-      onReset();
-    }, 10000);
+// Inside ThankYouPage component
+useEffect(() => {
+  const printReceipt = async () => {
+    try {
+      await fetch('http://localhost:3000/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: transactionId,
+          pin: generatedPin,
+          processType: processType,
+          weight: weight, // Ensure these props are passed to ThankYouPage
+          price: price
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to print:", error);
+    }
+  };
 
-    return () => clearTimeout(timer);
-  }, [onReset]);
+  if (transactionId) {
+    printReceipt();
+  }
+
+  // Your existing reset timer
+  const timer = setTimeout(() => {
+    onReset();
+  }, 10000);
+
+  return () => clearTimeout(timer);
+}, [onReset, transactionId, generatedPin, processType]);
 
   return (
     <div className="thankyou-page">
