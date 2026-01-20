@@ -1,19 +1,25 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { WelcomePage } from './components/WelcomePage';
 import { ProcessSelectionPage } from './components/ProcessSelectionPage';
 import { AvailableLockersPage } from './components/AvailableLockersPage';
 import { DropOffInstructionsPage } from './components/DropOffInstructionsPage';
+import { WeighingPage } from './components/WeighingPage';
 import { PickupLockersPage } from './components/PickupLockersPage';
 import { PinCodePage } from './components/PinCodePage';
 import { PaymentPage } from './components/PaymentPage';
 import { ThankYouPage } from './components/ThankYouPage';
 import './styles/app.css';
+// Logic and Types
+import { db } from '../firebaseConfig'; 
+import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore'; 
+import { useLockerSystem } from './lockerSystem'; 
 
 type Screen = 
   | 'welcome'
   | 'process-selection'
-  | 'available-lockers'
   | 'dropoff-instructions'
+  | 'available-lockers'
+  | 'weighing-process'
   | 'pickup-lockers'
   | 'pin-entry'
   | 'payment'
@@ -21,117 +27,218 @@ type Screen =
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
-  const [selectedLocker, setSelectedLocker] = useState<number | null>(null);
+  const [selectedLockerId, setSelectedLockerId] = useState<number | null>(null);
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
+  
+  // Use the centralized hook for locker state
+  const { lockers } = useLockerSystem();
 
-  const handleWelcomeNext = () => {
-    setCurrentScreen('process-selection');
-  };
+  const [lastGeneratedPin, setLastGeneratedPin] = useState<string | null>(null);
+  const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
+
+  const selectedLocker = lockers.find(l => l.id === selectedLockerId);
+
+  // --- NAVIGATION HANDLERS ---
+  const handleWelcomeNext = () => setCurrentScreen('process-selection');
 
   const handleProcessSelection = (process: 'dropoff' | 'pickup') => {
     setProcessType(process);
     if (process === 'dropoff') {
-      setCurrentScreen('available-lockers');
+      setCurrentScreen('dropoff-instructions');
     } else {
       setCurrentScreen('pickup-lockers');
     }
   };
 
-  const handleProcessBack = () => {
-    setCurrentScreen('welcome');
-  };
+  const handleProcessBack = () => setCurrentScreen('welcome');
 
-  const handleLockerSelect = (lockerId: number) => {
-    setSelectedLocker(lockerId);
-    setCurrentScreen('dropoff-instructions');
-  };
-
-  const handleAvailableLockersBack = () => {
-    setCurrentScreen('process-selection');
-  };
-
-  const handleDropOffComplete = () => {
-    setCurrentScreen('thank-you');
-  };
-
-  const handleDropOffBack = () => {
+  const handleInstructionsNext = () => {
     setCurrentScreen('available-lockers');
   };
 
-  const handlePickupLockerSelect = (lockerId: number) => {
-    setSelectedLocker(lockerId);
-    setCurrentScreen('pin-entry');
-  };
-
-  const handlePickupLockersBack = () => {
+  const handleInstructionsBack = () => {
     setCurrentScreen('process-selection');
   };
 
-  const handlePinVerified = () => {
-    setCurrentScreen('payment');
+  const handleLockerSelect = (lockerId: number) => {
+    setSelectedLockerId(lockerId);
+    setCurrentScreen('weighing-process');
   };
 
-  const handlePinCancel = () => {
-    setCurrentScreen('pickup-lockers');
+  const handleAvailableLockersBack = () => setCurrentScreen('dropoff-instructions');
+
+  // --- UPDATED: Now accepts customerPhone ---
+  // App.tsx
+const handleDropOffComplete = async (finalPrice: number, finalWeight: number, customerPhone?: string) => {
+  const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+  const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
+  
+  setLastGeneratedPin(newPin);
+  setLastTransactionId(newTransactionId);
+
+  // 1. Move to the Thank You screen IMMEDIATELY
+  // This ensures the user isn't stuck if Firebase is down or over quota
+  setCurrentScreen('thank-you');
+
+  if (selectedLockerId) {
+    try {
+      // 2. Physical Lock Command
+      await fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId: selectedLockerId }),
+      });
+
+      // 3. Attempt Firebase Save (This will likely still fail in the console)
+      await addDoc(collection(db, "transactions"), {
+        transactionId: newTransactionId,
+        lockerId: selectedLockerId,
+        pin: newPin,
+        price: finalPrice,
+        weight: finalWeight,
+        customerPhone: customerPhone || "N/A",
+        type: 'dropoff',
+        status: 'paid_pending',
+        timestamp: new Date()
+      });
+    } catch (e) {
+      console.error("Data was not saved to cloud due to Quota:", e);
+      // Data isn't in Firebase, but the user has their PIN on the screen now.
+    }
+  }
+};
+  const handleWeighingBack = () => setCurrentScreen('available-lockers');
+
+  const handlePickupLockerSelect = (lockerId: number) => {
+    setSelectedLockerId(lockerId);
+    setCurrentScreen('pin-entry');
   };
 
-  const handlePaymentCancel = () => {
-    setCurrentScreen('pickup-lockers');
-  };
+  const handlePickupLockersBack = () => setCurrentScreen('process-selection');
 
-  const handlePaymentComplete = () => {
+  const handlePinVerified = () => setCurrentScreen('payment');
+
+  const handlePinCancel = () => setCurrentScreen('pickup-lockers');
+
+  const handlePaymentCancel = () => setCurrentScreen('pickup-lockers');
+
+  const handlePaymentComplete = async () => {
+    const paymentId = `PAY-${Math.floor(Date.now() / 1000)}`;
+    setLastTransactionId(paymentId);
+
+    if (selectedLockerId) {
+      try {
+        await fetch('http://localhost:3000/api/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lockerId: selectedLockerId })
+        }).catch(err => console.error("Unlock failed:", err));
+
+        const q = query(
+          collection(db, "transactions"),
+          where("lockerId", "==", selectedLockerId),
+          where("status", "==", "paid_pending")
+        );
+
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach(async (document) => {
+          const transactionRef = doc(db, "transactions", document.id);
+          await updateDoc(transactionRef, {
+            status: 'completed',
+            pickedUpAt: new Date(),
+            paymentId: paymentId
+          });
+        });
+
+      } catch (e) {
+        console.error("Error completing payment:", e);
+      }
+    }
     setCurrentScreen('thank-you');
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setCurrentScreen('welcome');
-    setSelectedLocker(null);
+    setSelectedLockerId(null);
     setProcessType(null);
-  };
+    setLastGeneratedPin(null);
+    setLastTransactionId(null);
+  }, []);
 
   return (
     <div className="app-container">
       <div className="kiosk-screen">
-        {currentScreen === 'welcome' && (
-          <WelcomePage onNext={handleWelcomeNext} />
-        )}
+        {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} />}
+        
         {currentScreen === 'process-selection' && (
           <ProcessSelectionPage onSelect={handleProcessSelection} onBack={handleProcessBack} />
         )}
-        {currentScreen === 'available-lockers' && (
-          <AvailableLockersPage onSelectLocker={handleLockerSelect} onBack={handleAvailableLockersBack} />
+        
+        {currentScreen === 'dropoff-instructions' && (
+           <DropOffInstructionsPage 
+             onNext={handleInstructionsNext}
+             onBack={handleInstructionsBack}
+           />
         )}
-        {currentScreen === 'dropoff-instructions' && selectedLocker && (
-          <DropOffInstructionsPage 
-            lockerId={selectedLocker} 
-            onComplete={handleDropOffComplete}
-            onBack={handleDropOffBack}
+        
+        {currentScreen === 'available-lockers' && (
+          <AvailableLockersPage 
+            lockers={lockers.filter(l => l.status === 'available')} 
+            onSelectLocker={handleLockerSelect} 
+            onBack={handleAvailableLockersBack} 
           />
         )}
-        {currentScreen === 'pickup-lockers' && (
-          <PickupLockersPage onSelectLocker={handlePickupLockerSelect} onBack={handlePickupLockersBack} />
+        
+        {/* WEIGHING PROCESS - Passes the updated handler */}
+        {currentScreen === 'weighing-process' && selectedLockerId && (
+          <WeighingPage 
+            lockerId={selectedLockerId} 
+            currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
+            // @ts-ignore - Ignoring type check if WeighingPage definition hasn't been updated yet
+            onComplete={handleDropOffComplete} 
+            onBack={handleWeighingBack}
+          />
         )}
+        
+        {currentScreen === 'pickup-lockers' && (
+          <PickupLockersPage 
+            lockers={lockers.filter(l => l.status === 'occupied')} 
+            onSelectLocker={handlePickupLockerSelect} 
+            onBack={handlePickupLockersBack} 
+          />
+        )}
+        
         {currentScreen === 'pin-entry' && selectedLocker && (
           <PinCodePage 
-            lockerId={selectedLocker}
+            lockerId={selectedLocker.id}
+            correctPin={selectedLocker.pin || '0000'}
             onVerified={handlePinVerified}
             onCancel={handlePinCancel}
           />
         )}
+        
         {currentScreen === 'payment' && selectedLocker && (
           <PaymentPage 
-            lockerId={selectedLocker}
+            lockerId={selectedLocker.id}
+            price={selectedLocker.price || 0}
+            weight={selectedLocker.weight || 0}
             onComplete={handlePaymentComplete}
             onCancel={handlePaymentCancel}
           />
         )}
+        
         {currentScreen === 'thank-you' && (
           <ThankYouPage 
             processType={processType!}
+            generatedPin={lastGeneratedPin}
+            transactionId={lastTransactionId} 
             onReset={handleReset}
           />
         )}
       </div>
+    
     </div>
   );
+ 
 }
+

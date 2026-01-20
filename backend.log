@@ -1,0 +1,145 @@
+✅ CONNECTED TO HARDWARE ON /dev/ttyUSB0
+Server running on port 3000
+Serial Port Error: Error Resource temporarily unavailable Cannot lock port
+⚠️  STARTING SIMULATION MODE (For UI Testing) [18:21:33] Arduino: --- SYSTEM MONITOR ---
+[18:21:33] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.9 kg
+[18:21:34] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:21:34] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:21:34] Arduino: CREDIT: 0.00 PHP
+[18:21:34] Arduino: >>> COIN DETECTED: 1
+[18:21:34] Arduino: [+] Accepted: 1
+[18:21:34] Arduino: >>> UNLOCKING L1 <<<
+[18:21:39] Arduino: >>> DOOR OPENED. SOLENOID OFF. <<<
+[18:21:39] Arduino: --- SYSTEM MONITOR ---
+[18:21:39] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 2.3 kg
+[18:21:39] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:21:39] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:21:39] Arduino: CREDIT: 1.00 PHP
+[18:21:39] Arduino: >>> UNLOCKING L1 <<<
+[18:21:44] Arduino: >>> DOOR OPENED. SOLENOID OFF. <<<
+[18:22:05] Arduino: --- SYSTEM MONITOR ---
+[18:22:05] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:05] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:05] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:05] Arduino: CREDIT: 1.00 PHP
+[18:22:05] Arduino: >>> COIN DETECTED: 5
+[18:22:05] Arduino: [+] Accepted: 5
+[18:22:07] Arduino: --- SYSTEM MONITOR ---
+[18:22:07] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:07] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:07] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:07] Arduino: CREDIT: 6.00 PHP
+[18:22:09] Arduino: --- SYSTEM MONITOR ---
+[18:22:10] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:10] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:10] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:10] Arduino: CREDIT: 6.00 PHP
+[18:22:12] Arduino: --- SYSTEM MONITOR ---
+[18:22:12] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:12] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:12] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:12] Arduino: CREDIT: 6.00 PHP
+[18:22:14] Arduino: --- SYSTEM MONITOR ---
+[18:22:14] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:14] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:14] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:14] Arduino: CREDIT: 6.00 PHP
+[18:22:16] Arduino: --- SYSTEM MONITOR ---
+[18:22:16] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:16] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:16] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:16] Arduino: CREDIT: 6.00 PHP
+[18:22:19] Arduino: --- SYSTEM MONITOR ---
+[18:22:19] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:19] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:19] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:19] Arduino: CREDIT: 6.00 PHP
+[18:22:21] Arduino: --- SYSTEM MONITOR ---
+[18:22:21] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:21] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:21] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:21] Arduino: CREDIT: 6.00 PHP
+[18:22:23] Arduino: --- SYSTEM MONITOR ---
+[18:22:23] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:23] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:23] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:23] Arduino: CREDIT: 6.00 PHP
+[18:22:25] Arduino: --- SYSTEM MONITOR ---
+[18:22:25] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:25] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:25] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:25] Arduino: CREDIT: 6.00 PHP
+[18:22:27] Arduino: --- SYSTEM MONITOR ---
+[18:22:27] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:27] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:27] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:27] Arduino: CREDIT: 6.00 PHP
+[18:22:30] Arduino: --- SYSTEM MONITOR ---
+[18:22:30] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:30] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:30] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:30] Arduino: CREDIT: 6.00 PHP
+[18:22:32] Arduino: --- SYSTEM MONITOR ---
+[18:22:32] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:32] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:32] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:32] Arduino: CREDIT: 6.00 PHP
+[18:22:34] Arduino: --- SYSTEM MONITOR ---
+[18:22:34] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:34] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:34] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:34] Arduino: CREDIT: 6.00 PHP
+[18:22:36] Arduino: --- SYSTEM MONITOR ---
+[18:22:36] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:36] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:36] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:37] Arduino: CREDIT: 6.00 PHP
+[18:22:39] Arduino: --- SYSTEM MONITOR ---
+[18:22:39] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:39] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:39] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:39] Arduino: CREDIT: 6.00 PHP
+[18:22:41] Arduino: --- SYSTEM MONITOR ---
+[18:22:41] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:41] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:41] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:41] Arduino: CREDIT: 6.00 PHP
+[18:22:43] Arduino: --- SYSTEM MONITOR ---
+[18:22:43] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:43] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:43] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:43] Arduino: CREDIT: 6.00 PHP
+[18:22:45] Arduino: --- SYSTEM MONITOR ---
+[18:22:45] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:45] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:45] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:45] Arduino: CREDIT: 6.00 PHP
+[18:22:47] Arduino: --- SYSTEM MONITOR ---
+[18:22:47] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:47] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:47] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:47] Arduino: CREDIT: 6.00 PHP
+[18:22:49] Arduino: --- SYSTEM MONITOR ---
+[18:22:49] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:49] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:49] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:49] Arduino: CREDIT: 6.00 PHP
+[18:22:52] Arduino: --- SYSTEM MONITOR ---
+[18:22:52] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:52] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:52] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:22:52] Arduino: CREDIT: 6.00 PHP
+[18:24:24] Arduino: --- SYSTEM MONITOR ---
+[18:24:24] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:24:24] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:24:24] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:24:24] Arduino: CREDIT: 6.00 PHP
+[18:24:31] Arduino: --- SYSTEM MONITOR ---
+[18:24:31] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:24:31] Arduino: L2: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:24:31] Arduino: L3: [OPEN  ] [EMPTY ] Wt: 0.0 kg
+[18:24:31] Arduino: CREDIT: 6.00 PHP
+[18:24:31] Arduino: >>> COIN DETECTED: 1
+[18:24:31] Arduino: [+] Accepted: 1
+[18:24:33] Arduino: --- SYSTEM MONITOR ---
+[18:24:33] Arduino: L1: [OPEN  ] [EMPTY ] Wt: 0.0 kg
