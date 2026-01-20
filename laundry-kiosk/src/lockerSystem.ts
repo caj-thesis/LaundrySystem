@@ -15,6 +15,7 @@ export function useLockerSystem() {
 
   // --- 1. FIREBASE SYNC ---
   useEffect(() => {
+    // Queries transactions where status is 'paid_pending' (active laundry)
     const q = query(
       collection(db, "transactions"), 
       where("status", "==", "paid_pending") 
@@ -32,12 +33,13 @@ export function useLockerSystem() {
       setLockers(prevLockers => prevLockers.map(locker => {
         const trx = activeTransactions[locker.id];
         if (trx) {
+          // If a transaction exists, map the laundryStatus from DB to the locker
           return {
             ...locker,
             status: 'occupied',
             price: trx.price,
             pin: trx.pin,
-            laundryStatus: trx.laundryStatus 
+            laundryStatus: trx.laundryStatus // <--- Critical Connection
           };
         } else {
           // Reset if previously occupied
