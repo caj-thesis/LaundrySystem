@@ -1,3 +1,5 @@
+import { exec } from 'child_process'; // Add this one line at the top
+
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -157,6 +159,41 @@ app.post('/api/debug/weight', (req, res) => {
     if (lockerId === 1) systemState.l1.weight = parseFloat(weight);
     if (lockerId === 2) systemState.l2.weight = parseFloat(weight);
     res.json({ success: true, newState: systemState });
+});
+
+// --- ADD ONLY THIS ENDPOINT FOR PRINTING ---
+app.post('/api/print', (req, res) => {
+  const { transactionId, pin, processType, weight, price } = req.body;
+
+  // Formatting the receipt text to match your successful manual test
+  const receiptText = `
+      LAUNDRY KIOSK
+   --------------------------
+   Date: ${new Date().toLocaleString()}
+   Trans #: ${transactionId || 'N/A'}
+   Service: ${processType.toUpperCase()}
+   --------------------------
+   ${processType === 'dropoff' 
+     ? `YOUR PIN: ${pin}\n   Keep this PIN safe!` 
+     : `Weight: ${weight} kg\n   Paid: PHP ${price}`
+   }
+   --------------------------
+   Thank you for using our
+      Laundry Kiosk!
+   
+   
+   
+  `;
+
+  // Directly pipe the text to the USB port you verified earlier
+  exec(`echo -e "${receiptText}" > /dev/usb/lp0`, (error) => {
+    if (error) {
+      console.error('Hardware Print Error:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+    console.log('Receipt printed successfully to /dev/usb/lp0');
+    res.json({ success: true });
+  });
 });
 
 // Add this to your server.js to handle the locking command
