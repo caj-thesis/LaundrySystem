@@ -165,33 +165,31 @@ app.post('/api/debug/weight', (req, res) => {
 app.post('/api/print', (req, res) => {
   const { transactionId, pin, processType, weight, price } = req.body;
 
-  // Formatting the receipt text to match your successful manual test
   const receiptText = `
-      LAUNDRY KIOSK
+    CAJ LAUNDRY LOCKER CO.
    --------------------------
    Date: ${new Date().toLocaleString()}
    Trans #: ${transactionId || 'N/A'}
    Service: ${processType.toUpperCase()}
    --------------------------
    ${processType === 'dropoff' 
-     ? `YOUR PIN: ${pin}\n   Keep this PIN safe!` 
-     : `Weight: ${weight} kg\n   Paid: PHP ${price}`
+     ? `YOUR PIN: ${pin}\\n   Keep this PIN safe!` 
+     : `Weight: ${weight} kg\\n   Paid: PHP ${price}`
    }
    --------------------------
    Thank you for using our
-      Laundry Kiosk!
+    Laundry Locker Service!
    
    
    
   `;
 
-  // Directly pipe the text to the USB port you verified earlier
-  exec(`echo -e "${receiptText}" > /dev/usb/lp0`, (error) => {
+  // Using printf avoids the "-e" text and is cleaner for thermal printers
+  exec(`printf "${receiptText}" > /dev/usb/lp0`, (error) => {
     if (error) {
       console.error('Hardware Print Error:', error);
-      return res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({ success: false });
     }
-    console.log('Receipt printed successfully to /dev/usb/lp0');
     res.json({ success: true });
   });
 });
