@@ -5,8 +5,8 @@ interface ThankYouPageProps {
   processType: 'dropoff' | 'pickup';
   generatedPin?: string | null;
   transactionId?: string | null;
-  price?: number;
-  weight?: number;
+  weight: number; // Required
+  price: number;  // Required
   onReset: () => void;
 }
 
@@ -28,8 +28,8 @@ export function ThankYouPage({ processType, generatedPin, transactionId, price, 
             transactionId,
             pin: generatedPin,
             processType,
-            weight: weight || 0,
-            price: price || 0
+            weight,
+            price
           }),
         });
       } catch (error) {

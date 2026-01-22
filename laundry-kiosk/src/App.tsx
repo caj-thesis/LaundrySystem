@@ -35,6 +35,8 @@ export default function App() {
 
   const [lastGeneratedPin, setLastGeneratedPin] = useState<string | null>(null);
   const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
+  const [lastWeight, setLastWeight] = useState<number>(0); // NEW
+  const [lastPrice, setLastPrice] = useState<number>(0);   // NEW
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
@@ -75,6 +77,8 @@ const handleDropOffComplete = async (finalPrice: number, finalWeight: number, cu
   
   setLastGeneratedPin(newPin);
   setLastTransactionId(newTransactionId);
+  setLastWeight(finalWeight); // SAVE WEIGHT
+  setLastPrice(finalPrice);   // SAVE PRICE
 
   // 1. Move to the Thank You screen IMMEDIATELY
   // This ensures the user isn't stuck if Firebase is down or over quota
@@ -125,6 +129,12 @@ const handleDropOffComplete = async (finalPrice: number, finalWeight: number, cu
   const handlePaymentComplete = async () => {
     const paymentId = `PAY-${Math.floor(Date.now() / 1000)}`;
     setLastTransactionId(paymentId);
+
+    // CRITICAL: Capture the locker info before resetting
+  if (selectedLocker) {
+    setLastWeight(selectedLocker.weight || 0);
+    setLastPrice(selectedLocker.price || 0);
+  }
 
     if (selectedLockerId) {
       try {
@@ -232,6 +242,8 @@ const handleDropOffComplete = async (finalPrice: number, finalWeight: number, cu
             processType={processType!}
             generatedPin={lastGeneratedPin}
             transactionId={lastTransactionId} 
+            weight={lastWeight} // Pass stored weight
+             price={lastPrice}   // Pass stored price
             onReset={handleReset}
           />
         )}

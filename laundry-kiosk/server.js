@@ -166,15 +166,18 @@ app.post('/api/print', (req, res) => {
   const { transactionId, pin, processType, weight, price } = req.body;
 
   const receiptText = `
-    CAJ LAUNDRY LOCKER CO.
+      CAJ LAUNDRY LOCKER CO.
    --------------------------
    Date: ${new Date().toLocaleString()}
    Trans #: ${transactionId || 'N/A'}
    Service: ${processType.toUpperCase()}
    --------------------------
+   Weight: ${Number(weight).toFixed(2)} kg
+   Price:  PHP ${Number(price).toFixed(2)}
+   --------------------------
    ${processType === 'dropoff' 
      ? `YOUR PIN: ${pin}\\n   Keep this PIN safe!` 
-     : `Weight: ${weight} kg\\n   Paid: PHP ${price}`
+     : `Status: PAID\\n   Locker is now open`
    }
    --------------------------
    Thank you for using our
@@ -184,12 +187,9 @@ app.post('/api/print', (req, res) => {
    
   `;
 
-  // Using printf avoids the "-e" text and is cleaner for thermal printers
+  // printf is used to handle \n correctly without printing "-e"
   exec(`printf "${receiptText}" > /dev/usb/lp0`, (error) => {
-    if (error) {
-      console.error('Hardware Print Error:', error);
-      return res.status(500).json({ success: false });
-    }
+    if (error) return res.status(500).json({ success: false });
     res.json({ success: true });
   });
 });
