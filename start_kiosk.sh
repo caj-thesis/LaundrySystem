@@ -37,9 +37,11 @@ if [ ! -f "serviceAccountKey.json" ]; then
 fi
 
 # Check for system packages
-DEPENDENCIES=(unclutter x11-xserver-utils chromium-browser libudev-dev)
+# UPDATED: Changed 'chromium-browser' to 'chromium'
+DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
 for pkg in "${DEPENDENCIES[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+        echo "Installing missing package: $pkg"
         sudo apt-get update && sudo apt-get install -y "$pkg"
     fi
 done
@@ -52,12 +54,18 @@ fi
 
 # --- 4. HARDWARE & BACKEND STARTUP ---
 # Start Python Hardware Bridge
-if [ -d "venv" ]; then
-    source venv/bin/activate
-    echo "Starting Hardware Bridge..."
-    python3 hardware_bridge.py &
+# UPDATED: Added check to ensure file exists before running
+if [ -f "hardware_bridge.py" ]; then
+    if [ -d "venv" ]; then
+        source venv/bin/activate
+        echo "Starting Hardware Bridge..."
+        python3 hardware_bridge.py &
+    else
+        echo "WARNING: venv not found. Trying global python..."
+        python3 hardware_bridge.py &
+    fi
 else
-    echo "WARNING: venv not found. Hardware bridge might fail."
+    echo "CRITICAL ERROR: hardware_bridge.py not found in $(pwd)"
 fi
 
 # Start Node Backend
@@ -78,6 +86,7 @@ echo "Waiting 20 seconds for full initialization..."
 sleep 20
 
 echo "Launching Chromium..."
+# Ensure we use the command 'chromium' (matches the package installed)
 chromium --no-sandbox \
          --kiosk \
          --disable-gpu \
