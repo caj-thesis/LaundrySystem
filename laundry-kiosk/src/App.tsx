@@ -71,43 +71,39 @@ export default function App() {
 
   // --- UPDATED: Now accepts customerPhone ---
   // App.tsx
-const handleDropOffComplete = async (finalPrice: number, finalWeight: number, customerPhone?: string) => {
+const handleDropOffComplete = async (finalPrice: number, finalWeight: number, phoneNumber?: string) => { 
   const newPin = Math.floor(1000 + Math.random() * 9000).toString();
   const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
   
   setLastGeneratedPin(newPin);
   setLastTransactionId(newTransactionId);
-  setLastWeight(finalWeight); // SAVE WEIGHT
-  setLastPrice(finalPrice);   // SAVE PRICE
+  setLastWeight(finalWeight);
+  setLastPrice(finalPrice);
 
-  // 1. Move to the Thank You screen IMMEDIATELY
-  // This ensures the user isn't stuck if Firebase is down or over quota
   setCurrentScreen('thank-you');
 
   if (selectedLockerId) {
     try {
-      // 2. Physical Lock Command
       await fetch('http://localhost:3000/api/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lockerId: selectedLockerId }),
       });
 
-      // 3. Attempt Firebase Save (This will likely still fail in the console)
       await addDoc(collection(db, "transactions"), {
         transactionId: newTransactionId,
         lockerId: selectedLockerId,
         pin: newPin,
         price: finalPrice,
         weight: finalWeight,
-        customerPhone: customerPhone || "N/A",
+        phoneNumber: phoneNumber || "N/A", 
         type: 'dropoff',
         status: 'paid_pending',
+        laundryStatus: 'Pending', 
         timestamp: new Date()
       });
     } catch (e) {
-      console.error("Data was not saved to cloud due to Quota:", e);
-      // Data isn't in Firebase, but the user has their PIN on the screen now.
+      console.error("Data was not saved to cloud:", e);
     }
   }
 };
