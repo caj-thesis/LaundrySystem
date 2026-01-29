@@ -133,26 +133,47 @@ def auto_scenario_runner():
 # 1. SMS Listener
 def on_snapshot(col_snapshot, changes, read_time):
     for change in changes:
-        if change.type.name == 'MODIFIED':
+        # Check for NEW transactions (Added) or Status Updates (Modified)
+        if change.type.name in ['ADDED', 'MODIFIED']:
             data = change.document.to_dict()
-            if data.get('laundryStatus') == 'Done' and gsm:
-                phone = data.get('phoneNumber')
-                if phone:
-                    try:
-                        gsm.write(b'AT+CMGF=1\r\n')
-                        time.sleep(0.5)
-                        gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
-                        time.sleep(0.5)
-                        gsm.write(b"Your Laundry is Ready!")
-                        gsm.write(bytes([26]))
-                        print(f"✅ SMS Sent to {phone}")
-                    except: pass
+            status = data.get('laundryStatus')
+            phone = data.get('phoneNumber')
+            trans_id = data.get('transactionId', 'N/A')
+            pin = data.get('pin', 'N/A')
 
+            if not phone or not gsm:
+                continue
+
+            message = ""
+            if status == 'Pending':
+                message = f"Drop-off Confirmed!\nID: {trans_id}\nPIN: {pin}\nStatus: {status}"
+            elif status == 'Done':
+                message = f"Laundry Ready!\nID: {trans_id}\nStatus: {status}"
+
+            if message:
+                try:
+                    gsm.write(b'AT+CMGF=1\r\n')
+                    time.sleep(0.5)
+                    gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
+                    time.sleep(0.5)
+                    gsm.write(message.encode())
+                    gsm.write(bytes([26]))
+                    print(f"✅ SMS Sent to {phone}: {status}")
+                    
+                    # Log the SMS event
+                    with open("sms_history.log", "a") as f:
+                        f.write(f"{time.ctime()} | TO: {phone} | MSG: {message.replace('\\n', ' ')}\n")
+                except Exception as e:
+                    print(f"❌ SMS Failed: {e}")
+
+# Update the query to listen for all relevant statuses
 if db:
     try:
-        query = db.collection('transactions').where('laundryStatus', '==', 'Done')
+        # Listening for both Pending (initial drop-off) and Done
+        query = db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done'])
         query.on_snapshot(on_snapshot)
-    except: pass
+    except Exception as e:
+        print(f"Error setting up snapshot: {e}")
 
 # 2. Main Logic
 if not arduino:
