@@ -6,7 +6,6 @@ import serial.tools.list_ports
 import time
 import sys
 import os
-import threading
 
 # --- CONFIGURATION ---
 BAUD_RATE = 115200 
@@ -91,46 +90,17 @@ if arduino_port:
     try:
         arduino = serial.Serial(arduino_port, BAUD_RATE, timeout=1)
         print("🔌 Arduino Connected.")
-    except: pass
+    except Exception as e: 
+        print(f"❌ Failed to connect to Arduino: {e}")
 
 if gsm_port:
     try:
         gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1)
         print("🔌 GSM Connected.")
-    except: pass
+    except Exception as e: 
+        print(f"❌ Failed to connect to GSM: {e}")
 
-# --- SIMULATION STATE (If Arduino Missing) ---
-sim_state = {
-    "L1": {"weight": 0.0, "door": "CLOSED"},
-    "L2": {"weight": 0.0, "door": "CLOSED"},
-    "CREDIT": 0.0
-}
-
-def auto_scenario_runner():
-    """Runs if Arduino is missing."""
-    print("\n🤖 AUTO-SIMULATION ACTIVE (No Arduino Detected)")
-    while True:
-        sim_state["L1"] = {"weight": 0.0, "door": "CLOSED"}
-        sim_state["CREDIT"] = 0.0
-        time.sleep(5)
-
-        # Open Door, Add Weight
-        sim_state["L1"]["door"] = "OPEN"
-        time.sleep(2)
-        sim_state["L1"]["weight"] = 5.5
-        time.sleep(2)
-        sim_state["L1"]["door"] = "CLOSED"
-        time.sleep(2)
-
-        # Add Credit
-        for i in range(1, 4):
-            sim_state["CREDIT"] = float(i * 10)
-            time.sleep(2)
-        
-        time.sleep(5)
-
-# --- EXECUTION LOOP ---
-# 1. SMS Listener
+# --- SMS LISTENER ---
 def on_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         # Check for NEW transactions (Added) or Status Updates (Modified)
@@ -142,6 +112,8 @@ def on_snapshot(col_snapshot, changes, read_time):
             pin = data.get('pin', 'N/A')
 
             if not phone or not gsm:
+                if not gsm and phone:
+                    print(f"⚠️ Cannot send SMS to {phone}: GSM not connected.")
                 continue
 
             message = ""
@@ -169,42 +141,41 @@ def on_snapshot(col_snapshot, changes, read_time):
 # Update the query to listen for all relevant statuses
 if db:
     try:
+        print("🎧 Listening for Firebase transactions...")
         # Listening for both Pending (initial drop-off) and Done
         query = db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done'])
         query.on_snapshot(on_snapshot)
     except Exception as e:
         print(f"Error setting up snapshot: {e}")
 
-# 2. Main Logic
+# --- MAIN EXECUTION LOOP ---
 if not arduino:
-    # Start Simulation
-    t = threading.Thread(target=auto_scenario_runner, daemon=True)
-    t.start()
-    
-    # Sync Loop (Simulated)
-    try:
-        while True:
-            data_str = f"DATA|L1:{sim_state['L1']['weight']}:{sim_state['L1']['door']}|L2:{sim_state['L2']['weight']}:{sim_state['L2']['door']}|CREDIT:{sim_state['CREDIT']}"
-            if db:
-                db.collection('kiosks').document('main_unit').set({
-                    "raw_data": data_str,
-                    "lastUpdated": firestore.SERVER_TIMESTAMP
-                }, merge=True)
-            time.sleep(0.5)
-    except KeyboardInterrupt: pass
+    print("⚠️ WARNING: Arduino not detected. Hardware sync disabled.")
+if not gsm:
+    print("⚠️ WARNING: GSM not detected. SMS notifications disabled.")
 
-else:
-    # Sync Loop (Real Arduino)
-    print("🚀 Bridge Running (Hardware Mode)...")
-    try:
-        while True:
-            if arduino.in_waiting > 0:
+print("🚀 Bridge Running (Production Mode)...")
+
+try:
+    while True:
+        # 1. Read from Arduino (if connected)
+        if arduino and arduino.in_waiting > 0:
+            try:
                 line = arduino.readline().decode('utf-8', errors='ignore').strip()
                 if line.startswith("DATA") and db:
                     print(f"🔄 {line}")
+                    # Push hardware state to Firebase for the Kiosk UI
                     db.collection('kiosks').document('main_unit').set({
                         "raw_data": line,
                         "lastUpdated": firestore.SERVER_TIMESTAMP
                     }, merge=True)
-            time.sleep(0.1)
-    except KeyboardInterrupt: pass
+            except Exception as e:
+                print(f"❌ Error reading Arduino: {e}")
+
+        # 2. Keep script alive
+        time.sleep(0.1)
+
+except KeyboardInterrupt:
+    print("\n🛑 Bridge Stopped by User")
+    if arduino: arduino.close()
+    if gsm: gsm.close()
