@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # --- 1. LOGGING & CLEANUP ---
-exec > /home/caj/kiosk.log 2>&1
+# UPDATED: Direct all output to a singular 'system_logs.log' file
+exec > /home/caj/system_logs.log 2>&1
 echo "--- Kiosk System Starting: $(date) ---"
 
 echo "🧹 Cleaning up old processes..."
@@ -55,7 +56,7 @@ if [ -f "hardware_bridge.py" ]; then
     if [ -d "venv" ]; then
         source venv/bin/activate
         echo "Starting Hardware Bridge..."
-        # UPDATED: Added -u for unbuffered output so logs show immediately
+        # -u ensures output is unbuffered and appears immediately in the log
         python3 -u hardware_bridge.py &
     else
         echo "WARNING: venv not found. Trying global python..."
@@ -67,7 +68,8 @@ fi
 
 # Start Node Backend
 echo "Starting Backend Server..."
-node server.js > /home/caj/backend.log 2>&1 &
+# UPDATED: Removed redirection to backend.log so it inherits system_logs.log
+node server.js &
 
 # Start React Frontend
 echo "Starting React Frontend..."

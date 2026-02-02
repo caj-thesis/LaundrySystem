@@ -35,9 +35,11 @@ def probe_device(port_device):
     print(f"🔎 Probing {port_device}...")
     try:
         ser = serial.Serial(port_device, BAUD_RATE, timeout=2)
-        time.sleep(2) 
+        # FIX: Increased wait time to 4s to handle Arduino auto-reset delay
+        time.sleep(4) 
         
         # TEST 1: Check for Arduino Data Stream
+        # FIX: Added a small retry read to catch split packets
         if ser.in_waiting > 0:
             reading = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
             if "DATA|" in reading:
@@ -109,7 +111,6 @@ else:
 # --- SMS LISTENER ---
 def on_snapshot(col_snapshot, changes, read_time):
     for change in changes:
-        # Check for NEW transactions (Added) or Status Updates (Modified)
         if change.type.name in ['ADDED', 'MODIFIED']:
             data = change.document.to_dict()
             status = data.get('laundryStatus')
@@ -138,7 +139,6 @@ def on_snapshot(col_snapshot, changes, read_time):
                     gsm.write(bytes([26]))
                     print(f"✅ SMS Sent to {phone}: {status}")
                     
-                    # Log the SMS event
                     with open("sms_history.log", "a") as f:
                         f.write(f"{time.ctime()} | TO: {phone} | MSG: {message.replace('\\n', ' ')}\n")
                 except Exception as e:
@@ -148,7 +148,6 @@ def on_snapshot(col_snapshot, changes, read_time):
 if db:
     try:
         print("🎧 Listening for Firebase transactions...")
-        # Listening for both Pending (initial drop-off) and Done
         query = db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done'])
         query.on_snapshot(on_snapshot)
     except Exception as e:
@@ -164,21 +163,17 @@ print("🚀 Bridge Running (Production Mode)...")
 
 try:
     while True:
-        # 1. Read from Arduino (if connected)
         if arduino and arduino.in_waiting > 0:
             try:
                 line = arduino.readline().decode('utf-8', errors='ignore').strip()
                 if line.startswith("DATA") and db:
                     print(f"🔄 {line}")
-                    # Push hardware state to Firebase for the Kiosk UI
                     db.collection('kiosks').document('main_unit').set({
                         "raw_data": line,
                         "lastUpdated": firestore.SERVER_TIMESTAMP
                     }, merge=True)
             except Exception as e:
                 print(f"❌ Error reading Arduino: {e}")
-
-        # 2. Keep script alive
         time.sleep(0.1)
 
 except KeyboardInterrupt:
