@@ -7,6 +7,9 @@ import time
 import sys
 import os
 
+# FORCE FLUSHING OF LOGS
+sys.stdout.reconfigure(line_buffering=True)
+
 # --- CONFIGURATION ---
 BAUD_RATE = 115200 
 
@@ -21,9 +24,9 @@ else:
         cred = credentials.Certificate(key_path)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
-        print("✅ Authenticated to Firebase")
+        print("✅ [FIREBASE] Authenticated")
     except Exception as e:
-        print(f"⚠️ Firebase Init Error: {e}")
+        print(f"⚠️ [FIREBASE] Init Error: {e}")
         db = None
 
 # --- SMART PORT DETECTION ---
@@ -31,12 +34,10 @@ def probe_device(port_device):
     """Checks if a port is Arduino or GSM by testing communication"""
     print(f"🔎 Probing {port_device}...")
     try:
-        # Open port safely
         ser = serial.Serial(port_device, BAUD_RATE, timeout=2)
-        time.sleep(2) # Wait for device reboot (Arduino resets on connect)
+        time.sleep(2) 
         
         # TEST 1: Check for Arduino Data Stream
-        # Arduino sends "DATA|..." continuously.
         if ser.in_waiting > 0:
             reading = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
             if "DATA|" in reading:
@@ -44,7 +45,6 @@ def probe_device(port_device):
                 return "ARDUINO"
         
         # TEST 2: Check for GSM Command Response
-        # GSM is silent until we speak to it.
         ser.write(b'AT\r\n')
         time.sleep(1)
         response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
@@ -54,28 +54,31 @@ def probe_device(port_device):
 
         ser.close()
     except Exception as e:
-        print(f"   (Probe failed: {e})")
+        print(f"   (Probe failed on {port_device}: {e})")
     
     return None
 
 def find_ports():
+    print("--- Scanning for Hardware ---")
     found_arduino = None
     found_gsm = None
     ports = serial.tools.list_ports.comports()
     
+    if not ports:
+        print("⚠️ No USB devices found!")
+
     for port in ports:
-        # Only check USB ports
         if "USB" in port.device or "ACM" in port.device:
             device_type = probe_device(port.device)
             
             if device_type == "ARDUINO":
-                print(f"   ✅ Identified ARDUINO on {port.device}")
+                print(f"✅ [HARDWARE] Identified ARDUINO on {port.device}")
                 found_arduino = port.device
             elif device_type == "GSM":
-                print(f"   ✅ Identified GSM on {port.device}")
+                print(f"✅ [HARDWARE] Identified GSM on {port.device}")
                 found_gsm = port.device
             else:
-                print(f"   (Unknown device on {port.device})")
+                print(f"❓ [HARDWARE] Unknown device on {port.device}")
 
     return found_arduino, found_gsm
 
@@ -85,20 +88,23 @@ arduino_port, gsm_port = find_ports()
 arduino = None
 gsm = None
 
-# Connect to identified ports
 if arduino_port:
     try:
         arduino = serial.Serial(arduino_port, BAUD_RATE, timeout=1)
-        print("🔌 Arduino Connected.")
+        print(f"🔌 [ARDUINO] Connected Successfully on {arduino_port}")
     except Exception as e: 
-        print(f"❌ Failed to connect to Arduino: {e}")
+        print(f"❌ [ARDUINO] Connection Failed: {e}")
+else:
+    print("⚠️ [ARDUINO] Not found during scan.")
 
 if gsm_port:
     try:
         gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1)
-        print("🔌 GSM Connected.")
+        print(f"🔌 [GSM] Connected Successfully on {gsm_port}")
     except Exception as e: 
-        print(f"❌ Failed to connect to GSM: {e}")
+        print(f"❌ [GSM] Connection Failed: {e}")
+else:
+    print("⚠️ [GSM] Not found during scan.")
 
 # --- SMS LISTENER ---
 def on_snapshot(col_snapshot, changes, read_time):

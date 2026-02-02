@@ -10,7 +10,6 @@ import { db, auth } from './firebaseConfig.js';
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth"; 
 
-// --- PATH SETUP ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -18,8 +17,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --- PRINTER CHECK ---
+const PRINTER_PATH = '/dev/usb/lp0';
+try {
+  if (fs.existsSync(PRINTER_PATH)) {
+    console.log(`🔌 [PRINTER] Connected at ${PRINTER_PATH}`);
+  } else {
+    console.log(`⚠️ [PRINTER] Not found at ${PRINTER_PATH} (Is it plugged in?)`);
+  }
+} catch (err) {
+  console.error(`❌ [PRINTER] Error checking printer: ${err.message}`);
+}
+
 // --- STATE STORAGE ---
-// This is now synced from Firebase so the UI stays updated
 let systemState = {
   l1: { door: 'CLOSED', weight: 0.0 }, 
   l2: { door: 'CLOSED', weight: 0.0 },
@@ -28,13 +38,11 @@ let systemState = {
 
 // --- AUTHENTICATION & SYNC ---
 signInAnonymously(auth).then(() => {
-  console.log("✅ Authenticated to Firebase");
+  console.log("✅ [FIREBASE] Authenticated");
   
-  // Listen to Firebase for hardware updates from the Python Bridge
   onSnapshot(doc(db, "kiosks", "main_unit"), (doc) => {
     if (doc.exists()) {
       const data = doc.data();
-      // Parsing the raw_data string sent by the Python script
       if (data.raw_data && data.raw_data.startsWith('DATA')) {
         const parts = data.raw_data.split('|');
         parts.forEach(part => {

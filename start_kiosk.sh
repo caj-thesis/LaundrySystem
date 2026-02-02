@@ -14,13 +14,11 @@ fuser -k 5173/tcp 3000/tcp 2>/dev/null || true
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-# Fallback for Node if NVM fails
 if ! command -v npm &> /dev/null; then
     echo "NVM failed. Using manual path fallback..."
     export PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin:$PATH"
 fi
 
-# Exit if Node is still not found
 if ! command -v npm &> /dev/null; then
     echo "CRITICAL ERROR: Node/NPM not found."
     exit 1
@@ -37,7 +35,6 @@ if [ ! -f "serviceAccountKey.json" ]; then
 fi
 
 # Check for system packages
-# UPDATED: Changed 'chromium-browser' to 'chromium'
 DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
 for pkg in "${DEPENDENCIES[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -54,15 +51,15 @@ fi
 
 # --- 4. HARDWARE & BACKEND STARTUP ---
 # Start Python Hardware Bridge
-# UPDATED: Added check to ensure file exists before running
 if [ -f "hardware_bridge.py" ]; then
     if [ -d "venv" ]; then
         source venv/bin/activate
         echo "Starting Hardware Bridge..."
-        python3 hardware_bridge.py &
+        # UPDATED: Added -u for unbuffered output so logs show immediately
+        python3 -u hardware_bridge.py &
     else
         echo "WARNING: venv not found. Trying global python..."
-        python3 hardware_bridge.py &
+        python3 -u hardware_bridge.py &
     fi
 else
     echo "CRITICAL ERROR: hardware_bridge.py not found in $(pwd)"
@@ -86,7 +83,6 @@ echo "Waiting 20 seconds for full initialization..."
 sleep 20
 
 echo "Launching Chromium..."
-# Ensure we use the command 'chromium' (matches the package installed)
 chromium --no-sandbox \
          --kiosk \
          --disable-gpu \
