@@ -13,7 +13,7 @@ export const INITIAL_LOCKERS: Locker[] = [
 export function useLockerSystem() {
   const [lockers, setLockers] = useState<Locker[]>(INITIAL_LOCKERS);
 
-  // --- 1. FIREBASE SYNC ---
+  // --- 1. FIREBASE SYNC (Transactions) ---
   useEffect(() => {
     const q = query(
       collection(db, "transactions"), 
@@ -52,7 +52,7 @@ export function useLockerSystem() {
     return () => unsubscribe();
   }, []);
 
-  // --- 2. HARDWARE POLLING ---
+  // --- 2. HARDWARE POLLING (Local Bridge) ---
   useEffect(() => {
     const fetchHardwareStatus = async () => {
       try {
@@ -74,14 +74,16 @@ export function useLockerSystem() {
           return locker;
         }));
       } catch (error) {
-        // Silently fail or log sparingly to avoid console spam
+        // Silently fail to avoid console spam if server is restarting
       }
     };
 
     // Initial fetch
     fetchHardwareStatus();
-    // Poll every 1s
-    const intervalId = setInterval(fetchHardwareStatus, 1000);
+    
+    // OPTIMIZED: Poll every 200ms for smooth live-weight updates
+    const intervalId = setInterval(fetchHardwareStatus, 200);
+    
     return () => clearInterval(intervalId);
   }, []);
 

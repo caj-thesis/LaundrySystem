@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 1. LOGGING & CLEANUP ---
-# UPDATED: Direct all output to a singular 'system_logs.log' file
+# Direct all output to a singular 'system_logs.log' file
 exec > /home/caj/system_logs.log 2>&1
 echo "--- Kiosk System Starting: $(date) ---"
 
@@ -53,22 +53,37 @@ fi
 # --- 4. HARDWARE & BACKEND STARTUP ---
 # Start Python Hardware Bridge
 if [ -f "hardware_bridge.py" ]; then
-    if [ -d "venv" ]; then
+    # --- AUTO-FIX: Create venv if missing ---
+    if [ ! -d "venv" ]; then
+        echo "⚠️  Virtual Environment (venv) not found. Creating it now..."
+        python3 -m venv venv
         source venv/bin/activate
-        echo "Starting Hardware Bridge..."
-        # -u ensures output is unbuffered and appears immediately in the log
-        python3 -u hardware_bridge.py &
+        
+        echo "📦 Installing required Python libraries..."
+        pip install --upgrade pip
+        pip install firebase-admin pyserial
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Python environment created and dependencies installed."
+        else
+            echo "❌ Error installing Python dependencies."
+            exit 1
+        fi
     else
-        echo "WARNING: venv not found. Trying global python..."
-        python3 -u hardware_bridge.py &
+        # Just activate if it already exists
+        source venv/bin/activate
     fi
+    # ----------------------------------------
+
+    echo "Starting Hardware Bridge..."
+    # -u ensures output is unbuffered and appears immediately in the log
+    python3 -u hardware_bridge.py &
 else
     echo "CRITICAL ERROR: hardware_bridge.py not found in $(pwd)"
 fi
 
 # Start Node Backend
 echo "Starting Backend Server..."
-# UPDATED: Removed redirection to backend.log so it inherits system_logs.log
 node server.js &
 
 # Start React Frontend

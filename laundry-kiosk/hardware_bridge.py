@@ -6,12 +6,27 @@ import serial.tools.list_ports
 import time
 import sys
 import os
+import json
+import datetime
 
 # FORCE FLUSHING OF LOGS
 sys.stdout.reconfigure(line_buffering=True)
 
 # --- CONFIGURATION ---
 BAUD_RATE = 115200 
+LOG_FILE = "gsm_logs.log"
+STATE_FILE = "sys_state.json" # Local file for IPC
+UPDATE_INTERVAL = 0.2         # Update local file every 0.2s
+
+# --- LOGGING FUNCTION ---
+def log_gsm(message):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"📱 {timestamp} {message}")
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except:
+        pass
 
 # --- FIREBASE SETUP ---
 key_path = "serviceAccountKey.json" 
@@ -24,92 +39,72 @@ else:
         cred = credentials.Certificate(key_path)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
-        print("✅ [FIREBASE] Authenticated")
+        print("✅ [FIREBASE] Authenticated (Command/SMS Mode)")
     except Exception as e:
         print(f"⚠️ [FIREBASE] Init Error: {e}")
         db = None
 
-# --- SMART PORT DETECTION ---
-def probe_device(port_device):
-    """Checks if a port is Arduino or GSM by testing communication"""
-    print(f"🔎 Probing {port_device}...")
-    try:
-        ser = serial.Serial(port_device, BAUD_RATE, timeout=2)
-        # FIX: Increased wait time to 4s to handle Arduino auto-reset delay
-        time.sleep(4) 
-        
-        # TEST 1: Check for Arduino Data Stream
-        # FIX: Added a small retry read to catch split packets
-        if ser.in_waiting > 0:
-            reading = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
-            if "DATA|" in reading:
-                ser.close()
-                return "ARDUINO"
-        
-        # TEST 2: Check for GSM Command Response
-        ser.write(b'AT\r\n')
-        time.sleep(1)
-        response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
-        if "OK" in response:
-            ser.close()
-            return "GSM"
-
-        ser.close()
-    except Exception as e:
-        print(f"   (Probe failed on {port_device}: {e})")
-    
-    return None
-
+# --- HARDWARE DETECTION (ROBUST MODE) ---
 def find_ports():
     print("--- Scanning for Hardware ---")
-    found_arduino = None
-    found_gsm = None
+    arduino_port = None
+    gsm_port = None
     ports = serial.tools.list_ports.comports()
     
-    if not ports:
-        print("⚠️ No USB devices found!")
-
     for port in ports:
+        # Filter for likely candidates (USB or ACM)
         if "USB" in port.device or "ACM" in port.device:
-            device_type = probe_device(port.device)
-            
-            if device_type == "ARDUINO":
-                print(f"✅ [HARDWARE] Identified ARDUINO on {port.device}")
-                found_arduino = port.device
-            elif device_type == "GSM":
-                print(f"✅ [HARDWARE] Identified GSM on {port.device}")
-                found_gsm = port.device
-            else:
-                print(f"❓ [HARDWARE] Unknown device on {port.device}")
+            try:
+                print(f"🔎 Probing {port.device}...")
+                s = serial.Serial(port.device, BAUD_RATE, timeout=1)
+                
+                # WAIT FOR ARDUINO REBOOT (Crucial Step)
+                # Arduinos reset on serial connection. We must wait > 2s.
+                time.sleep(3) 
+                
+                # --- CHECK 1: Look for 'DATA|' stream (Arduino) ---
+                # We try reading a few times in case data is buffered or split
+                is_arduino = False
+                for _ in range(3):
+                    if s.in_waiting > 0:
+                        line = s.read(s.in_waiting).decode('utf-8', errors='ignore')
+                        if "DATA|" in line:
+                            arduino_port = port.device
+                            print(f"✅ ARDUINO found on {port.device}")
+                            is_arduino = True
+                            break
+                    time.sleep(1) # Wait a bit more if empty
+                
+                if is_arduino:
+                    s.close()
+                    continue
 
-    return found_arduino, found_gsm
+                # --- CHECK 2: Look for 'OK' response (GSM) ---
+                # If not Arduino, send AT command
+                s.write(b'AT\r\n')
+                time.sleep(0.5)
+                resp = s.read(s.in_waiting).decode('utf-8', errors='ignore')
+                if "OK" in resp:
+                    gsm_port = port.device
+                    print(f"✅ GSM found on {port.device}")
+                
+                s.close()
+            except Exception as e:
+                print(f"   Probe error on {port.device}: {e}")
 
-# --- MAIN SETUP ---
+    return arduino_port, gsm_port
+
 arduino_port, gsm_port = find_ports()
+arduino = serial.Serial(arduino_port, BAUD_RATE, timeout=1) if arduino_port else None
+gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1) if gsm_port else None
 
-arduino = None
-gsm = None
+if not arduino: print("⚠️ Arduino not found (Check USB Cable)")
+if not gsm: print("⚠️ GSM not found (Check USB Cable)")
 
-if arduino_port:
-    try:
-        arduino = serial.Serial(arduino_port, BAUD_RATE, timeout=1)
-        print(f"🔌 [ARDUINO] Connected Successfully on {arduino_port}")
-    except Exception as e: 
-        print(f"❌ [ARDUINO] Connection Failed: {e}")
-else:
-    print("⚠️ [ARDUINO] Not found during scan.")
+# --- LISTENERS (INTERNET) ---
 
-if gsm_port:
-    try:
-        gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1)
-        print(f"🔌 [GSM] Connected Successfully on {gsm_port}")
-    except Exception as e: 
-        print(f"❌ [GSM] Connection Failed: {e}")
-else:
-    print("⚠️ [GSM] Not found during scan.")
-
-# --- SMS LISTENER ---
-def on_snapshot(col_snapshot, changes, read_time):
+# 1. SMS Listener
+def on_transaction_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name in ['ADDED', 'MODIFIED']:
             data = change.document.to_dict()
@@ -118,65 +113,74 @@ def on_snapshot(col_snapshot, changes, read_time):
             trans_id = data.get('transactionId', 'N/A')
             pin = data.get('pin', 'N/A')
 
-            if not phone or not gsm:
-                if not gsm and phone:
-                    print(f"⚠️ Cannot send SMS to {phone}: GSM not connected.")
-                continue
-
-            message = ""
+            if not phone or not gsm: continue
+            
+            msg = ""
             if status == 'Pending':
-                message = f"Drop-off Confirmed!\nID: {trans_id}\nPIN: {pin}\nStatus: {status}"
+                msg = f"Locker Code: {pin}\nRef: {trans_id}"
             elif status == 'Done':
-                message = f"Laundry Ready!\nID: {trans_id}\nStatus: {status}"
+                msg = f"Laundry Ready!\nRef: {trans_id}"
 
-            if message:
+            if msg:
+                log_gsm(f"Sending SMS to {phone}")
                 try:
                     gsm.write(b'AT+CMGF=1\r\n')
                     time.sleep(0.5)
                     gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
                     time.sleep(0.5)
-                    gsm.write(message.encode())
-                    gsm.write(bytes([26]))
-                    print(f"✅ SMS Sent to {phone}: {status}")
-                    
-                    with open("sms_history.log", "a") as f:
-                        f.write(f"{time.ctime()} | TO: {phone} | MSG: {message.replace('\\n', ' ')}\n")
+                    gsm.write(msg.encode())
+                    gsm.write(bytes([26])) 
+                    time.sleep(3)
                 except Exception as e:
-                    print(f"❌ SMS Failed: {e}")
+                    log_gsm(f"SMS Error: {e}")
 
-# Update the query to listen for all relevant statuses
+# 2. Command Listener (Unlock/Lock)
+def on_command_snapshot(doc_snapshot, changes, read_time):
+    for change in changes:
+        if change.type.name == 'MODIFIED': 
+            data = change.document.to_dict()
+            action = data.get('action')
+            locker_id = data.get('lockerId')
+            
+            if arduino and action and locker_id:
+                cmd = f"{action.upper()}:{locker_id}\n"
+                try:
+                    arduino.write(cmd.encode())
+                    print(f"📤 [REMOTE COMMAND] Sent: {cmd.strip()}")
+                except Exception as e:
+                    print(f"❌ Command Error: {e}")
+
 if db:
+    print("🎧 Listening for Firebase Commands & Transactions...")
     try:
-        print("🎧 Listening for Firebase transactions...")
-        query = db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done'])
-        query.on_snapshot(on_snapshot)
+        # Using simple on_snapshot to avoid 'filter' warning
+        db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done']).on_snapshot(on_transaction_snapshot)
+        db.collection('commands').document('latest').on_snapshot(on_command_snapshot)
     except Exception as e:
-        print(f"Error setting up snapshot: {e}")
+        print(f"Listener Error: {e}")
 
-# --- MAIN EXECUTION LOOP ---
-if not arduino:
-    print("⚠️ WARNING: Arduino not detected. Hardware sync disabled.")
-if not gsm:
-    print("⚠️ WARNING: GSM not detected. SMS notifications disabled.")
+# --- MAIN LOOP (LOCAL FILE WRITE) ---
+print("🚀 Hybrid Bridge Running...")
+last_file_update = 0
 
-print("🚀 Bridge Running (Production Mode)...")
-
-try:
-    while True:
-        if arduino and arduino.in_waiting > 0:
-            try:
-                line = arduino.readline().decode('utf-8', errors='ignore').strip()
-                if line.startswith("DATA") and db:
-                    print(f"🔄 {line}")
-                    db.collection('kiosks').document('main_unit').set({
+while True:
+    if arduino and arduino.in_waiting:
+        try:
+            line = arduino.readline().decode('utf-8', errors='ignore').strip()
+            if line.startswith("DATA"):
+                # Write to local file for Node.js
+                if time.time() - last_file_update > UPDATE_INTERVAL:
+                    state = {
                         "raw_data": line,
-                        "lastUpdated": firestore.SERVER_TIMESTAMP
-                    }, merge=True)
-            except Exception as e:
-                print(f"❌ Error reading Arduino: {e}")
-        time.sleep(0.1)
-
-except KeyboardInterrupt:
-    print("\n🛑 Bridge Stopped by User")
-    if arduino: arduino.close()
-    if gsm: gsm.close()
+                        "timestamp": time.time()
+                    }
+                    temp_file = STATE_FILE + ".tmp"
+                    with open(temp_file, "w") as f:
+                        json.dump(state, f)
+                    os.replace(temp_file, STATE_FILE)
+                    last_file_update = time.time()
+                    
+        except Exception as e:
+            print(f"Serial Read Error: {e}")
+    
+    time.sleep(0.01)
