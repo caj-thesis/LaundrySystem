@@ -209,10 +209,10 @@ while True:
                                 new_action = 'lock' if door_status == 'CLOSED' else 'unlock'
                                 
                                 if db:
-                                    print(f"🔄 [SYNC] Locker {l_id} is {door_status}. Updating Firebase Action -> '{new_action}'")
+                                    # Only update the status, never change the 'action' based on sensor data
+                                    print(f"🔄 [SYNC] Locker {l_id} status update -> {door_status}")
                                     db.collection('lockers').document(l_id).update({
-                                        'action': new_action,
-                                        'doorStatus': door_status # Optional: Update status too if needed
+                                        'doorStatus': door_status 
                                     })
                         except Exception as parse_err:
                             print(f"Parse Error on part '{part}': {parse_err}")
