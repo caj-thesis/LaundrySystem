@@ -142,47 +142,54 @@ def send_led_command(locker_id, color_code):
             print(f"❌ LED Write Error: {e}")
 
 def process_locker_leds(locker_id, locker_data):
-    """Determines the correct LED color based on status and transaction."""
+    """
+    STRICT RGB LED LOGIC:
+    1. Green  -> Status is 'available'
+    2. Yellow -> Transaction is 'Done' (Ready for Pickup)
+    3. Red    -> All other states (Drop-off, Occupied, Processing, etc.)
+    """
     
-    # 1. Get Status (Handle both casing variations just in case)
+    # 1. GET STATUS
+    # We check 'collectionStatus' first (if used), otherwise 'status'
     raw_status = locker_data.get('collectionStatus', locker_data.get('status', ''))
     status = raw_status.lower()
 
-    # 2. Case: AVAILABLE -> GREEN
+    # --- CASE 1: AVAILABLE (GREEN) ---
     if status == 'available':
         send_led_command(locker_id, LED_GREEN)
         print(f"🟢 Locker {locker_id}: Available -> GREEN")
+        return # Stop here
 
-    # 3. Case: OCCUPIED -> Check Transaction
-    elif status == 'occupied':
-        current_tx_id = locker_data.get('currentTransactionId')
+    # --- CASE 2: CHECK FOR "DONE" (YELLOW) ---
+    # If we are here, the locker is NOT available. Check if laundry is done.
+    current_tx_id = locker_data.get('currentTransactionId')
+    is_done = False
+
+    if current_tx_id and db:
+        try:
+            # Fetch transaction to check 'laundryStatus'
+            tx_ref = db.collection('transactions').document(current_tx_id)
+            tx_doc = tx_ref.get()
+            
+            if tx_doc.exists:
+                tx_data = tx_doc.to_dict()
+                laundry_status = tx_data.get('laundryStatus', '')
+                
+                # If laundry is specifically 'Done', we want YELLOW
+                if laundry_status == 'Done':
+                    is_done = True
+        except Exception as e:
+            print(f"⚠️ Error fetching transaction {current_tx_id}: {e}")
+
+    if is_done:
+        send_led_command(locker_id, LED_YELLOW)
+        print(f"🟡 Locker {locker_id}: Laundry Done -> YELLOW")
         
-        is_done = False
-        if current_tx_id and db:
-            try:
-                # Fetch the transaction to check 'laundryStatus'
-                tx_ref = db.collection('transactions').document(current_tx_id)
-                tx_doc = tx_ref.get()
-                if tx_doc.exists:
-                    tx_data = tx_doc.to_dict()
-                    laundry_status = tx_data.get('laundryStatus', '')
-                    if laundry_status == 'Done':
-                        is_done = True
-            except Exception as e:
-                print(f"⚠️ Error fetching transaction {current_tx_id}: {e}")
-
-        if is_done:
-            # Case: OCCUPIED + DONE -> YELLOW
-            send_led_command(locker_id, LED_YELLOW)
-            print(f"🟡 Locker {locker_id}: Occupied & Done -> YELLOW")
-        else:
-            # Case: OCCUPIED + PROCESSING -> RED
-            send_led_command(locker_id, LED_RED)
-            print(f"🔴 Locker {locker_id}: Occupied & Processing -> RED")
-    
+    # --- CASE 3: NEITHER (RED) ---
+    # This catches 'occupied', 'drop-off', 'processing', 'service', etc.
     else:
-        # Fallback for unknown states
-        pass
+        send_led_command(locker_id, LED_RED)
+        print(f"🔴 Locker {locker_id}: {status.upper()} (Occupied) -> RED")
 
 # --- LISTENERS ---
 
