@@ -15,10 +15,10 @@ sys.stdout.reconfigure(line_buffering=True)
 # --- CONFIGURATION ---
 BAUD_RATE = 115200 
 LOG_FILE = "gsm_logs.log"
-STATE_FILE = "sys_state.json" # Local file for IPC
-UPDATE_INTERVAL = 0.2         # Update local file every 0.2s
+STATE_FILE = "sys_state.json" 
+UPDATE_INTERVAL = 0.2         
 
-# --- LOGGING FUNCTION ---
+# --- LOGGING ---
 def log_gsm(message):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"📱 {timestamp} {message}")
@@ -39,12 +39,12 @@ else:
         cred = credentials.Certificate(key_path)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
-        print("✅ [FIREBASE] Authenticated (Command/SMS Mode)")
+        print("✅ [FIREBASE] Authenticated (Locker/SMS Mode)")
     except Exception as e:
         print(f"⚠️ [FIREBASE] Init Error: {e}")
         db = None
 
-# --- HARDWARE DETECTION (ROBUST MODE) ---
+# --- HARDWARE DETECTION ---
 def find_ports():
     print("--- Scanning for Hardware ---")
     arduino_port = None
@@ -52,18 +52,13 @@ def find_ports():
     ports = serial.tools.list_ports.comports()
     
     for port in ports:
-        # Filter for likely candidates (USB or ACM)
         if "USB" in port.device or "ACM" in port.device:
             try:
                 print(f"🔎 Probing {port.device}...")
                 s = serial.Serial(port.device, BAUD_RATE, timeout=1)
-                
-                # WAIT FOR ARDUINO REBOOT (Crucial Step)
-                # Arduinos reset on serial connection. We must wait > 2s.
                 time.sleep(3) 
                 
-                # --- CHECK 1: Look for 'DATA|' stream (Arduino) ---
-                # We try reading a few times in case data is buffered or split
+                # Check 1: Arduino (DATA|)
                 is_arduino = False
                 for _ in range(3):
                     if s.in_waiting > 0:
@@ -73,14 +68,13 @@ def find_ports():
                             print(f"✅ ARDUINO found on {port.device}")
                             is_arduino = True
                             break
-                    time.sleep(1) # Wait a bit more if empty
+                    time.sleep(1) 
                 
                 if is_arduino:
                     s.close()
                     continue
 
-                # --- CHECK 2: Look for 'OK' response (GSM) ---
-                # If not Arduino, send AT command
+                # Check 2: GSM (OK)
                 s.write(b'AT\r\n')
                 time.sleep(0.5)
                 resp = s.read(s.in_waiting).decode('utf-8', errors='ignore')
@@ -101,7 +95,7 @@ gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1) if gsm_port else None
 if not arduino: print("⚠️ Arduino not found (Check USB Cable)")
 if not gsm: print("⚠️ GSM not found (Check USB Cable)")
 
-# --- LISTENERS (INTERNET) ---
+# --- LISTENERS ---
 
 # 1. SMS Listener
 def on_transaction_snapshot(col_snapshot, changes, read_time):
@@ -134,32 +128,35 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
                 except Exception as e:
                     log_gsm(f"SMS Error: {e}")
 
-# 2. Command Listener (Unlock/Lock)
-def on_command_snapshot(doc_snapshot, changes, read_time):
+# 2. Locker Action Listener
+def on_locker_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name == 'MODIFIED': 
             data = change.document.to_dict()
+            locker_id = change.document.id
             action = data.get('action')
-            locker_id = data.get('lockerId')
             
-            if arduino and action and locker_id:
+            # STRICT FILTER: Only send command if action is explicit LOCK/UNLOCK
+            # This ignores updates where only 'status' changed (e.g. drop-off/pick-up)
+            valid_actions = ['UNLOCK', 'LOCK']
+            
+            if arduino and action and action.upper() in valid_actions:
                 cmd = f"{action.upper()}:{locker_id}\n"
                 try:
                     arduino.write(cmd.encode())
-                    print(f"📤 [REMOTE COMMAND] Sent: {cmd.strip()}")
+                    print(f"📤 [LOCKER DB] Sent Action: {cmd.strip()}")
                 except Exception as e:
-                    print(f"❌ Command Error: {e}")
+                    print(f"❌ Serial Write Error: {e}")
 
 if db:
-    print("🎧 Listening for Firebase Commands & Transactions...")
+    print("🎧 Listening for Firebase 'lockers' & 'transactions'...")
     try:
-        # Using simple on_snapshot to avoid 'filter' warning
         db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done']).on_snapshot(on_transaction_snapshot)
-        db.collection('commands').document('latest').on_snapshot(on_command_snapshot)
+        db.collection('lockers').on_snapshot(on_locker_snapshot)
     except Exception as e:
         print(f"Listener Error: {e}")
 
-# --- MAIN LOOP (LOCAL FILE WRITE) ---
+# --- MAIN LOOP ---
 print("🚀 Hybrid Bridge Running...")
 last_file_update = 0
 
@@ -168,7 +165,6 @@ while True:
         try:
             line = arduino.readline().decode('utf-8', errors='ignore').strip()
             if line.startswith("DATA"):
-                # Write to local file for Node.js
                 if time.time() - last_file_update > UPDATE_INTERVAL:
                     state = {
                         "raw_data": line,

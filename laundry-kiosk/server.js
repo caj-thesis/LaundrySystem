@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 
 // --- FIREBASE IMPORTS ---
 import { db, auth } from './firebaseConfig.js'; 
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth"; 
 
 const app = express();
@@ -17,14 +17,16 @@ app.use(express.json());
 const STATE_FILE = 'sys_state.json';
 
 // --- LOCAL STATE CONTAINER ---
+// Now includes 'status' (Logical) and 'action' (Solenoid) alongside hardware sensors
 let systemState = {
-  l1: { door: 'CLOSED', weight: 0.0 }, 
-  l2: { door: 'CLOSED', weight: 0.0 },
+  l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'IDLE' }, 
+  l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'IDLE' },
   credit: 0.0,
   lastUpdated: 0
 };
 
-// --- FILE WATCHER (Replaces Firebase Read) ---
+// --- 1. HARDWARE WATCHER (Reads Local File) ---
+// Syncs physical sensors (Door/Weight) from Python script
 console.log(`👀 Watching local file: ${STATE_FILE}`);
 
 function updateStateFromFile() {
@@ -35,71 +37,123 @@ function updateStateFromFile() {
         const data = JSON.parse(raw);
         
         if (data.raw_data && data.raw_data.startsWith('DATA')) {
-            // Expected: DATA|L1:5.2:OPEN|L2:0.0:CLOSED
             const parts = data.raw_data.split('|');
             parts.forEach(part => {
                 if (part.startsWith('L1:')) {
                     const d = part.split(':');
                     systemState.l1.weight = parseFloat(d[1]) || 0;
-                    systemState.l1.door = d[2];
+                    systemState.l1.door = d[2]; // Updates physical door state
                 }
                 if (part.startsWith('L2:')) {
                     const d = part.split(':');
                     systemState.l2.weight = parseFloat(d[1]) || 0;
-                    systemState.l2.door = d[2];
+                    systemState.l2.door = d[2]; // Updates physical door state
                 }
             });
             systemState.lastUpdated = data.timestamp;
         }
     } catch (err) {
-        // Ignore read errors (collision with python writing)
+        // Ignore read errors
     }
 }
-
-// Poll file every 200ms (Fast & Free)
 setInterval(updateStateFromFile, 200);
 
-// --- AUTH (For Sending Commands) ---
-signInAnonymously(auth).then(() => console.log("✅ [FIREBASE] Ready for commands"));
+// --- 2. DATABASE LISTENER (Reads Logical Status) ---
+// Syncs logical status (drop-off/pick-up) from Firebase to Server Memory
+function startDatabaseListener() {
+    console.log("🎧 Listening to 'lockers' collection...");
+    
+    onSnapshot(collection(db, "lockers"), (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const data = change.doc.data();
+            const id = change.doc.id; // "1" or "2"
+            const key = `l${id}`;
+
+            // Merge DB status into local systemState
+            if (systemState[key]) {
+                // Determine status from DB, default to 'available' if missing
+                systemState[key].status = data.status || 'available'; 
+                systemState[key].action = data.action || 'IDLE';
+                console.log(`[SYNC] Locker ${id} is now ${systemState[key].status.toUpperCase()}`);
+            }
+        });
+    });
+}
+
+// --- INITIALIZE LOCKERS ---
+async function initializeLockers() {
+  const lockers = ['1', '2'];
+  
+  for (const id of lockers) {
+    const ref = doc(db, "lockers", id);
+    const snap = await getDoc(ref);
+    
+    if (!snap.exists()) {
+      console.log(`[INIT] Creating default doc for Locker ${id}`);
+      await setDoc(ref, {
+        lockerId: id,
+        action: 'IDLE',      
+        status: 'available', // Default state
+        timestamp: new Date()
+      });
+    }
+  }
+}
+
+// --- AUTH & STARTUP ---
+signInAnonymously(auth).then(async () => {
+    console.log("✅ [FIREBASE] Authenticated");
+    await initializeLockers();   // Ensure docs exist
+    startDatabaseListener();     // Start syncing DB -> Memory
+});
 
 // --- API ENDPOINTS ---
 
-// 1. Get Status (Reads from Local Memory)
+// 1. Get Status
+// Returns merged state: { l1: { door: 'CLOSED', status: 'drop-off', ... } }
 app.get('/api/status', (req, res) => res.json(systemState));
 
-// 2. Unlock (Writes to Firebase)
+// 2. Unlock (Updates Logic & Action)
 app.post('/api/unlock', async (req, res) => {
-  const { lockerId } = req.body;
+  const { lockerId, status } = req.body; 
   try {
-    // Write to Firebase -> Python detects this -> Arduino unlocks
-    await setDoc(doc(db, "commands", "latest"), {
+    const updateData = {
       action: 'unlock',
       lockerId: lockerId,
       timestamp: new Date()
-    });
-    console.log(`[REMOTE] Sent unlock command for Locker ${lockerId}`);
+    };
+    if (status) updateData.status = status; // e.g., Set to 'drop-off'
+
+    await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
+    
+    console.log(`[REMOTE] Unlock Locker ${lockerId} -> ${status || 'Keep Status'}`);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// 3. Lock (Writes to Firebase)
+// 3. Lock (Updates Logic & Action)
 app.post('/api/lock', async (req, res) => {
-  const { lockerId } = req.body;
+  const { lockerId, status } = req.body;
   try {
-    await setDoc(doc(db, "commands", "latest"), {
+    const updateData = {
       action: 'lock',
       lockerId: lockerId,
       timestamp: new Date()
-    });
+    };
+    if (status) updateData.status = status; 
+
+    await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
+    
+    console.log(`[REMOTE] Lock Locker ${lockerId} -> ${status || 'Keep Status'}`);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// 4. Print (Local)
+// 4. Print
 app.post('/api/print', (req, res) => {
   const { transactionId, pin, processType, weight, price } = req.body;
 
@@ -121,7 +175,6 @@ app.post('/api/print', (req, res) => {
    Thank you!
   `;
 
-  // Direct print to USB printer
   exec(`printf "${receiptText}" > /dev/usb/lp0`, (error) => {
     if (error) {
         console.error("Printer Error:", error);
@@ -131,4 +184,4 @@ app.post('/api/print', (req, res) => {
   });
 });
 
-app.listen(3000, () => console.log('🚀 Server running on 3000 (Hybrid Mode)'));
+app.listen(3000, () => console.log('🚀 Server running on 3000'));
