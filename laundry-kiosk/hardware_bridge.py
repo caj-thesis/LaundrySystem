@@ -95,6 +95,10 @@ gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1) if gsm_port else None
 if not arduino: print("⚠️ Arduino not found (Check USB Cable)")
 if not gsm: print("⚠️ GSM not found (Check USB Cable)")
 
+# --- STATE TRACKING ---
+# Keeps track of the last known physical state to prevent infinite loops
+local_door_states = { "1": None, "2": None, "3": None }
+
 # --- LISTENERS ---
 
 # 1. SMS Listener
@@ -128,7 +132,7 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
                 except Exception as e:
                     log_gsm(f"SMS Error: {e}")
 
-# 2. Locker Action Listener
+# 2. Locker Action Listener (Fixed: Translates LOCK/UNLOCK to Single Chars)
 def on_locker_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name == 'MODIFIED': 
@@ -136,15 +140,27 @@ def on_locker_snapshot(col_snapshot, changes, read_time):
             locker_id = change.document.id
             action = data.get('action')
             
-            # STRICT FILTER: Only send command if action is explicit LOCK/UNLOCK
-            # This ignores updates where only 'status' changed (e.g. drop-off/pick-up)
-            valid_actions = ['UNLOCK', 'LOCK']
+            # Translate 'LOCK'/'UNLOCK' to Arduino Single Chars
+            # Locker 1: Unlock='1', Lock='4'
+            # Locker 2: Unlock='2', Lock='5'
+            cmd_char = None
             
-            if arduino and action and action.upper() in valid_actions:
-                cmd = f"{action.upper()}:{locker_id}\n"
+            if action:
+                act = action.upper()
+                if locker_id == '1':
+                    if act == 'UNLOCK': cmd_char = '1'
+                    elif act == 'LOCK': cmd_char = '4'
+                elif locker_id == '2':
+                    if act == 'UNLOCK': cmd_char = '2'
+                    elif act == 'LOCK': cmd_char = '5'
+                elif locker_id == '3':
+                    if act == 'UNLOCK': cmd_char = '3'
+                    elif act == 'LOCK': cmd_char = '6'
+
+            if arduino and cmd_char:
                 try:
-                    arduino.write(cmd.encode())
-                    print(f"📤 [LOCKER DB] Sent Action: {cmd.strip()}")
+                    arduino.write(cmd_char.encode())
+                    print(f"📤 [FIREBASE] Received Action: {action} -> Sent Command: '{cmd_char}'")
                 except Exception as e:
                     print(f"❌ Serial Write Error: {e}")
 
@@ -164,18 +180,43 @@ while True:
     if arduino and arduino.in_waiting:
         try:
             line = arduino.readline().decode('utf-8', errors='ignore').strip()
+            
+            # --- HANDLE DATA STREAM & SYNC TO FIREBASE ---
             if line.startswith("DATA"):
+                # 1. Update Local JSON (Existing Logic)
                 if time.time() - last_file_update > UPDATE_INTERVAL:
-                    state = {
-                        "raw_data": line,
-                        "timestamp": time.time()
-                    }
+                    state = { "raw_data": line, "timestamp": time.time() }
                     temp_file = STATE_FILE + ".tmp"
                     with open(temp_file, "w") as f:
                         json.dump(state, f)
                     os.replace(temp_file, STATE_FILE)
                     last_file_update = time.time()
-                    
+
+                # 2. Parse & Sync to Firebase Action Field (New Logic)
+                # Format: DATA|L1:Wt:Door|L2:Wt:Door...
+                parts = line.split('|')
+                for part in parts:
+                    if part.startswith('L') and ':' in part:
+                        # Example part: "L1:0.0:CLOSED"
+                        try:
+                            l_data = part.split(':')
+                            l_id = l_data[0].replace('L', '') 
+                            door_status = l_data[2]      
+                            
+                            if local_door_states.get(l_id) != door_status:
+                                local_door_states[l_id] = door_status
+                                
+                                new_action = 'lock' if door_status == 'CLOSED' else 'unlock'
+                                
+                                if db:
+                                    print(f"🔄 [SYNC] Locker {l_id} is {door_status}. Updating Firebase Action -> '{new_action}'")
+                                    db.collection('lockers').document(l_id).update({
+                                        'action': new_action,
+                                        'doorStatus': door_status # Optional: Update status too if needed
+                                    })
+                        except Exception as parse_err:
+                            print(f"Parse Error on part '{part}': {parse_err}")
+
         except Exception as e:
             print(f"Serial Read Error: {e}")
     
