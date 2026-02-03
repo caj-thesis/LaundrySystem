@@ -40,16 +40,25 @@ function updateStateFromFile() {
         if (data.raw_data && data.raw_data.startsWith('DATA')) {
             const parts = data.raw_data.split('|');
             parts.forEach(part => {
+                // Existing logic for L1
                 if (part.startsWith('L1:')) {
                     const d = part.split(':');
                     systemState.l1.weight = parseFloat(d[1]) || 0;
-                    systemState.l1.door = d[2]; // Updates physical door state
+                    systemState.l1.door = d[2];
                 }
+                // Existing logic for L2
                 if (part.startsWith('L2:')) {
                     const d = part.split(':');
                     systemState.l2.weight = parseFloat(d[1]) || 0;
-                    systemState.l2.door = d[2]; // Updates physical door state
+                    systemState.l2.door = d[2];
                 }
+                
+                // --- ADD THIS BLOCK ---
+                if (part.startsWith('CREDIT:')) {
+                    const d = part.split(':');
+                    systemState.credit = parseFloat(d[1]) || 0.0;
+                }
+                // ----------------------
             });
             systemState.lastUpdated = data.timestamp;
         }
@@ -57,6 +66,7 @@ function updateStateFromFile() {
         // Ignore read errors
     }
 }
+
 setInterval(updateStateFromFile, 200);
 
 // --- 2. DATABASE LISTENER (Reads Logical Status) ---
