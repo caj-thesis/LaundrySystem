@@ -143,6 +143,7 @@ def on_locker_snapshot(col_snapshot, changes, read_time):
             # Translate 'LOCK'/'UNLOCK' to Arduino Single Chars
             # Locker 1: Unlock='1', Lock='4'
             # Locker 2: Unlock='2', Lock='5'
+            # Locker 3: Unlock='3', Lock='6'
             cmd_char = None
             
             if action:
@@ -205,11 +206,8 @@ while True:
                             
                             if local_door_states.get(l_id) != door_status:
                                 local_door_states[l_id] = door_status
-                                
-                                new_action = 'lock' if door_status == 'CLOSED' else 'unlock'
-                                
+                                                                
                                 if db:
-                                    # Only update the status, never change the 'action' based on sensor data
                                     print(f"🔄 [SYNC] Locker {l_id} status update -> {door_status}")
                                     db.collection('lockers').document(l_id).update({
                                         'doorStatus': door_status 

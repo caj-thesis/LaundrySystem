@@ -11,8 +11,15 @@ interface WeighingPageProps {
 export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
 
+  // NEW: State to freeze the weight when the user locks the locker
+  const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
+
+  // Determine which weight to use: the frozen one (if locked) or the live one
+  const displayWeight = frozenWeight !== null ? frozenWeight : currentWeight;
+
   const pricePerKg = 25;
-  const totalPrice = currentWeight * pricePerKg;
+  // Calculate price based on the displayWeight, not the potentially fluctuating currentWeight
+  const totalPrice = displayWeight * pricePerKg;
 
   // 1. Auto-Unlock on Mount
   useEffect(() => {
@@ -37,46 +44,40 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
   }, [lockerId, step]);
 
   // 2. Handle User Confirmation ("Lock & Pay")
-const handleLock = async () => {
-  setStep('weighing'); // Show the "Locking..." loading state
-  
-  try {
-    // Call the new lock API
-    await fetch('http://localhost:3000/api/lock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lockerId }),
-    });
+  const handleLock = async () => {
+    // FREEZE THE WEIGHT HERE
+    setFrozenWeight(currentWeight);
     
-    // The useEffect already handles moving from 'weighing' to 'summary' after 2.5s
-  } catch (err) {
-    console.error("Locking failed:", err);
-    // Even if it fails, you might want to move to summary or show an error
-    setStep('summary');
-  }
+    setStep('weighing'); // Show the "Locking..." loading state
+    
+    try {
+      // Call the new lock API
+      await fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId }),
+      });
+      
+      // The useEffect already handles moving from 'weighing' to 'summary' after 2.5s
+    } catch (err) {
+      console.error("Locking failed:", err);
+      // Even if it fails, you might want to move to summary or show an error
+      setStep('summary');
+    }
   };
   
    // 3. Simulate Locking & Final Weighing
-
   useEffect(() => {
-
     let timer: NodeJS.Timeout;
 
     if (step === 'weighing') {
-
       timer = setTimeout(() => {
-
         setStep('summary');
-
       }, 2500);
-
     }
 
     return () => clearTimeout(timer);
-
   }, [step]);
-
-
 
   // --- STATE & HANDLERS FOR SMS ---
   const [customerPhone, setCustomerPhone] = useState('');
@@ -168,8 +169,9 @@ const handleLock = async () => {
                    <Scale size={28} />
                    <span>Current Weight</span>
                 </div>
+                {/* UPDATED: Uses displayWeight */}
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
-                   {currentWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
+                   {displayWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
                 </div>
              </div>
 
@@ -190,6 +192,7 @@ const handleLock = async () => {
                    <PhilippinePeso size={28} />
                    <span>Total Price</span>
                 </div>
+                {/* UPDATED: Uses totalPrice (which depends on displayWeight) */}
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    ₱{totalPrice.toFixed(2)}
                 </div>
@@ -208,11 +211,11 @@ const handleLock = async () => {
         <div style={{ padding: '16px 24px', width: '100%', borderTop: '1px solid #f3f4f6', backgroundColor: 'white' }}>
           <button 
             onClick={handleLock} 
-            disabled={currentWeight <= 0}
-            className={`btn-full ${currentWeight > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+            disabled={displayWeight <= 0}
+            className={`btn-full ${displayWeight > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
             style={{ padding: '16px', fontSize: '20px' }}
           >
-            {currentWeight > 0 ? (
+            {displayWeight > 0 ? (
                <div className="flex items-center justify-center gap-3">
                   <Lock size={24} />
                   <span>Lock Locker & Pay</span>
@@ -313,7 +316,8 @@ const handleLock = async () => {
                     <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
                  </div>
-                 <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{currentWeight.toFixed(1)} kg</span>
+                 {/* UPDATED: Uses displayWeight */}
+                 <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
               </div>
 
               <div style={{ width: '100%', height: '2px', borderTop: '2px dashed #cbd5e1', margin: '16px 0' }}></div>
@@ -417,7 +421,7 @@ const handleLock = async () => {
           flexShrink: 0 
       }}>
         <button 
-          onClick={() => onComplete(totalPrice, currentWeight, customerPhone)} 
+          onClick={() => onComplete(totalPrice, displayWeight, customerPhone)} 
           disabled={!isValidPhone}
           className={`btn-full shadow-lg text-white ${
             isValidPhone 
