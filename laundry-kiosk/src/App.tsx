@@ -160,7 +160,7 @@ export default function App() {
 
     if (selectedLockerId) {
       try {
-        // 1. Hardware Call
+        // 1. Hardware Call (Unlocks the door)
         fetch('http://localhost:3000/api/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -184,7 +184,7 @@ export default function App() {
         );
         await Promise.all(updates);
 
-        // 3. Update Locker Status in DB (The "Step 2" Fix)
+        // 3. Update Locker Status in DB
         console.log(`Updating Locker ${selectedLockerId} to available...`);
         
         const lockerRef = doc(db, "lockers", String(selectedLockerId));
@@ -204,12 +204,24 @@ export default function App() {
   };
 
   const handleReset = useCallback(() => {
+    // --- FIX: RE-LOCK LOCKER AFTER PICKUP ---
+    // The door was unlocked in handlePaymentComplete. 
+    // We must re-engage the lock so it latches when the next user closes it.
+    if (processType === 'pickup' && selectedLockerId) {
+      console.log(`[RESET] Auto-locking Locker ${selectedLockerId} after pickup`);
+      fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId: selectedLockerId }),
+      }).catch(e => console.error("Auto-lock failed:", e));
+    }
+
     setCurrentScreen('welcome');
     setSelectedLockerId(null);
     setProcessType(null);
     setLastGeneratedPin(null);
     setLastTransactionId(null);
-  }, []);
+  }, [processType, selectedLockerId]);
 
   return (
     <div className="app-container">

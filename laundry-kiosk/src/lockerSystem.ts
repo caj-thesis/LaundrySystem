@@ -15,6 +15,7 @@ export function useLockerSystem() {
 
   // --- 1. FIREBASE SYNC (Transactions) ---
   useEffect(() => {
+    // Listen for active transactions (occupied lockers)
     const q = query(
       collection(db, "transactions"), 
       where("status", "==", "paid_pending") 
@@ -32,17 +33,26 @@ export function useLockerSystem() {
       setLockers(prevLockers => prevLockers.map(locker => {
         const trx = activeTransactions[locker.id];
         if (trx) {
-          return {
-            ...locker,
-            status: 'occupied',
-            price: trx.price,
-            pin: trx.pin,
-            laundryStatus: trx.laundryStatus 
+          // If there is an active transaction, use its stored values
+          return { 
+            ...locker, 
+            status: 'occupied', 
+            price: trx.price, 
+            pin: trx.pin, 
+            laundryStatus: trx.laundryStatus,
+            weight: trx.weight // Ensure stored weight is loaded
           };
         } else {
-          // Reset if previously occupied
+          // If no active transaction, ensure it is available
           if (locker.status === 'occupied') {
-             return { ...locker, status: 'available', price: undefined, pin: undefined, laundryStatus: undefined };
+            return { 
+              ...locker, 
+              status: 'available', 
+              price: undefined, 
+              pin: undefined, 
+              laundryStatus: undefined,
+              weight: 0 
+            };
           }
           return locker;
         }
@@ -58,34 +68,38 @@ export function useLockerSystem() {
       try {
         const response = await fetch('http://localhost:3000/api/status');
         const data = await response.json();
-
+        
         setLockers(prevLockers => prevLockers.map(locker => {
           let hardwareData = null;
           if (locker.id === 1) hardwareData = data.l1;
           if (locker.id === 2) hardwareData = data.l2;
-
+          
           if (hardwareData) {
+            // LOGIC FIX:
+            // 1. Always update door status.
+            // 2. ONLY update weight from hardware if the locker is 'available'.
+            //    If it is 'occupied', we must trust the stored Transaction weight 
+            //    so the price doesn't fluctuate or drop to 0 during pickup.
+            
+            const isOccupied = locker.status === 'occupied';
+
             return {
               ...locker,
-              weight: hardwareData.weight, 
-              doorStatus: hardwareData.door 
+              doorStatus: hardwareData.door ? 'OPEN' : 'CLOSED',
+              weight: isOccupied ? locker.weight : hardwareData.weight 
             };
           }
           return locker;
         }));
-      } catch (error) {
-        // Silently fail to avoid console spam if server is restarting
+      } catch (e) {
+        // console.error("Hardware poll error", e);
       }
     };
 
-    // Initial fetch
-    fetchHardwareStatus();
-    
-    // OPTIMIZED: Poll every 200ms for smooth live-weight updates
-    const intervalId = setInterval(fetchHardwareStatus, 200);
-    
-    return () => clearInterval(intervalId);
+    // Poll every 200ms for smooth scale updates
+    const interval = setInterval(fetchHardwareStatus, 200);
+    return () => clearInterval(interval);
   }, []);
 
-  return { lockers, setLockers };
+  return { lockers };
 }
