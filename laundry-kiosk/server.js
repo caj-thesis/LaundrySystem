@@ -18,9 +18,10 @@ const STATE_FILE = 'sys_state.json';
 
 // --- LOCAL STATE CONTAINER ---
 // Now includes 'status' (Logical) and 'action' (Solenoid) alongside hardware sensors
+// [UPDATED] Defaults changed from 'IDLE' to 'lock'
 let systemState = {
-  l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'IDLE' }, 
-  l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'IDLE' },
+  l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock' }, 
+  l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock' },
   credit: 0.0,
   lastUpdated: 0
 };
@@ -73,7 +74,8 @@ function startDatabaseListener() {
             if (systemState[key]) {
                 // Determine status from DB, default to 'available' if missing
                 systemState[key].status = data.status || 'available'; 
-                systemState[key].action = data.action || 'IDLE';
+                // [UPDATED] Default action changed to 'lock'
+                systemState[key].action = data.action || 'lock';
                 console.log(`[SYNC] Locker ${id} is now ${systemState[key].status.toUpperCase()}`);
             }
         });
@@ -92,7 +94,7 @@ async function initializeLockers() {
       console.log(`[INIT] Creating default doc for Locker ${id}`);
       await setDoc(ref, {
         lockerId: id,
-        action: 'IDLE',      
+        action: 'lock',      // [UPDATED] Default set to 'lock' (was IDLE)
         status: 'available', // Default state
         timestamp: new Date()
       });
