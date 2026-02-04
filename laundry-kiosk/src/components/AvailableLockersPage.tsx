@@ -8,6 +8,10 @@ interface AvailableLockersPageProps {
 }
 
 export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: AvailableLockersPageProps) {
+  // 1. Calculate how many lockers are actually visible first
+  const visibleLockers = lockers.filter(l => l.isConnected !== false);
+  const isSingleLockerMode = visibleLockers.length === 1;
+
   return (
     <div className="lockers-page" style={{ 
       display: 'flex', 
@@ -33,25 +37,29 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       <div className="lockers-grid" style={{ 
         flex: 1, 
         overflowY: 'auto', 
-        paddingBottom: '4px' 
+        paddingBottom: '4px',
+        display: 'flex',         // Use Flexbox to center content if needed
+        flexDirection: 'column'
       }}>
         
         <div className="lockers-grid-container" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
+          // If single locker, force 1 column. If multiple, use auto-fit.
+          gridTemplateColumns: isSingleLockerMode ? '1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', 
           gap: '12px',
-          padding: '4px'
+          padding: '4px',
+          width: '100%'
         }}>
           {lockers.map((locker) => {
-            // 1. CHECK CONNECTION
+            // CHECK CONNECTION
             const isOnline = locker.isConnected !== false;
 
-            // 2. FILTER: If offline, don't render anything
+            // FILTER: If offline, don't render anything
             if (!isOnline) {
                 return null; 
             }
 
-            // 3. Determine Status
+            // Determine Status
             const isAvailable = locker.status === 'available';
             const isOccupied = locker.status === 'occupied';
 
@@ -90,56 +98,72 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                   borderRadius: '12px',
                   padding: '16px',
                   display: 'flex',
-                  flexDirection: 'column',
+                  
+                  // DYNAMIC LAYOUT:
+                  // If Single Mode: Row (Left to Right), Fixed Height
+                  // If Multi Mode: Column (Top to Bottom), Square Aspect Ratio
+                  flexDirection: isSingleLockerMode ? 'row' : 'column',
+                  aspectRatio: isSingleLockerMode ? 'auto' : '1/1',
+                  height: isSingleLockerMode ? '140px' : 'auto', 
+                  gap: isSingleLockerMode ? '24px' : '0px',
+                  
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: isAvailable ? 'pointer' : 'not-allowed',
                   opacity: isAvailable ? 1 : 0.8,
                   transition: 'all 0.2s ease',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                  aspectRatio: '1/1'
+                  width: '100%'
                 }}
               >
                 {/* Icon Circle */}
                 <div style={{
                   backgroundColor: 'white',
                   borderRadius: '50%',
-                  padding: '12px',
-                  marginBottom: '12px',
+                  padding: isSingleLockerMode ? '16px' : '12px',
+                  marginBottom: isSingleLockerMode ? '0px' : '12px',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}>
-                  <Lock size={28} color={iconColor} strokeWidth={2.5} />
+                  <Lock size={isSingleLockerMode ? 32 : 28} color={iconColor} strokeWidth={2.5} />
                 </div>
 
-                {/* Locker Name */}
-                <span className="locker-id" style={{ 
-                  fontSize: '18px', 
-                  fontWeight: 'bold', 
-                  color: '#374151',
-                  marginBottom: '4px'
+                {/* Text Container (Groups text together for Row layout) */}
+                <div style={{
+                   display: 'flex',
+                   flexDirection: 'column',
+                   alignItems: isSingleLockerMode ? 'flex-start' : 'center',
+                   justifyContent: 'center'
                 }}>
-                  Locker {locker.id}
-                </span>
+                    {/* Locker Name */}
+                    <span className="locker-id" style={{ 
+                      fontSize: isSingleLockerMode ? '24px' : '18px', 
+                      fontWeight: 'bold', 
+                      color: '#374151',
+                      marginBottom: '4px'
+                    }}>
+                      Locker {locker.id}
+                    </span>
 
-                {/* Status Text */}
-                <span className="locker-status" style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  color: statusColor,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}>
-                  {statusText}
-                </span>
+                    {/* Status Text */}
+                    <span className="locker-status" style={{ 
+                      fontSize: isSingleLockerMode ? '16px' : '14px', 
+                      fontWeight: '600', 
+                      color: statusColor,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      {statusText}
+                    </span>
 
-                {/* Capacity */}
-                <span className="locker-capacity" style={{ 
-                  fontSize: '12px', 
-                  color: '#6b7280', 
-                  marginTop: '4px' 
-                }}>
-                  Max: {locker.capacity}
-                </span>
+                    {/* Capacity */}
+                    <span className="locker-capacity" style={{ 
+                      fontSize: '12px', 
+                      color: '#6b7280', 
+                      marginTop: '4px' 
+                    }}>
+                      Max: {locker.capacity}
+                    </span>
+                </div>
               </button>
             );
           })}

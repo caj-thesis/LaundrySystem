@@ -3,17 +3,18 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig'; 
 import type { Locker } from './types';
 
-// Centralized Configuration
+// Centralized Configuration (Added Locker 3)
 export const INITIAL_LOCKERS: Locker[] = [
-  { id: 1, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
-  { id: 2, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED' },
+  { id: 1, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED', isConnected: true },
+  { id: 2, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED', isConnected: true },
+  { id: 3, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED', isConnected: true },
 ];
 
 // Custom Hook to manage Locker State
 export function useLockerSystem() {
   const [lockers, setLockers] = useState<Locker[]>(INITIAL_LOCKERS);
 
-  // --- 1. FIREBASE SYNC (Transactions) ---
+  // --- 1. FIREBASE SYNC (Transactions / Business Logic) ---
   useEffect(() => {
     // Listen for active transactions (occupied lockers)
     const q = query(
@@ -32,6 +33,8 @@ export function useLockerSystem() {
 
       setLockers(prevLockers => prevLockers.map(locker => {
         const trx = activeTransactions[locker.id];
+        
+        // Preserve existing hardware state (door/connection) while updating business logic
         if (trx) {
           // If there is an active transaction, use its stored values
           return { 
@@ -62,7 +65,7 @@ export function useLockerSystem() {
     return () => unsubscribe();
   }, []);
 
-  // --- 2. HARDWARE POLLING (Local Bridge) ---
+  // --- 2. HARDWARE POLLING (Connection, Door, Live Weight) ---
   useEffect(() => {
     const fetchHardwareStatus = async () => {
       try {
@@ -73,20 +76,25 @@ export function useLockerSystem() {
           let hardwareData = null;
           if (locker.id === 1) hardwareData = data.l1;
           if (locker.id === 2) hardwareData = data.l2;
+          if (locker.id === 3) hardwareData = data.l3;
           
           if (hardwareData) {
-            // LOGIC FIX:
-            // 1. Always update door status.
-            // 2. ONLY update weight from hardware if the locker is 'available'.
-            //    If it is 'occupied', we must trust the stored Transaction weight 
-            //    so the price doesn't fluctuate or drop to 0 during pickup.
-            
             const isOccupied = locker.status === 'occupied';
+
+            // Normalize Door Status (Arduino sends 'OPE'/'CLO' or 'OPEN'/'CLOSED')
+            const rawDoor = hardwareData.door || 'CLOSED';
+            const normalizedDoor = (rawDoor === 'OPE' || rawDoor === 'OPEN') ? 'OPEN' : 'CLOSED';
 
             return {
               ...locker,
-              doorStatus: hardwareData.door ? 'OPEN' : 'CLOSED',
-              weight: isOccupied ? locker.weight : hardwareData.weight 
+              // [CRITICAL] Update Connection Status
+              isConnected: hardwareData.isConnected !== undefined ? hardwareData.isConnected : true,
+              
+              // Update Door
+              doorStatus: normalizedDoor,
+              
+              // Update Weight: If occupied, trust the transaction weight. If available, show live scale.
+              weight: isOccupied ? locker.weight : (hardwareData.weight || 0)
             };
           }
           return locker;
@@ -96,7 +104,7 @@ export function useLockerSystem() {
       }
     };
 
-    // Poll every 200ms for smooth scale updates
+    // Poll every 200ms for smooth scale updates & instant connection checks
     const interval = setInterval(fetchHardwareStatus, 200);
     return () => clearInterval(interval);
   }, []);
