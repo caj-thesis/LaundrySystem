@@ -1,3 +1,4 @@
+# --- IMPORTS ---
 import firebase_admin
 from firebase_admin import credentials, firestore
 import serial
@@ -5,138 +6,324 @@ import serial.tools.list_ports
 import time
 import sys
 import os
+import json
+import datetime
+
+# FORCE FLUSHING OF LOGS
+sys.stdout.reconfigure(line_buffering=True)
 
 # --- CONFIGURATION ---
-BAUD_RATE = 9600  # Matched to your working Arduino Config
-KEY_PATH = "serviceAccountKey.json" 
-LED_RED = 'r'
-LED_GREEN = 'g'
-LED_YELLOW = 'y'
+BAUD_RATE = 115200 
+LOG_FILE = "gsm_logs.log"
+STATE_FILE = "sys_state.json" 
+UPDATE_INTERVAL = 0.2         
+
+# --- LED COLOR DEFINITIONS ---
+LED_OFF = 0
+LED_RED = 1
+LED_GREEN = 2
+LED_BLUE = 3
+LED_YELLOW = 4
+
+# --- LOGGING ---
+def log_gsm(message):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"📱 {timestamp} {message}")
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except:
+        pass
 
 # --- FIREBASE SETUP ---
-if not os.path.exists(KEY_PATH):
-    print(f"❌ Error: {KEY_PATH} not found.")
-    sys.exit(1)
+key_path = "serviceAccountKey.json" 
 
-try:
-    cred = credentials.Certificate(KEY_PATH)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    print("✅ [FIREBASE] Authenticated (Anti-Spam Bridge)")
-except Exception as e:
-    print(f"❌ Firebase Error: {e}")
-    sys.exit(1)
+if not os.path.exists(key_path):
+    print(f"❌ Error: {key_path} not found.")
+    db = None
+else:
+    try:
+        cred = credentials.Certificate(key_path)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        print("✅ [FIREBASE] Authenticated (Locker/SMS Mode)")
+    except Exception as e:
+        print(f"⚠️ [FIREBASE] Init Error: {e}")
+        db = None
 
-arduino = None
-gsm = None
+# --- HARDWARE DETECTION ---
+def find_ports():
+    print("--- Scanning for Hardware ---")
+    arduino_port = None
+    gsm_port = None
+    ports = serial.tools.list_ports.comports()
+    
+    for port in ports:
+        if "USB" in port.device or "ACM" in port.device:
+            try:
+                print(f"🔎 Probing {port.device}...")
+                s = serial.Serial(port.device, BAUD_RATE, timeout=1)
+                time.sleep(3) 
+                
+                # Check 1: Arduino (DATA|)
+                is_arduino = False
+                for _ in range(3):
+                    if s.in_waiting > 0:
+                        line = s.read(s.in_waiting).decode('utf-8', errors='ignore')
+                        if "DATA|" in line:
+                            arduino_port = port.device
+                            print(f"✅ ARDUINO found on {port.device}")
+                            is_arduino = True
+                            break
+                    time.sleep(1) 
+                
+                if is_arduino:
+                    s.close()
+                    continue
 
-def find_and_connect():
-    global arduino, gsm
-    if arduino is None:
-        ports = serial.tools.list_ports.comports()
-        for port in ports:
-            if "USB" in port.device or "ACM" in port.device:
-                try:
-                    s = serial.Serial(port.device, BAUD_RATE, timeout=1)
-                    time.sleep(2) 
-                    s.reset_input_buffer()
-                    
-                    start_check = time.time()
-                    is_arduino = False
-                    while time.time() - start_check < 2:
-                        if s.in_waiting:
-                            line = s.readline().decode('utf-8', errors='ignore').strip()
-                            if "DATA" in line:
-                                is_arduino = True
-                                break
-                    if is_arduino:
-                        arduino = s
-                        print(f"✅ FOUND ARDUINO on {port.device}!")
-                    else:
-                        s.close()
-                except:
-                    pass
+                # Check 2: GSM (OK)
+                s.write(b'AT\r\n')
+                time.sleep(0.5)
+                resp = s.read(s.in_waiting).decode('utf-8', errors='ignore')
+                if "OK" in resp:
+                    gsm_port = port.device
+                    print(f"✅ GSM found on {port.device}")
+                
+                s.close()
+            except Exception as e:
+                print(f"   Probe error on {port.device}: {e}")
 
-def send_arduino_command(cmd):
-    if arduino and arduino.is_open:
+    return arduino_port, gsm_port
+
+arduino_port, gsm_port = find_ports()
+arduino = serial.Serial(arduino_port, BAUD_RATE, timeout=1) if arduino_port else None
+gsm = serial.Serial(gsm_port, BAUD_RATE, timeout=1) if gsm_port else None
+
+if not arduino: print("⚠️ Arduino not found (Check USB Cable)")
+if not gsm: print("⚠️ GSM not found (Check USB Cable)")
+
+# --- STATE TRACKING ---
+# Keeps track of the last known physical state to prevent infinite loops
+local_door_states = { "1": None, "2": None, "3": None }
+
+# --- LED CONTROL FUNCTIONS ---
+
+def send_led_command(locker_id, color_code):
+    """Maps Locker ID & Color to the specific single-char command Arduino expects."""
+    cmd_char = None
+    
+    # Mapping based on your 1FEBBBRUARY.ino logic
+    # Locker 1: q(Red), w(Green), e(Blue), r(Yellow)
+    if locker_id == '1':
+        if color_code == LED_RED:      cmd_char = 'q'
+        elif color_code == LED_GREEN:  cmd_char = 'w'
+        elif color_code == LED_BLUE:   cmd_char = 'e'
+        elif color_code == LED_YELLOW: cmd_char = 'r'
+        
+    # Locker 2: a(Red), s(Green), d(Blue), f(Yellow)
+    elif locker_id == '2':
+        if color_code == LED_RED:      cmd_char = 'a'
+        elif color_code == LED_GREEN:  cmd_char = 's'
+        elif color_code == LED_BLUE:   cmd_char = 'd'
+        elif color_code == LED_YELLOW: cmd_char = 'f'
+
+    # Locker 3: z(Red), x(Green), c(Blue), v(Yellow)
+    elif locker_id == '3':
+        if color_code == LED_RED:      cmd_char = 'z'
+        elif color_code == LED_GREEN:  cmd_char = 'x'
+        elif color_code == LED_BLUE:   cmd_char = 'c'
+        elif color_code == LED_YELLOW: cmd_char = 'v'
+
+    if arduino and arduino.is_open and cmd_char:
         try:
-            arduino.write(f"{cmd}\n".encode('utf-8'))
-            print(f"📤 Sent: {cmd}")
-        except:
-            pass
+            arduino.write(cmd_char.encode('utf-8'))
+            # print(f"💡 LED Command Sent: Locker {locker_id} -> '{cmd_char}'")
+        except Exception as e:
+            print(f"❌ LED Write Error: {e}")
 
-def update_locker_led(locker_id, data):
-    status = data.get('status', '').lower()
-    color = LED_RED
-    if status == 'available': color = LED_GREEN
-    elif data.get('currentTransactionId'): color = LED_YELLOW # Simplified
-    send_arduino_command(f"{color}{locker_id}")
+def process_locker_leds(locker_id, locker_data):
+    """
+    STRICT RGB LED LOGIC:
+    1. Green  -> Status is 'available'
+    2. Yellow -> Transaction is 'Done' (Ready for Pickup)
+    3. Red    -> All other states (Drop-off, Occupied, Processing, etc.)
+    """
+    
+    # 1. GET STATUS
+    # We check 'collectionStatus' first (if used), otherwise 'status'
+    raw_status = locker_data.get('collectionStatus', locker_data.get('status', ''))
+    status = raw_status.lower()
 
-def on_locker_snapshot(col_snapshot, changes, read_time):
+    # --- CASE 1: AVAILABLE (GREEN) ---
+    if status == 'available':
+        send_led_command(locker_id, LED_GREEN)
+        print(f"🟢 Locker {locker_id}: Available -> GREEN")
+        return # Stop here
+
+    # --- CASE 2: CHECK FOR "DONE" (YELLOW) ---
+    # If we are here, the locker is NOT available. Check if laundry is done.
+    current_tx_id = locker_data.get('currentTransactionId')
+    is_done = False
+
+    if current_tx_id and db:
+        try:
+            # Fetch transaction to check 'laundryStatus'
+            tx_ref = db.collection('transactions').document(current_tx_id)
+            tx_doc = tx_ref.get()
+            
+            if tx_doc.exists:
+                tx_data = tx_doc.to_dict()
+                laundry_status = tx_data.get('laundryStatus', '')
+                
+                # If laundry is specifically 'Done', we want YELLOW
+                if laundry_status == 'Done':
+                    is_done = True
+        except Exception as e:
+            print(f"⚠️ Error fetching transaction {current_tx_id}: {e}")
+
+    if is_done:
+        send_led_command(locker_id, LED_YELLOW)
+        print(f"🟡 Locker {locker_id}: Laundry Done -> YELLOW")
+        
+    # --- CASE 3: NEITHER (RED) ---
+    # This catches 'occupied', 'drop-off', 'processing', 'service', etc.
+    else:
+        send_led_command(locker_id, LED_RED)
+        print(f"🔴 Locker {locker_id}: {status.upper()} (Occupied) -> RED")
+
+# --- LISTENERS ---
+
+# 1. SMS Listener
+def on_transaction_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name in ['ADDED', 'MODIFIED']:
             data = change.document.to_dict()
+            status = data.get('laundryStatus')
+            phone = data.get('phoneNumber')
+            trans_id = data.get('transactionId', 'N/A')
+            pin = data.get('pin', 'N/A')
+
+            if not phone or not gsm: continue
+            
+            msg = ""
+            if status == 'Pending':
+                msg = f"Locker Code: {pin}\nRef: {trans_id}"
+            elif status == 'Done':
+                msg = f"Laundry Ready!\nRef: {trans_id}"
+
+            if msg:
+                log_gsm(f"Sending SMS to {phone}")
+                try:
+                    gsm.write(b'AT+CMGF=1\r\n')
+                    time.sleep(0.5)
+                    gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
+                    time.sleep(0.5)
+                    gsm.write(msg.encode())
+                    gsm.write(bytes([26])) 
+                    time.sleep(3)
+                except Exception as e:
+                    log_gsm(f"SMS Error: {e}")
+
+# 2. Locker Action & LED Listener
+def on_locker_snapshot(col_snapshot, changes, read_time):
+    for change in changes:
+        # React to both ADDED (Startup) and MODIFIED (Updates)
+        if change.type.name in ['ADDED', 'MODIFIED']: 
+            data = change.document.to_dict()
             locker_id = change.document.id
-            update_locker_led(locker_id, data)
+            
+            # --- LED UPDATE LOGIC ---
+            process_locker_leds(locker_id, data)
+
+            # --- LOCK/UNLOCK ACTION LOGIC ---
             action = data.get('action')
+            cmd_char = None
+            
             if action:
-                cmd = 'u' if action.upper() == 'UNLOCK' else 'l'
-                send_arduino_command(f"{cmd}{locker_id}")
+                act = action.upper()
+                if locker_id == '1':
+                    if act == 'UNLOCK': cmd_char = '1'
+                    elif act == 'LOCK': cmd_char = '4'
+                elif locker_id == '2':
+                    if act == 'UNLOCK': cmd_char = '2'
+                    elif act == 'LOCK': cmd_char = '5'
+                elif locker_id == '3':
+                    if act == 'UNLOCK': cmd_char = '3'
+                    elif act == 'LOCK': cmd_char = '6'
+
+            if arduino and cmd_char:
+                try:
+                    arduino.write(cmd_char.encode())
+                    print(f"📤 [FIREBASE] Received Action: {action} -> Sent Command: '{cmd_char}'")
+                except Exception as e:
+                    print(f"❌ Serial Write Error: {e}")
 
 if db:
-    db.collection('lockers').on_snapshot(on_locker_snapshot)
+    print("🎧 Listening for Firebase 'lockers' & 'transactions'...")
+    try:
+        db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done']).on_snapshot(on_transaction_snapshot)
+        db.collection('lockers').on_snapshot(on_locker_snapshot)
+    except Exception as e:
+        print(f"Listener Error: {e}")
 
 # --- MAIN LOOP ---
-print("🚀 Bridge Started.")
-local_status_cache = {}
+print("🚀 Hybrid Bridge Running...")
+last_file_update = 0
 
 while True:
-    if arduino is None:
-        find_and_connect()
-        time.sleep(2)
-        continue 
-
-    try:
-        if arduino.in_waiting:
+    if arduino and arduino.in_waiting:
+        try:
             line = arduino.readline().decode('utf-8', errors='ignore').strip()
             
+            # --- HANDLE DATA STREAM & SYNC TO FIREBASE ---
             if line.startswith("DATA"):
+                # 1. Update Local JSON (for dashboard/display if needed)
+                if time.time() - last_file_update > UPDATE_INTERVAL:
+                    state = { "raw_data": line, "timestamp": time.time() }
+                    temp_file = STATE_FILE + ".tmp"
+                    with open(temp_file, "w") as f:
+                        json.dump(state, f)
+                    os.replace(temp_file, STATE_FILE)
+                    last_file_update = time.time()
+
+                # 2. Parse & Sync to Firebase Action Field
+                # Format: DATA|L1:Wt:Door|L2:Wt:Door...
                 parts = line.split('|')
                 for part in parts:
-                    if part.startswith("L") and ":" in part:
+                    if part.startswith('L') and ':' in part:
+                        # Example part: "L1:0.0:CLOSED"
                         try:
-                            # Parse: L1:0.0:CLOSED:1
-                            seg = part.split(':')
-                            l_id = seg[0].replace('L', '')
-                            door = seg[2]
-                            conn_status = "Online" if seg[3] == "1" else "Offline"
+                            l_data = part.split(':')
+                            l_id = l_data[0].replace('L', '') 
+                            weight = l_data[1]
+                            door_status = l_data[2]      
                             
-                            current_state = f"{door}_{conn_status}"
-                            
-                            # CRITICAL FIX: Check Cache BEFORE trying Firebase
-                            if local_status_cache.get(l_id) != current_state:
-                                print(f"🔄 Locker {l_id}: {conn_status} | {door}")
-                                
-                                # 1. Update Cache IMMEDIATELY to stop the loop
-                                local_status_cache[l_id] = current_state
-                                
-                                # 2. Try Firebase (If it fails, we won't retry instantly)
+                            # Detect Change
+                            if local_door_states.get(l_id) != door_status:
+                                local_door_states[l_id] = door_status
                                 if db:
-                                    try:
-                                        db.collection('lockers').document(l_id).update({
-                                            'doorStatus': door,
-                                            'connectionStatus': conn_status,
-                                            'lastUpdate': firestore.SERVER_TIMESTAMP
-                                        })
-                                    except Exception as db_e:
-                                        print(f"⚠️ Firebase Write Failed (Quota/Net): {db_e}")
-                                        
-                        except Exception as parse_e:
-                            pass
-                            
-    except Exception as e:
-        print(f"❌ Connection Error: {e}")
-        if arduino: arduino.close()
-        arduino = None
+                                    print(f"🔄 [SYNC] Locker {l_id} status update -> {door_status}")
+                                    db.collection('lockers').document(l_id).update({
+                                        'doorStatus': door_status 
+                                    })
+                        except Exception as parse_err:
+                            pass # Silently ignore parse errors to keep loop fast
 
+            # --- HANDLE COIN INSERTION ---
+            elif line.startswith("COIN_ADDED:"):
+                # Format: COIN_ADDED:5
+                try:
+                    amount_str = line.split(":")[1]
+                    amount = int(amount_str)
+                    print(f"💰 COIN INSERTED: {amount}")
+                    
+                    # FUTURE TODO: If you want to save this to Firebase, 
+                    # you can update a 'credits' document here.
+                    
+                except ValueError:
+                    print(f"⚠️ Malformed coin data: {line}")
+
+        except Exception as e:
+            print(f"Serial Read Error: {e}")
+    
     time.sleep(0.01)

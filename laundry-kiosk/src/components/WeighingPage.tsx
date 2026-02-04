@@ -11,14 +11,14 @@ interface WeighingPageProps {
 export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
 
-  // NEW: State to freeze the weight when the user locks the locker
+  // State to freeze the weight when the user locks the locker
   const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
 
   // Determine which weight to use: the frozen one (if locked) or the live one
   const displayWeight = frozenWeight !== null ? frozenWeight : currentWeight;
 
   const pricePerKg = 25;
-  // Calculate price based on the displayWeight, not the potentially fluctuating currentWeight
+  // Calculate price based on the displayWeight
   const totalPrice = displayWeight * pricePerKg;
 
   // 1. Auto-Unlock on Mount
@@ -45,23 +45,17 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
 
   // 2. Handle User Confirmation ("Lock & Pay")
   const handleLock = async () => {
-    // FREEZE THE WEIGHT HERE
     setFrozenWeight(currentWeight);
-    
-    setStep('weighing'); // Show the "Locking..." loading state
+    setStep('weighing'); 
     
     try {
-      // Call the new lock API
       await fetch('http://localhost:3000/api/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lockerId }),
       });
-      
-      // The useEffect already handles moving from 'weighing' to 'summary' after 2.5s
     } catch (err) {
       console.error("Locking failed:", err);
-      // Even if it fails, you might want to move to summary or show an error
       setStep('summary');
     }
   };
@@ -82,8 +76,10 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
   // --- STATE & HANDLERS FOR SMS ---
   const [customerPhone, setCustomerPhone] = useState('');
 
-  // Validate: Must be exactly 11 digits and numeric
-  const isValidPhone = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
+  // UPDATED VALIDATION: Valid if empty (skip) OR exactly 11 digits
+  const isSkipped = customerPhone.length === 0;
+  const isComplete = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
+  const isValidInput = isSkipped || isComplete;
 
   const handleKeypadPress = (digit: string) => {
     if (customerPhone.length < 11) {
@@ -149,7 +145,7 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
             <span>Door Unlocked & Scale Active</span>
           </div>
 
-          {/* HIGHLIGHTED CARDS SECTION */}
+          {/* Cards */}
           <div style={{ display: 'flex', width: '100%', maxWidth: '900px', gap: '24px', alignItems: 'stretch' }}>
              
              {/* Weight Card */}
@@ -169,7 +165,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                    <Scale size={28} />
                    <span>Current Weight</span>
                 </div>
-                {/* UPDATED: Uses displayWeight */}
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    {displayWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
                 </div>
@@ -192,7 +187,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                    <PhilippinePeso size={28} />
                    <span>Total Price</span>
                 </div>
-                {/* UPDATED: Uses totalPrice (which depends on displayWeight) */}
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    ₱{totalPrice.toFixed(2)}
                 </div>
@@ -200,7 +194,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
 
           </div>
 
-          {/* Simple Info Text */}
           <div className="flex items-center gap-2 text-gray-400 text-xs">
              <Info size={14} />
              <p>Close door when finished.</p>
@@ -316,7 +309,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                     <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
                  </div>
-                 {/* UPDATED: Uses displayWeight */}
                  <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
               </div>
 
@@ -339,9 +331,12 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
             borderTop: '6px solid #16a34a',
             display: 'flex',
             flexDirection: 'column',
-            padding: '16px 24px' // Slightly tighter padding to fit keypad
+            padding: '16px 24px' 
         }}>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">SMS Notification</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-gray-800">SMS Notification</h3>
+              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Optional</span>
+            </div>
             
             {/* Display Screen */}
             <div className="relative mb-4">
@@ -349,15 +344,16 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                 type="text"
                 readOnly
                 value={customerPhone}
-                placeholder="09XXXXXXXXX"
+                placeholder="Skip if none"
                 className="w-full text-2xl font-bold text-center p-3 border-2 rounded-lg bg-gray-50 text-gray-800 focus:outline-none"
                 style={{
                   letterSpacing: '3px',
-                  borderColor: isValidPhone ? '#16a34a' : '#e5e7eb'
+                  // Green if complete, Blue (Neutral) if empty, Red if partial
+                  borderColor: isComplete ? '#16a34a' : (isSkipped ? '#e5e7eb' : '#ef4444')
                 }}
               />
               <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)' }}>
-                {isValidPhone && <span style={{ color: '#16a34a', fontSize: '24px' }}>✔</span>}
+                {isComplete && <span style={{ color: '#16a34a', fontSize: '24px' }}>✔</span>}
               </div>
             </div>
 
@@ -380,7 +376,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                 </button>
               ))}
               
-              {/* Bottom Row */}
               <button 
                 onClick={handleClear}
                 className="bg-red-50 hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center font-bold"
@@ -404,8 +399,8 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
             </div>
             
             <div className="h-6 text-center">
-               {!isValidPhone && customerPhone.length > 0 && (
-                 <span className="text-red-500 text-xs font-medium">11 Digits Required</span>
+               {!isValidInput && (
+                 <span className="text-red-500 text-xs font-medium">Please enter 11 digits or clear to skip</span>
                )}
             </div>
         </div>
@@ -422,15 +417,19 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
       }}>
         <button 
           onClick={() => onComplete(totalPrice, displayWeight, customerPhone)} 
-          disabled={!isValidPhone}
+          disabled={!isValidInput}
           className={`btn-full shadow-lg text-white ${
-            isValidPhone 
-              ? 'bg-green-600 hover:bg-green-700 shadow-green-100' 
+            isValidInput 
+              ? (isComplete ? 'bg-green-600 hover:bg-green-700 shadow-green-100' : 'bg-gray-600 hover:bg-gray-700') 
               : 'bg-gray-300 cursor-not-allowed shadow-none'
           }`}
           style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', transition: 'all 0.2s' }}
         >
-          {isValidPhone ? 'CONFIRM & DROP OFF' : 'ENTER PHONE NUMBER'}
+          {/* Dynamic Button Text */}
+          {isValidInput 
+            ? (isComplete ? 'CONFIRM & DROP OFF' : 'CONFIRM (NO SMS)') 
+            : 'ENTER PHONE OR CLEAR'
+          }
         </button>
       </div>
     </div>
