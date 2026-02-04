@@ -16,11 +16,11 @@ app.use(express.json());
 
 const STATE_FILE = 'sys_state.json';
 
-// --- LOCAL STATE CONTAINER ---
+// --- LOCAL STATE CONTAINER (Added L3) ---
 let systemState = {
   l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, 
   l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
-  l3: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
+  l3: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, // <--- ADDED
   credit: 0.0,
   lastUpdated: 0
 };
@@ -43,13 +43,18 @@ function updateStateFromFile() {
                     const d = part.split(':');
                     systemState.l1.weight = parseFloat(d[1]) || 0;
                     systemState.l1.door = d[2];
-                    // d[3] is the connection flag from Python, but we prefer DB source for stability
                 }
                 // L2 Logic
                 if (part.startsWith('L2:')) {
                     const d = part.split(':');
                     systemState.l2.weight = parseFloat(d[1]) || 0;
                     systemState.l2.door = d[2];
+                }
+                // L3 Logic (THIS WAS MISSING)
+                if (part.startsWith('L3:')) {
+                    const d = part.split(':');
+                    systemState.l3.weight = parseFloat(d[1]) || 0;
+                    systemState.l3.door = d[2];
                 }
                 
                 if (part.startsWith('CREDIT:')) {
@@ -66,26 +71,22 @@ function updateStateFromFile() {
 
 setInterval(updateStateFromFile, 200);
 
-// --- 2. DATABASE LISTENER (Reads Logical Status) ---
+// --- 2. DATABASE LISTENER ---
 function startDatabaseListener() {
     console.log("🎧 Listening to 'lockers' collection...");
     
     onSnapshot(collection(db, "lockers"), (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const data = change.doc.data();
-            const id = change.doc.id; // "1" or "2"
+            const id = change.doc.id; // "1", "2", or "3"
             const key = `l${id}`;
 
             if (systemState[key]) {
-                // Merge DB status into local systemState
                 systemState[key].status = data.status || 'available'; 
                 systemState[key].action = data.action || 'lock';
-                
-                // [NEW] Sync Connection Status
-                // If the field is missing, default to true (Connected)
                 systemState[key].isConnected = (data.isConnected !== undefined) ? data.isConnected : true;
 
-                console.log(`[SYNC] Locker ${id}: ${systemState[key].status.toUpperCase()} | Connected: ${systemState[key].isConnected}`);
+                // console.log(`[SYNC] Locker ${id}: ${systemState[key].status.toUpperCase()}`);
             }
         });
     });
@@ -93,7 +94,7 @@ function startDatabaseListener() {
 
 // --- INITIALIZE LOCKERS ---
 async function initializeLockers() {
-  const lockers = ['1', '2', '3'];
+  const lockers = ['1', '2', '3']; // <--- ADDED '3' HERE
   
   for (const id of lockers) {
     const ref = doc(db, "lockers", id);
@@ -105,7 +106,7 @@ async function initializeLockers() {
         lockerId: id,
         action: 'lock',      
         status: 'available', 
-        isConnected: true, // Default
+        isConnected: true,
         timestamp: new Date()
       });
     }
@@ -120,11 +121,8 @@ signInAnonymously(auth).then(async () => {
 });
 
 // --- API ENDPOINTS ---
-
-// 1. Get Status
 app.get('/api/status', (req, res) => res.json(systemState));
 
-// 2. Unlock
 app.post('/api/unlock', async (req, res) => {
   const { lockerId, status } = req.body; 
   try {
@@ -134,7 +132,6 @@ app.post('/api/unlock', async (req, res) => {
       timestamp: new Date()
     };
     if (status) updateData.status = status;
-
     await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
     res.json({ success: true });
   } catch (e) {
@@ -142,7 +139,6 @@ app.post('/api/unlock', async (req, res) => {
   }
 });
 
-// 3. Lock
 app.post('/api/lock', async (req, res) => {
   const { lockerId, status } = req.body;
   try {
@@ -152,7 +148,6 @@ app.post('/api/lock', async (req, res) => {
       timestamp: new Date()
     };
     if (status) updateData.status = status; 
-
     await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
     res.json({ success: true });
   } catch (e) {
@@ -160,10 +155,8 @@ app.post('/api/lock', async (req, res) => {
   }
 });
 
-// 4. Print
 app.post('/api/print', (req, res) => {
   const { transactionId, pin, processType, weight, price } = req.body;
-
   const receiptText = `
       CAJ LAUNDRY LOCKER CO.
    --------------------------

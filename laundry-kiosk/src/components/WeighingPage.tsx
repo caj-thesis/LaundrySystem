@@ -252,10 +252,10 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
       
       {/* Header */}
       <div className="page-header" style={{ 
-         padding: '12px 0 8px', 
-         marginBottom: '0',
-         textAlign: 'center',
-         flexShrink: 0
+          padding: '12px 0 8px', 
+          marginBottom: '0',
+          textAlign: 'center',
+          flexShrink: 0
       }}>
         <h2 className="text-xl font-bold text-gray-800">Drop Off Summary</h2>
         <p className="text-sm text-gray-500">Review transaction & enter contact details</p>
@@ -294,8 +294,8 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
                alignItems: 'center' 
            }}>
               <div>
-                 <span style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', letterSpacing: '1px' }}>Locker Unit</span>
-                 <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>#{lockerId}</span>
+                  <span style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', letterSpacing: '1px' }}>Locker Unit</span>
+                  <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>#{lockerId}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
                   <span style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', letterSpacing: '1px' }}>Date</span>
@@ -305,18 +305,18 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
 
            <div style={{ padding: '20px 24px', flex: 1 }}> 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-                 <div>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
-                 </div>
-                 <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
+                  <div>
+                     <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
+                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
+                  </div>
+                  <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
               </div>
 
               <div style={{ width: '100%', height: '2px', borderTop: '2px dashed #cbd5e1', margin: '16px 0' }}></div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                 <span style={{ fontSize: '20px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a' }}>Total Due</span>
-                 <span style={{ fontSize: '48px', fontWeight: '800', color: '#2563eb', lineHeight: '1' }}>₱{totalPrice.toFixed(2)}</span>
+                  <span style={{ fontSize: '20px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a' }}>Total Due</span>
+                  <span style={{ fontSize: '48px', fontWeight: '800', color: '#2563eb', lineHeight: '1' }}>₱{totalPrice.toFixed(2)}</span>
               </div>
            </div>
         </div>
@@ -331,15 +331,16 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
             borderTop: '6px solid #16a34a',
             display: 'flex',
             flexDirection: 'column',
-            padding: '16px 24px' 
+            padding: '16px 24px',
+            overflow: 'hidden' /* FIX: Ensures content stays inside rounded corners */
         }}>
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-800">SMS Notification</h3>
               <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Optional</span>
             </div>
             
             {/* Display Screen */}
-            <div className="relative mb-4">
+            <div className="relative mb-4 w-full">
               <input
                 type="text"
                 readOnly
@@ -359,18 +360,19 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
 
             {/* Keypad Grid */}
             <div style={{ 
-               flex: 1, 
                display: 'grid', 
                gridTemplateColumns: 'repeat(3, 1fr)', 
                gap: '12px',
-               marginBottom: '8px' 
+               marginBottom: '8px',
+               flex: 1,           /* Allow grid to take available space */
+               alignContent: 'center' /* Center buttons vertically if space permits */
             }}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                 <button
                   key={num}
                   onClick={() => handleKeypadPress(num.toString())}
                   className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-lg text-xl font-bold shadow-sm transition-colors"
-                  style={{ height: '100%' }}
+                  style={{ height: '56px' }} /* FIX: Fixed height prevents overlap */
                 >
                   {num}
                 </button>
@@ -379,6 +381,7 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
               <button 
                 onClick={handleClear}
                 className="bg-red-50 hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center font-bold"
+                style={{ height: '56px' }}
               >
                 <X size={24} />
               </button>
@@ -386,6 +389,7 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
               <button 
                 onClick={() => handleKeypadPress('0')}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xl font-bold"
+                style={{ height: '56px' }}
               >
                 0
               </button>
@@ -393,12 +397,13 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
               <button 
                 onClick={handleBackspace}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center"
+                style={{ height: '56px' }}
               >
                 <Delete size={24} />
               </button>
             </div>
             
-            <div className="h-6 text-center">
+            <div className="h-6 text-center mt-2">
                {!isValidInput && (
                  <span className="text-red-500 text-xs font-medium">Please enter 11 digits or clear to skip</span>
                )}
