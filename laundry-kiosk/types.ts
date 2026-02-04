@@ -8,4 +8,5 @@ export interface Locker {
   pin?: string; 
   doorStatus?: string;
   laundryStatus?: 'Dropped' | 'Processing' | 'Done';
+  isConnected?: boolean; 
 }

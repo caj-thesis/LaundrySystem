@@ -13,17 +13,17 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       display: 'flex', 
       flexDirection: 'column', 
       height: '100%', 
-      padding: '12px', // Minimal padding to maximize internal space
+      padding: '12px', 
       backgroundColor: '#f9fafb' 
     }}>
       
-      {/* Header - Compacted */}
+      {/* Header */}
       <div className="page-header" style={{ marginBottom: '8px', textAlign: 'center', flexShrink: 0 }}>
         <h2 className="page-title" style={{ fontSize: '22px', fontWeight: 'bold', color: '#1f2937', marginBottom: '2px' }}>Available Lockers</h2>
         <p className="page-subtitle" style={{ fontSize: '14px', color: '#4b5563' }}>Select a locker for your laundry</p>
       </div>
 
-      {/* Return Button - Absolute positioning to save header space if desired, or kept in flow */}
+      {/* Return Button */}
       <button onClick={onBack} className="btn-return-top" style={{ top: '12px', right: '12px' }}>
         <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
         Return
@@ -38,73 +38,111 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
         
         <div className="lockers-grid-container" style={{
           display: 'grid',
-          // DYNAMIC LAYOUT:
-          // 'auto-fit' collapses empty tracks, forcing the items to STRETCH to fill the width.
-          // 'minmax(200px, 1fr)' ensures they are at least 200px wide, but grow (1fr) to fill.
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
           gap: '12px',
-          width: '100%',
-          padding: '4px' // Prevent shadow clipping
+          padding: '4px'
         }}>
-          
-          {lockers.length === 0 ? (
-            <div className="no-data-message" style={{ 
-              gridColumn: '1/-1', 
-              textAlign: 'center', 
-              padding: '3rem', 
-              color: '#6b7280', 
-              fontSize: '18px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              minHeight: '300px'
-            }}>
-              <Lock size={64} style={{ marginBottom: '16px', opacity: 0.2 }} />
-              No lockers available for drop-off at the moment.
-            </div>
-          ) : (
-            lockers.map((locker) => (
+          {lockers.map((locker) => {
+            // 1. CHECK CONNECTION
+            const isOnline = locker.isConnected !== false;
+
+            // 2. FILTER: If offline, don't render anything
+            if (!isOnline) {
+                return null; 
+            }
+
+            // 3. Determine Status
+            const isAvailable = locker.status === 'available';
+            const isOccupied = locker.status === 'occupied';
+
+            // Base styles
+            let bgColor = 'white';
+            let borderColor = '#e5e7eb';
+            let iconColor = '#9ca3af';
+            let statusText = isAvailable ? 'Available' : 'Occupied';
+            let statusColor = isAvailable ? '#10b981' : '#ef4444';
+
+            // OCCUPIED STYLING
+            if (isOccupied) {
+              bgColor = '#fef2f2'; // Light Red
+              borderColor = '#fecaca';
+              iconColor = '#ef4444';
+              statusText = 'In Use';
+              statusColor = '#ef4444';
+            } else {
+              // AVAILABLE STYLING
+              bgColor = '#ecfdf5'; // Light Green
+              borderColor = '#a7f3d0';
+              iconColor = '#10b981';
+              statusText = 'Available';
+              statusColor = '#10b981';
+            }
+
+            return (
               <button
                 key={locker.id}
                 onClick={() => onSelectLocker(locker.id)}
-                className="locker-button"
+                disabled={!isAvailable} 
+                className={`locker-card ${isAvailable ? 'available' : 'unavailable'}`}
                 style={{
+                  backgroundColor: bgColor,
+                  border: `2px solid ${borderColor}`,
+                  borderRadius: '12px',
+                  padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '24px', 
-                  backgroundColor: 'white',
-                  border: '2px solid transparent',
-                  borderRadius: '16px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                  cursor: 'pointer',
+                  cursor: isAvailable ? 'pointer' : 'not-allowed',
+                  opacity: isAvailable ? 1 : 0.8,
                   transition: 'all 0.2s ease',
-                  minHeight: '180px' // Increased height to consume vertical space
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                  aspectRatio: '1/1'
                 }}
               >
-                <div style={{ 
-                  backgroundColor: '#eff6ff', 
-                  padding: '16px', // Larger icon padding
-                  borderRadius: '50%', 
-                  marginBottom: '16px',
-                  color: '#2563eb' 
+                {/* Icon Circle */}
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '50%',
+                  padding: '12px',
+                  marginBottom: '12px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                 }}>
-                  <Lock size={40} /> {/* Larger Icon */}
+                  <Lock size={28} color={iconColor} strokeWidth={2.5} />
                 </div>
-                
-                <div className="locker-number" style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937' }}>
+
+                {/* Locker Name */}
+                <span className="locker-id" style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 'bold', 
+                  color: '#374151',
+                  marginBottom: '4px'
+                }}>
                   Locker {locker.id}
-                </div>
-                
-                <div className="locker-capacity" style={{ fontSize: '16px', color: '#6b7280', marginTop: '4px' }}>
+                </span>
+
+                {/* Status Text */}
+                <span className="locker-status" style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: statusColor,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  {statusText}
+                </span>
+
+                {/* Capacity */}
+                <span className="locker-capacity" style={{ 
+                  fontSize: '12px', 
+                  color: '#6b7280', 
+                  marginTop: '4px' 
+                }}>
                   Max: {locker.capacity}
-                </div>
+                </span>
               </button>
-            ))
-          )}
+            );
+          })}
         </div>
       </div>
     </div>

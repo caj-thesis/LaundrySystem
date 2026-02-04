@@ -17,10 +17,10 @@ app.use(express.json());
 const STATE_FILE = 'sys_state.json';
 
 // --- LOCAL STATE CONTAINER ---
-// [NEW] Added 'isConnected' (default true)
 let systemState = {
   l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, 
   l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
+  l3: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
   credit: 0.0,
   lastUpdated: 0
 };
@@ -93,7 +93,7 @@ function startDatabaseListener() {
 
 // --- INITIALIZE LOCKERS ---
 async function initializeLockers() {
-  const lockers = ['1', '2'];
+  const lockers = ['1', '2', '3'];
   
   for (const id of lockers) {
     const ref = doc(db, "lockers", id);
