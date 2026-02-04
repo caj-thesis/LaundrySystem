@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { WelcomePage } from './components/WelcomePage';
 import { ProcessSelectionPage } from './components/ProcessSelectionPage';
 import { AvailableLockersPage } from './components/AvailableLockersPage';
-import { LaundryTypeSelectionPage } from './components/LaundryTypeSelectionPage'; // NEW IMPORT
+import { LaundryTypeSelectionPage } from './components/LaundryTypeSelectionPage'; 
 import { DropOffInstructionsPage } from './components/DropOffInstructionsPage';
 import { WeighingPage } from './components/WeighingPage';
 import { PickupLockersPage } from './components/PickupLockersPage';
@@ -30,7 +30,7 @@ type Screen =
   | 'process-selection'
   | 'dropoff-instructions'
   | 'available-lockers'
-  | 'laundry-type-selection' // NEW SCREEN
+  | 'laundry-type-selection'
   | 'weighing-process'
   | 'pickup-lockers'
   | 'pin-entry'
@@ -42,8 +42,10 @@ export default function App() {
   const [selectedLockerId, setSelectedLockerId] = useState<number | null>(null);
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
   
-  // NEW: State to store the selected price per kg
+  // State for pricing and laundry type
   const [selectedPricePerKg, setSelectedPricePerKg] = useState<number>(25);
+  // NEW: State to store the selected laundry type name (e.g., 'Clothes' or 'Bed Sheets')
+  const [selectedLaundryType, setSelectedLaundryType] = useState<string>('Clothes');
 
   // Use the centralized hook for locker state
   const { lockers } = useLockerSystem();
@@ -79,18 +81,16 @@ export default function App() {
 
   const handleLockerSelect = (lockerId: number) => {
     setSelectedLockerId(lockerId);
-    // WAS: setCurrentScreen('weighing-process');
-    // NOW: Go to laundry type selection first
     setCurrentScreen('laundry-type-selection');
   };
 
-  // NEW: Handler for Laundry Type Selection
-  const handleLaundryTypeSelect = (price: number) => {
+  // UPDATED: Handler for Laundry Type Selection captures both price and type name
+  const handleLaundryTypeSelect = (price: number, type: string) => {
     setSelectedPricePerKg(price);
+    setSelectedLaundryType(type); // Store the type name
     setCurrentScreen('weighing-process');
   };
 
-  // NEW: Back button for Laundry Type Selection
   const handleLaundryTypeBack = () => {
     setCurrentScreen('available-lockers');
   };
@@ -125,9 +125,11 @@ export default function App() {
           pin: newPin,
           price: finalPrice,
           weight: finalWeight,
-          pricePerKg: selectedPricePerKg, // Optional: Store the rate used
+          pricePerKg: selectedPricePerKg,
           phoneNumber: phoneNumber || "N/A", 
-          type: 'dropoff',
+          // UPDATED: Use the selected laundry type (e.g., 'Clothes' or 'Bed Sheets') 
+          // instead of the hardcoded 'dropoff'
+          type: selectedLaundryType, 
           status: 'paid_pending',
           laundryStatus: 'Pending', 
           timestamp: new Date()
@@ -152,8 +154,6 @@ export default function App() {
   };
 
   const handleWeighingBack = () => {
-    // WAS: setCurrentScreen('available-lockers');
-    // NOW: Go back to type selection
     setCurrentScreen('laundry-type-selection');
   };
 
@@ -240,8 +240,9 @@ export default function App() {
     setProcessType(null);
     setLastGeneratedPin(null);
     setLastTransactionId(null);
-    // Reset price to default just in case
+    // Reset price and type to defaults
     setSelectedPricePerKg(25);
+    setSelectedLaundryType('Clothes');
   }, [processType, selectedLockerId]);
 
   return (
@@ -268,7 +269,7 @@ export default function App() {
           />
         )}
 
-        {/* NEW SCREEN: LAUNDRY TYPE SELECTION */}
+        {/* LAUNDRY TYPE SELECTION */}
         {currentScreen === 'laundry-type-selection' && (
           <LaundryTypeSelectionPage 
             onSelect={handleLaundryTypeSelect}
@@ -281,7 +282,8 @@ export default function App() {
           <WeighingPage 
             lockerId={selectedLockerId} 
             currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
-            pricePerKg={selectedPricePerKg} // PASS THE SELECTED PRICE
+            // UPDATED: Pass the dynamic price
+            pricePerKg={selectedPricePerKg}
             // @ts-ignore 
             onComplete={handleDropOffComplete} 
             onBack={handleWeighingBack}

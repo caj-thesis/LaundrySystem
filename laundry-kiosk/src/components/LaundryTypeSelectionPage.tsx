@@ -1,7 +1,8 @@
 import { ArrowLeft, Shirt, BedDouble } from 'lucide-react';
 
 interface LaundryTypeSelectionPageProps {
-  onSelect: (price: number) => void;
+  // UPDATED: Now accepts both price and the type name
+  onSelect: (price: number, type: string) => void;
   onBack: () => void;
 }
 
@@ -21,7 +22,8 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
       <div className="process-selection-buttons">
         {/* Option 1: Regular Clothes */}
         <button 
-          onClick={() => onSelect(25)} 
+          // UPDATED: Pass price AND type name
+          onClick={() => onSelect(25, 'Clothes')} 
           className="process-button"
           style={{ borderColor: '#3b82f6', backgroundColor: '#eff6ff' }} // Blue theme
         >
@@ -44,7 +46,8 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
 
         {/* Option 2: Bed Sheets / Heavy */}
         <button 
-          onClick={() => onSelect(40)} 
+          // UPDATED: Pass price AND type name
+          onClick={() => onSelect(40, 'Bed Sheets')} 
           className="process-button"
           style={{ borderColor: '#8b5cf6', backgroundColor: '#f5f3ff' }} // Violet theme
         >

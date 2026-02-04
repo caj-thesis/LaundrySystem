@@ -4,11 +4,13 @@ import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete
 interface WeighingPageProps {
   lockerId: number;
   currentWeight: number; 
+  // NEW: Accept dynamic price from parent
+  pricePerKg: number; 
   onComplete: (price: number, weight: number, customerPhone: string) => void;
   onBack: () => void;
 }
 
-export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: WeighingPageProps) {
+export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
 
   // State to freeze the weight when the user locks the locker
@@ -17,8 +19,7 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
   // Determine which weight to use: the frozen one (if locked) or the live one
   const displayWeight = frozenWeight !== null ? frozenWeight : currentWeight;
 
-  const pricePerKg = 25;
-  // Calculate price based on the displayWeight
+  // UPDATED: Calculate price based on the passed prop, not a hardcoded value
   const totalPrice = displayWeight * pricePerKg;
 
   // 1. Auto-Unlock on Mount
@@ -76,7 +77,7 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
   // --- STATE & HANDLERS FOR SMS ---
   const [customerPhone, setCustomerPhone] = useState('');
 
-  // UPDATED VALIDATION: Valid if empty (skip) OR exactly 11 digits
+  // Valid if empty (skip) OR exactly 11 digits
   const isSkipped = customerPhone.length === 0;
   const isComplete = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
   const isValidInput = isSkipped || isComplete;
@@ -325,54 +326,50 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
         <div style={{ 
             backgroundColor: 'white',
             flex: 1, 
-            maxWidth: '500px',
+            maxWidth: '380px', 
             borderRadius: '12px',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             borderTop: '6px solid #16a34a',
             display: 'flex',
             flexDirection: 'column',
-            padding: '16px 24px',
-            overflow: 'hidden' /* FIX: Ensures content stays inside rounded corners */
+            padding: '12px 16px', // Compact padding
+            height: '100%',
+            overflow: 'hidden'
         }}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">SMS Notification</h3>
-              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Optional</span>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-bold text-gray-800">SMS Notification</h3>
+              <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Optional</span>
             </div>
             
-            {/* Display Screen */}
-            <div className="relative mb-4 w-full">
+            {/* Display Screen - More Compact */}
+            <div className="relative mb-2 w-full">
               <input
                 type="text"
                 readOnly
                 value={customerPhone}
                 placeholder="Skip if none"
-                className="w-full text-2xl font-bold text-center p-3 border-2 rounded-lg bg-gray-50 text-gray-800 focus:outline-none"
+                className="w-full text-lg font-bold text-center p-1.5 border-2 rounded-md bg-gray-50 text-gray-800 focus:outline-none"
                 style={{
-                  letterSpacing: '3px',
-                  // Green if complete, Blue (Neutral) if empty, Red if partial
+                  letterSpacing: '1px',
                   borderColor: isComplete ? '#16a34a' : (isSkipped ? '#e5e7eb' : '#ef4444')
                 }}
               />
-              <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)' }}>
-                {isComplete && <span style={{ color: '#16a34a', fontSize: '24px' }}>✔</span>}
-              </div>
             </div>
 
-            {/* Keypad Grid */}
+            {/* Keypad Grid - Flex-grow to fill space without overflowing */}
             <div style={{ 
-               display: 'grid', 
-               gridTemplateColumns: 'repeat(3, 1fr)', 
-               gap: '12px',
-               marginBottom: '8px',
-               flex: 1,           /* Allow grid to take available space */
-               alignContent: 'center' /* Center buttons vertically if space permits */
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(3, 1fr)', 
+                gap: '6px', // Tight gap
+                flex: 1,           
+                alignContent: 'center'
             }}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                 <button
                   key={num}
                   onClick={() => handleKeypadPress(num.toString())}
-                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-lg text-xl font-bold shadow-sm transition-colors"
-                  style={{ height: '56px' }} /* FIX: Fixed height prevents overlap */
+                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-md text-base font-bold shadow-sm"
+                  style={{ height: '40px' }} // Small fixed height to prevent overlap
                 >
                   {num}
                 </button>
@@ -380,33 +377,34 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
               
               <button 
                 onClick={handleClear}
-                className="bg-red-50 hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center font-bold"
-                style={{ height: '56px' }}
+                className="bg-red-50 hover:bg-red-100 text-red-600 rounded-md flex items-center justify-center font-bold text-[10px]"
+                style={{ height: '40px' }}
               >
-                <X size={24} />
+                CLEAR
               </button>
               
               <button 
                 onClick={() => handleKeypadPress('0')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xl font-bold"
-                style={{ height: '56px' }}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-base font-bold"
+                style={{ height: '40px' }}
               >
                 0
               </button>
               
               <button 
                 onClick={handleBackspace}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center"
-                style={{ height: '56px' }}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md flex items-center justify-center"
+                style={{ height: '40px' }}
               >
-                <Delete size={24} />
+                <Delete size={18} />
               </button>
             </div>
             
-            <div className="h-6 text-center mt-2">
-               {!isValidInput && (
-                 <span className="text-red-500 text-xs font-medium">Please enter 11 digits or clear to skip</span>
-               )}
+            {/* Error Message - Small text */}
+            <div className="h-4 text-center mt-1">
+              {!isValidInput && (
+                <span className="text-red-500 text-[10px] leading-none">11 digits or clear to skip</span>
+              )}
             </div>
         </div>
 
@@ -430,7 +428,6 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
           }`}
           style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', transition: 'all 0.2s' }}
         >
-          {/* Dynamic Button Text */}
           {isValidInput 
             ? (isComplete ? 'CONFIRM & DROP OFF' : 'CONFIRM (NO SMS)') 
             : 'ENTER PHONE OR CLEAR'
