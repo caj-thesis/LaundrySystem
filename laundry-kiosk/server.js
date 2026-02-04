@@ -17,17 +17,15 @@ app.use(express.json());
 const STATE_FILE = 'sys_state.json';
 
 // --- LOCAL STATE CONTAINER ---
-// Now includes 'status' (Logical) and 'action' (Solenoid) alongside hardware sensors
-// [UPDATED] Defaults changed from 'IDLE' to 'lock'
+// [NEW] Added 'isConnected' (default true)
 let systemState = {
-  l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock' }, 
-  l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock' },
+  l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, 
+  l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
   credit: 0.0,
   lastUpdated: 0
 };
 
 // --- 1. HARDWARE WATCHER (Reads Local File) ---
-// Syncs physical sensors (Door/Weight) from Python script
 console.log(`👀 Watching local file: ${STATE_FILE}`);
 
 function updateStateFromFile() {
@@ -40,25 +38,24 @@ function updateStateFromFile() {
         if (data.raw_data && data.raw_data.startsWith('DATA')) {
             const parts = data.raw_data.split('|');
             parts.forEach(part => {
-                // Existing logic for L1
+                // L1 Logic
                 if (part.startsWith('L1:')) {
                     const d = part.split(':');
                     systemState.l1.weight = parseFloat(d[1]) || 0;
                     systemState.l1.door = d[2];
+                    // d[3] is the connection flag from Python, but we prefer DB source for stability
                 }
-                // Existing logic for L2
+                // L2 Logic
                 if (part.startsWith('L2:')) {
                     const d = part.split(':');
                     systemState.l2.weight = parseFloat(d[1]) || 0;
                     systemState.l2.door = d[2];
                 }
                 
-                // --- ADD THIS BLOCK ---
                 if (part.startsWith('CREDIT:')) {
                     const d = part.split(':');
                     systemState.credit = parseFloat(d[1]) || 0.0;
                 }
-                // ----------------------
             });
             systemState.lastUpdated = data.timestamp;
         }
@@ -70,7 +67,6 @@ function updateStateFromFile() {
 setInterval(updateStateFromFile, 200);
 
 // --- 2. DATABASE LISTENER (Reads Logical Status) ---
-// Syncs logical status (drop-off/pick-up) from Firebase to Server Memory
 function startDatabaseListener() {
     console.log("🎧 Listening to 'lockers' collection...");
     
@@ -80,13 +76,16 @@ function startDatabaseListener() {
             const id = change.doc.id; // "1" or "2"
             const key = `l${id}`;
 
-            // Merge DB status into local systemState
             if (systemState[key]) {
-                // Determine status from DB, default to 'available' if missing
+                // Merge DB status into local systemState
                 systemState[key].status = data.status || 'available'; 
-                // [UPDATED] Default action changed to 'lock'
                 systemState[key].action = data.action || 'lock';
-                console.log(`[SYNC] Locker ${id} is now ${systemState[key].status.toUpperCase()}`);
+                
+                // [NEW] Sync Connection Status
+                // If the field is missing, default to true (Connected)
+                systemState[key].isConnected = (data.isConnected !== undefined) ? data.isConnected : true;
+
+                console.log(`[SYNC] Locker ${id}: ${systemState[key].status.toUpperCase()} | Connected: ${systemState[key].isConnected}`);
             }
         });
     });
@@ -104,8 +103,9 @@ async function initializeLockers() {
       console.log(`[INIT] Creating default doc for Locker ${id}`);
       await setDoc(ref, {
         lockerId: id,
-        action: 'lock',      // [UPDATED] Default set to 'lock' (was IDLE)
-        status: 'available', // Default state
+        action: 'lock',      
+        status: 'available', 
+        isConnected: true, // Default
         timestamp: new Date()
       });
     }
@@ -115,17 +115,16 @@ async function initializeLockers() {
 // --- AUTH & STARTUP ---
 signInAnonymously(auth).then(async () => {
     console.log("✅ [FIREBASE] Authenticated");
-    await initializeLockers();   // Ensure docs exist
-    startDatabaseListener();     // Start syncing DB -> Memory
+    await initializeLockers();   
+    startDatabaseListener();     
 });
 
 // --- API ENDPOINTS ---
 
 // 1. Get Status
-// Returns merged state: { l1: { door: 'CLOSED', status: 'drop-off', ... } }
 app.get('/api/status', (req, res) => res.json(systemState));
 
-// 2. Unlock (Updates Logic & Action)
+// 2. Unlock
 app.post('/api/unlock', async (req, res) => {
   const { lockerId, status } = req.body; 
   try {
@@ -134,18 +133,16 @@ app.post('/api/unlock', async (req, res) => {
       lockerId: lockerId,
       timestamp: new Date()
     };
-    if (status) updateData.status = status; // e.g., Set to 'drop-off'
+    if (status) updateData.status = status;
 
     await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
-    
-    console.log(`[REMOTE] Unlock Locker ${lockerId} -> ${status || 'Keep Status'}`);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// 3. Lock (Updates Logic & Action)
+// 3. Lock
 app.post('/api/lock', async (req, res) => {
   const { lockerId, status } = req.body;
   try {
@@ -157,8 +154,6 @@ app.post('/api/lock', async (req, res) => {
     if (status) updateData.status = status; 
 
     await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
-    
-    console.log(`[REMOTE] Lock Locker ${lockerId} -> ${status || 'Keep Status'}`);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
