@@ -24,7 +24,7 @@ export function DropOffInstructionsPage({ onNext, onBack }: DropOffInstructionsP
             <div className="instruction-number">1</div>
             <div className="instruction-content">
               <h3>Select a Locker</h3>
-              <p>Choose an available locker that fits your laundry size.</p>
+              <p>Choose an available locker and the type of laundry.</p>
             </div>
           </div>
 

@@ -1,235 +1,187 @@
-import escpos from 'escpos';
-import escposUSB from 'escpos-usb';
-escpos.USB = escposUSB;
+import { exec } from 'child_process';
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { SerialPort } from 'serialport';
-import { ReadlineParser } from '@serialport/parser-readline';
 
 // --- FIREBASE IMPORTS ---
 import { db, auth } from './firebaseConfig.js'; 
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth"; 
-
-// --- PATH SETUP ---
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const LOG_FILE = path.join(__dirname, 'hardware.log');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- CONFIGURATION ---
-const ARDUINO_PORT = '/dev/ttyUSB0'; 
-const BAUD_RATE = 115200; // Changed from 9600
+const STATE_FILE = 'sys_state.json';
 
-// --- PRINTER SETUP ---
-const device = new escpos.USB(0x0483, 0x070b); 
-const printer = new escpos.Printer(device);
-
-// --- STATE STORAGE ---
+// --- LOCAL STATE CONTAINER (Added L3) ---
 let systemState = {
-  l1: { door: 'CLOSED', weight: 0.0 }, 
-  l2: { door: 'CLOSED', weight: 0.0 },
-  credit: 0.0
+  l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, 
+  l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
+  l3: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, // <--- ADDED
+  credit: 0.0,
+  lastUpdated: 0
 };
 
-// --- SIMULATION MODE STATE ---
-let isSimulationMode = false;
+// --- 1. HARDWARE WATCHER (Reads Local File) ---
+console.log(`👀 Watching local file: ${STATE_FILE}`);
 
-// --- LOGGING FUNCTION ---
-function logHardware(data) {
-  const timestamp = new Date().toLocaleTimeString();
-  const logEntry = `[${timestamp}] ${data}\n`;
-  console.log(logEntry.trim()); 
-  fs.appendFile(LOG_FILE, logEntry, (err) => {
-    if (err) console.error(`Failed to write to log: ${err.message}`);
-  });
-}
+function updateStateFromFile() {
+    if (!fs.existsSync(STATE_FILE)) return;
 
-// --- FIREBASE SYNC FUNCTION ---
-let lastUploadTime = 0;
-const UPLOAD_INTERVAL = 2000; 
-
-async function syncToFirebase() {
-  if (!auth.currentUser) return;
-  const now = Date.now();
-  if (now - lastUploadTime > UPLOAD_INTERVAL) {
     try {
-      await setDoc(doc(db, "kiosks", "main_unit"), {
-        ...systemState,
-        lastUpdated: new Date()
-      });
-      lastUploadTime = now;
-    } catch (e) {
-      console.error("Firebase Sync Error:", e.message);
+        const raw = fs.readFileSync(STATE_FILE, 'utf8');
+        const data = JSON.parse(raw);
+        
+        if (data.raw_data && data.raw_data.startsWith('DATA')) {
+            const parts = data.raw_data.split('|');
+            parts.forEach(part => {
+                // L1 Logic
+                if (part.startsWith('L1:')) {
+                    const d = part.split(':');
+                    systemState.l1.weight = parseFloat(d[1]) || 0;
+                    systemState.l1.door = d[2];
+                }
+                // L2 Logic
+                if (part.startsWith('L2:')) {
+                    const d = part.split(':');
+                    systemState.l2.weight = parseFloat(d[1]) || 0;
+                    systemState.l2.door = d[2];
+                }
+                // L3 Logic (THIS WAS MISSING)
+                if (part.startsWith('L3:')) {
+                    const d = part.split(':');
+                    systemState.l3.weight = parseFloat(d[1]) || 0;
+                    systemState.l3.door = d[2];
+                }
+                
+                if (part.startsWith('CREDIT:')) {
+                    const d = part.split(':');
+                    systemState.credit = parseFloat(d[1]) || 0.0;
+                }
+            });
+            systemState.lastUpdated = data.timestamp;
+        }
+    } catch (err) {
+        // Ignore read errors
     }
-  }
 }
 
-// --- AUTHENTICATION INIT ---
-signInAnonymously(auth).catch((error) => console.error("Firebase Auth Error:", error.message));
+setInterval(updateStateFromFile, 200);
 
-// --- SERIAL CONNECTION ---
-let port;
-try {
-  port = new SerialPort({ path: ARDUINO_PORT, baudRate: BAUD_RATE });
-  const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
+// --- 2. DATABASE LISTENER ---
+function startDatabaseListener() {
+    console.log("🎧 Listening to 'lockers' collection...");
+    
+    onSnapshot(collection(db, "lockers"), (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const data = change.doc.data();
+            const id = change.doc.id; // "1", "2", or "3"
+            const key = `l${id}`;
 
-  console.log(`✅ CONNECTED TO HARDWARE ON ${ARDUINO_PORT}`);
+            if (systemState[key]) {
+                systemState[key].status = data.status || 'available'; 
+                systemState[key].action = data.action || 'lock';
+                systemState[key].isConnected = (data.isConnected !== undefined) ? data.isConnected : true;
 
- 
-// --- Updated Serial Parsing in server.js ---
-parser.on('data', (line) => {
-    const text = line.trim();
-    logHardware(`Arduino: ${text}`);
-
-    // If the line starts with "DATA", it contains our locker info
-    if (text.startsWith('DATA')) {
-        const parts = text.split('|'); // Splits into ["DATA", "L1:0.0:CLOSED", "L2:0.0:CLOSED"...]
-        
-        parts.forEach(part => {
-            // Check for Locker 1
-            if (part.startsWith('L1:')) {
-                const data = part.split(':'); // ["L1", "0.0", "CLOSED"]
-                systemState.l1.weight = parseFloat(data[1]) || 0;
-                systemState.l1.door = data[2];
-            }
-            // Check for Locker 2
-            if (part.startsWith('L2:')) {
-                const data = part.split(':');
-                systemState.l2.weight = parseFloat(data[1]) || 0;
-                systemState.l2.door = data[2];
-            }
-            // Check for Credit
-            if (part.startsWith('CREDIT:')) {
-                systemState.credit = parseFloat(part.split(':')[1]) || 0;
+                // console.log(`[SYNC] Locker ${id}: ${systemState[key].status.toUpperCase()}`);
             }
         });
+    });
+}
 
-        syncToFirebase(); // Send the real weight to your database
+// --- INITIALIZE LOCKERS ---
+async function initializeLockers() {
+  const lockers = ['1', '2', '3']; // <--- ADDED '3' HERE
+  
+  for (const id of lockers) {
+    const ref = doc(db, "lockers", id);
+    const snap = await getDoc(ref);
+    
+    if (!snap.exists()) {
+      console.log(`[INIT] Creating default doc for Locker ${id}`);
+      await setDoc(ref, {
+        lockerId: id,
+        action: 'lock',      
+        status: 'available', 
+        isConnected: true,
+        timestamp: new Date()
+      });
     }
+  }
+}
+
+// --- AUTH & STARTUP ---
+signInAnonymously(auth).then(async () => {
+    console.log("✅ [FIREBASE] Authenticated");
+    await initializeLockers();   
+    startDatabaseListener();     
 });
 
-  port.on('error', (err) => {
-    console.error('Serial Port Error:', err.message);
-    startSimulationMode();
-  });
-
-} catch (err) {
-  console.error("❌ HARDWARE CONNECTION FAILED:", err.message);
-  startSimulationMode();
-}
-
-function startSimulationMode() {
-  if (isSimulationMode) return;
-  isSimulationMode = true;
-  console.log("⚠️  STARTING SIMULATION MODE (UI Testing) ⚠️");
-  console.log("   - Weights will simulate IMMEDIATELY upon unlock.");
-}
-
-// --- API ---
+// --- API ENDPOINTS ---
 app.get('/api/status', (req, res) => res.json(systemState));
 
-app.post('/api/unlock', (req, res) => {
-  const { lockerId } = req.body;
-  
-  // --- UPDATED: IMMEDIATE SIMULATION ---
-  if (isSimulationMode) {
-    console.log(`[SIMULATION] Unlocking Locker ${lockerId}...`);
-    
-    // NO DELAY (setTimeout removed)
-    if (lockerId === 1) systemState.l1.weight = 3.5; 
-    if (lockerId === 2) systemState.l2.weight = 4.2; 
-    
-    console.log(`[SIMULATION] Weight detected immediately in Locker ${lockerId}`);
-    return res.json({ success: true, mode: 'simulation' });
-  }
-
-  if (!port) return res.status(500).json({ error: "Hardware not connected" });
-
-  if (lockerId === 1) port.write('1\n');
-  else if (lockerId === 2) port.write('2\n');
-  else return res.status(400).json({ error: "Invalid Locker ID" });
-
-  res.json({ success: true });
-});
-
-app.post('/api/debug/weight', (req, res) => {
-    const { lockerId, weight } = req.body;
-    if (lockerId === 1) systemState.l1.weight = parseFloat(weight);
-    if (lockerId === 2) systemState.l2.weight = parseFloat(weight);
-    res.json({ success: true, newState: systemState });
-});
-
-// Add this to your server.js to handle the locking command
-// server.js
-app.post('/api/lock', (req, res) => {
-  const { lockerId } = req.body;
-  
-  // These characters 'a', 'b', 'c' match your Arduino 'LOCK' logic
-  const lockCommands = { 1: 'a', 2: 'b', 3: 'c' };
-  const cmd = lockCommands[lockerId];
-
-  if (port && cmd) {
-    port.write(`${cmd}\n`); 
-    console.log(`Sent LOCK command to Arduino: ${cmd}`);
+app.post('/api/unlock', async (req, res) => {
+  const { lockerId, status } = req.body; 
+  try {
+    const updateData = {
+      action: 'unlock',
+      lockerId: lockerId,
+      timestamp: new Date()
+    };
+    if (status) updateData.status = status;
+    await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
     res.json({ success: true });
-  } else {
-    // If hardware isn't connected, still return success for UI testing
-    res.json({ success: true, warning: "Hardware not connected" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-// Create the /api/print endpoint
+app.post('/api/lock', async (req, res) => {
+  const { lockerId, status } = req.body;
+  try {
+    const updateData = {
+      action: 'lock',
+      lockerId: lockerId,
+      timestamp: new Date()
+    };
+    if (status) updateData.status = status; 
+    await setDoc(doc(db, "lockers", String(lockerId)), updateData, { merge: true });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/print', (req, res) => {
   const { transactionId, pin, processType, weight, price } = req.body;
+  const receiptText = `
+      CAJ LAUNDRY LOCKER CO.
+   --------------------------
+   Date: ${new Date().toLocaleString()}
+   Trans #: ${transactionId || 'N/A'}
+   Service: ${processType ? processType.toUpperCase() : 'SERVICE'}
+   --------------------------
+   Weight: ${Number(weight).toFixed(2)} kg
+   Price:  PHP ${Number(price).toFixed(2)}
+   --------------------------
+   ${processType === 'dropoff' 
+     ? `YOUR PIN: ${pin}\\n   Keep this PIN safe!` 
+     : `Status: PAID\\n   Locker is now open`
+   }
+   --------------------------
+   Thank you!
+  `;
 
-  device.open((error) => {
+  exec(`printf "${receiptText}" > /dev/usb/lp0`, (error) => {
     if (error) {
-      console.error("Printer Error:", error);
-      return res.status(500).json({ error: "Printer not found" });
+        console.error("Printer Error:", error);
+        return res.status(500).json({ success: false });
     }
-
-    printer
-      .font('a')
-      .align('ct')
-      .style('bu')
-      .size(1, 1)
-      .text('LAUNDRY KIOSK')
-      .size(0, 0)
-      .text('--------------------------------')
-      .align('lt')
-      .text(`Date: ${new Date().toLocaleString()}`)
-      .text(`Trans #: ${transactionId || 'N/A'}`)
-      .text(`Service: ${processType.toUpperCase()}`)
-      .text('--------------------------------');
-
-    if (processType === 'dropoff') {
-      printer
-        .size(1, 1)
-        .text(`PICKUP PIN: ${pin}`)
-        .size(0, 0)
-        .text('Keep this PIN to claim your items.');
-    } else {
-      printer
-        .text(`Weight: ${weight || 0} kg`)
-        .text(`Paid: PHP ${price || 0}`);
-    }
-
-    printer
-      .text('--------------------------------')
-      .align('ct')
-      .text('Thank you!')
-      .feed(3)
-      .close();
-      
     res.json({ success: true });
   });
 });
 
-app.listen(3000, () => console.log('Server running on port 3000'));
+app.listen(3000, () => console.log('🚀 Server running on 3000'));

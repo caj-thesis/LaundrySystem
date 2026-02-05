@@ -1,99 +1,118 @@
 #!/bin/bash
 
-# --- ENABLE LOGGING ---
-exec > /home/caj/kiosk.log 2>&1
-echo "--- Kiosk Script Started: $(date) ---"
+# --- 1. LOGGING & CLEANUP ---
+# Direct all output to a singular 'system_logs.log' file
+exec > /home/caj/system_logs.log 2>&1
+echo "--- Kiosk System Starting: $(date) ---"
 
-# --- ENVIRONMENT SETUP (MOVED TO TOP) ---
+echo "🧹 Cleaning up old processes..."
+pkill -f "node server.js" || true
+pkill -f "python3 hardware_bridge.py" || true
+pkill -f "chromium" || true
+fuser -k 5173/tcp 3000/tcp 2>/dev/null || true 
+
+# --- 2. ENVIRONMENT SETUP ---
 export NVM_DIR="$HOME/.nvm"
-# Fixed typo: changed "\." to "." to correctly source the file if it exists
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-# Fallback: Check if npm is found; if not, force the manual path
 if ! command -v npm &> /dev/null; then
-    echo "NVM failed to load. Using manual fallback..."
-    # Derived from the path found in your original script
-    MANUAL_NODE_HOME="/home/caj/.config/nvm/versions/node/v24.12.0"
-    export PATH="$MANUAL_NODE_HOME/bin:$PATH"
+    echo "NVM failed. Using manual path fallback..."
+    export PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin:$PATH"
 fi
 
-# Verification: Exit early if npm is still missing
 if ! command -v npm &> /dev/null; then
-    echo "CRITICAL ERROR: npm could not be found in PATH."
-    echo "Current PATH: $PATH"
+    echo "CRITICAL ERROR: Node/NPM not found."
     exit 1
 fi
-echo "Node version: $(node -v)"
-echo "NPM version: $(npm -v)"
 
-# --- AUTO-INSTALLER SECTION (System) ---
-echo "Checking system dependencies..."
+# --- 3. SYSTEM & PROJECT CHECKS ---
+KIOSK_APP_DIR="/home/caj/laundry-kiosk"
+cd "$KIOSK_APP_DIR" || { echo "Directory not found"; exit 1; }
+
+# Check for Firebase Key
+if [ ! -f "serviceAccountKey.json" ]; then
+    echo "CRITICAL ERROR: serviceAccountKey.json is missing!"
+    exit 1
+fi
+
+# Check for system packages
 DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
-
 for pkg in "${DEPENDENCIES[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
         echo "Installing missing package: $pkg"
         sudo apt-get update && sudo apt-get install -y "$pkg"
-    else
-        echo "Package $pkg is already installed."
     fi
 done
 
-# --- PROJECT SETUP ---
-KIOSK_APP_DIR="/home/caj/laundry-kiosk"
-
-if [ -d "$KIOSK_APP_DIR" ]; then
-    echo "Changing directory to $KIOSK_APP_DIR..."
-    cd "$KIOSK_APP_DIR" || exit 1
-    
-    # 1. Standard Install (React Dependencies)
-    if [ ! -d "node_modules" ]; then
-        echo "node_modules not found. Installing..."
-        npm install --no-audit --no-fund || { echo "npm install failed"; exit 1; }
-    fi
-
-    # 2. Backend Install (UPDATED: Added firebase)
-    # Checks if express, serialport OR firebase are missing
-    if [ ! -d "node_modules/express" ] || [ ! -d "node_modules/serialport" ] || [ ! -d "node_modules/firebase" ]; then
-        echo "Backend dependencies missing. Installing express, cors, serialport, firebase..."
-        # ADDED --save to update package.json
-        npm install express cors serialport firebase --save
-    fi
-else
-    echo "ERROR: Could not find folder at $KIOSK_APP_DIR"
-    exit 1
+# Ensure Node modules are installed
+if [ ! -d "node_modules" ] || [ ! -d "node_modules/firebase" ]; then
+    echo "Installing/Updating Node dependencies..."
+    npm install express cors serialport firebase --save
 fi
 
-# --- DISPLAY SETTINGS ---
-export DISPLAY=:0
-xset s off
-xset -dpms
-xset s noblank
+# --- 4. HARDWARE & BACKEND STARTUP ---
+# Start Python Hardware Bridge
+if [ -f "hardware_bridge.py" ]; then
+    # --- AUTO-FIX: Create venv if missing ---
+    if [ ! -d "venv" ]; then
+        echo "⚠️  Virtual Environment (venv) not found. Creating it now..."
+        python3 -m venv venv
+        source venv/bin/activate
+        
+        echo "📦 Installing required Python libraries..."
+        pip install --upgrade pip
+        pip install firebase-admin pyserial
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Python environment created and dependencies installed."
+        else
+            echo "❌ Error installing Python dependencies."
+            exit 1
+        fi
+    else
+        # Just activate if it already exists
+        source venv/bin/activate
+    fi
+    # ----------------------------------------
 
-# --- STARTUP UTILS ---
-unclutter -idle 0.5 &
+    echo "Starting Hardware Bridge..."
+    # -u ensures output is unbuffered and appears immediately in the log
+    python3 -u hardware_bridge.py &
+else
+    echo "CRITICAL ERROR: hardware_bridge.py not found in $(pwd)"
+fi
 
-# --- START BACKEND SERVER ---
+# Start Node Backend
 echo "Starting Backend Server..."
-# We can now rely on the 'node' command being in the PATH
-node server.js > /home/caj/backend.log 2>&1 &
-BACKEND_PID=$!
-echo "Backend started with PID: $BACKEND_PID"
+node server.js &
 
-# --- START REACT APP ---
-echo "Starting React App..."
-npm run dev &
+# Start React Frontend
+echo "Starting React Frontend..."
+npm run dev -- --port 5173 --strictPort &
 FRONTEND_PID=$!
 
-echo "Waiting 20 seconds for Vite to initialize..."
+# --- 5. DISPLAY & BROWSER ---
+export DISPLAY=:0
+xset s off && xset -dpms && xset s noblank
+unclutter -idle 0.5 -root &
+
+echo "Waiting 20 seconds for full initialization..."
 sleep 20
 
-# --- LAUNCH CHROMIUM ---
-echo "Launching Chromium in Kiosk mode..."
-# Added --disable-background-networking --disable-sync to fix QUOTA_EXCEEDED error
-chromium --password-store=basic --kiosk --disable-restore-session-state --noerrdialogs --disable-gpu --disable-software-rasterizer --disable-background-networking --disable-sync http://localhost:5173 &
+echo "Launching Chromium..."
+chromium --no-sandbox \
+         --kiosk \
+         --disable-gpu \
+         --disable-software-rasterizer \
+         --noerrdialogs \
+         --disable-session-crashed-bubble \
+         --disable-infobars \
+         --disable-notifications \
+         --password-store=basic \
+         --disable-background-networking \
+         --disable-sync \
+         --disable-features=TranslateUI,OptimizationHints,MediaRouter \
+         http://localhost:5173 &
 
-echo "--- Setup Complete. Waiting for processes... ---"
-
-# --- KEEP SCRIPT ALIVE ---
+echo "--- Kiosk fully initialized. ---"
 wait $FRONTEND_PID

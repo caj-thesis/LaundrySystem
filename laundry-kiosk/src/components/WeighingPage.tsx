@@ -4,15 +4,23 @@ import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete
 interface WeighingPageProps {
   lockerId: number;
   currentWeight: number; 
+  // NEW: Accept dynamic price from parent
+  pricePerKg: number; 
   onComplete: (price: number, weight: number, customerPhone: string) => void;
   onBack: () => void;
 }
 
-export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: WeighingPageProps) {
+export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
 
-  const pricePerKg = 25;
-  const totalPrice = currentWeight * pricePerKg;
+  // State to freeze the weight when the user locks the locker
+  const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
+
+  // Determine which weight to use: the frozen one (if locked) or the live one
+  const displayWeight = frozenWeight !== null ? frozenWeight : currentWeight;
+
+  // UPDATED: Calculate price based on the passed prop, not a hardcoded value
+  const totalPrice = displayWeight * pricePerKg;
 
   // 1. Auto-Unlock on Mount
   useEffect(() => {
@@ -37,52 +45,42 @@ export function WeighingPage({ lockerId, currentWeight, onComplete, onBack }: We
   }, [lockerId, step]);
 
   // 2. Handle User Confirmation ("Lock & Pay")
-const handleLock = async () => {
-  setStep('weighing'); // Show the "Locking..." loading state
-  
-  try {
-    // Call the new lock API
-    await fetch('http://localhost:3000/api/lock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lockerId }),
-    });
+  const handleLock = async () => {
+    setFrozenWeight(currentWeight);
+    setStep('weighing'); 
     
-    // The useEffect already handles moving from 'weighing' to 'summary' after 2.5s
-  } catch (err) {
-    console.error("Locking failed:", err);
-    // Even if it fails, you might want to move to summary or show an error
-    setStep('summary');
-  }
+    try {
+      await fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId }),
+      });
+    } catch (err) {
+      console.error("Locking failed:", err);
+      setStep('summary');
+    }
   };
   
    // 3. Simulate Locking & Final Weighing
-
   useEffect(() => {
-
     let timer: NodeJS.Timeout;
 
     if (step === 'weighing') {
-
       timer = setTimeout(() => {
-
         setStep('summary');
-
       }, 2500);
-
     }
 
     return () => clearTimeout(timer);
-
   }, [step]);
-
-
 
   // --- STATE & HANDLERS FOR SMS ---
   const [customerPhone, setCustomerPhone] = useState('');
 
-  // Validate: Must be exactly 11 digits and numeric
-  const isValidPhone = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
+  // Valid if empty (skip) OR exactly 11 digits
+  const isSkipped = customerPhone.length === 0;
+  const isComplete = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
+  const isValidInput = isSkipped || isComplete;
 
   const handleKeypadPress = (digit: string) => {
     if (customerPhone.length < 11) {
@@ -148,7 +146,7 @@ const handleLock = async () => {
             <span>Door Unlocked & Scale Active</span>
           </div>
 
-          {/* HIGHLIGHTED CARDS SECTION */}
+          {/* Cards */}
           <div style={{ display: 'flex', width: '100%', maxWidth: '900px', gap: '24px', alignItems: 'stretch' }}>
              
              {/* Weight Card */}
@@ -169,7 +167,7 @@ const handleLock = async () => {
                    <span>Current Weight</span>
                 </div>
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
-                   {currentWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
+                   {displayWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
                 </div>
              </div>
 
@@ -197,7 +195,6 @@ const handleLock = async () => {
 
           </div>
 
-          {/* Simple Info Text */}
           <div className="flex items-center gap-2 text-gray-400 text-xs">
              <Info size={14} />
              <p>Close door when finished.</p>
@@ -208,11 +205,11 @@ const handleLock = async () => {
         <div style={{ padding: '16px 24px', width: '100%', borderTop: '1px solid #f3f4f6', backgroundColor: 'white' }}>
           <button 
             onClick={handleLock} 
-            disabled={currentWeight <= 0}
-            className={`btn-full ${currentWeight > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+            disabled={displayWeight <= 0}
+            className={`btn-full ${displayWeight > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
             style={{ padding: '16px', fontSize: '20px' }}
           >
-            {currentWeight > 0 ? (
+            {displayWeight > 0 ? (
                <div className="flex items-center justify-center gap-3">
                   <Lock size={24} />
                   <span>Lock Locker & Pay</span>
@@ -256,10 +253,10 @@ const handleLock = async () => {
       
       {/* Header */}
       <div className="page-header" style={{ 
-         padding: '12px 0 8px', 
-         marginBottom: '0',
-         textAlign: 'center',
-         flexShrink: 0
+          padding: '12px 0 8px', 
+          marginBottom: '0',
+          textAlign: 'center',
+          flexShrink: 0
       }}>
         <h2 className="text-xl font-bold text-gray-800">Drop Off Summary</h2>
         <p className="text-sm text-gray-500">Review transaction & enter contact details</p>
@@ -298,8 +295,8 @@ const handleLock = async () => {
                alignItems: 'center' 
            }}>
               <div>
-                 <span style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', letterSpacing: '1px' }}>Locker Unit</span>
-                 <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>#{lockerId}</span>
+                  <span style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', letterSpacing: '1px' }}>Locker Unit</span>
+                  <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>#{lockerId}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
                   <span style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: 'bold', letterSpacing: '1px' }}>Date</span>
@@ -309,18 +306,18 @@ const handleLock = async () => {
 
            <div style={{ padding: '20px 24px', flex: 1 }}> 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-                 <div>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
-                 </div>
-                 <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{currentWeight.toFixed(1)} kg</span>
+                  <div>
+                     <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
+                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
+                  </div>
+                  <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
               </div>
 
               <div style={{ width: '100%', height: '2px', borderTop: '2px dashed #cbd5e1', margin: '16px 0' }}></div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                 <span style={{ fontSize: '20px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a' }}>Total Due</span>
-                 <span style={{ fontSize: '48px', fontWeight: '800', color: '#2563eb', lineHeight: '1' }}>₱{totalPrice.toFixed(2)}</span>
+                  <span style={{ fontSize: '20px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a' }}>Total Due</span>
+                  <span style={{ fontSize: '48px', fontWeight: '800', color: '#2563eb', lineHeight: '1' }}>₱{totalPrice.toFixed(2)}</span>
               </div>
            </div>
         </div>
@@ -329,80 +326,85 @@ const handleLock = async () => {
         <div style={{ 
             backgroundColor: 'white',
             flex: 1, 
-            maxWidth: '500px',
+            maxWidth: '380px', 
             borderRadius: '12px',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             borderTop: '6px solid #16a34a',
             display: 'flex',
             flexDirection: 'column',
-            padding: '16px 24px' // Slightly tighter padding to fit keypad
+            padding: '12px 16px', // Compact padding
+            height: '100%',
+            overflow: 'hidden'
         }}>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">SMS Notification</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-bold text-gray-800">SMS Notification</h3>
+              <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Optional</span>
+            </div>
             
-            {/* Display Screen */}
-            <div className="relative mb-4">
+            {/* Display Screen - More Compact */}
+            <div className="relative mb-2 w-full">
               <input
                 type="text"
                 readOnly
                 value={customerPhone}
-                placeholder="09XXXXXXXXX"
-                className="w-full text-2xl font-bold text-center p-3 border-2 rounded-lg bg-gray-50 text-gray-800 focus:outline-none"
+                placeholder="Skip if none"
+                className="w-full text-lg font-bold text-center p-1.5 border-2 rounded-md bg-gray-50 text-gray-800 focus:outline-none"
                 style={{
-                  letterSpacing: '3px',
-                  borderColor: isValidPhone ? '#16a34a' : '#e5e7eb'
+                  letterSpacing: '1px',
+                  borderColor: isComplete ? '#16a34a' : (isSkipped ? '#e5e7eb' : '#ef4444')
                 }}
               />
-              <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)' }}>
-                {isValidPhone && <span style={{ color: '#16a34a', fontSize: '24px' }}>✔</span>}
-              </div>
             </div>
 
-            {/* Keypad Grid */}
+            {/* Keypad Grid - Flex-grow to fill space without overflowing */}
             <div style={{ 
-               flex: 1, 
-               display: 'grid', 
-               gridTemplateColumns: 'repeat(3, 1fr)', 
-               gap: '12px',
-               marginBottom: '8px' 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(3, 1fr)', 
+                gap: '6px', // Tight gap
+                flex: 1,           
+                alignContent: 'center'
             }}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                 <button
                   key={num}
                   onClick={() => handleKeypadPress(num.toString())}
-                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-lg text-xl font-bold shadow-sm transition-colors"
-                  style={{ height: '100%' }}
+                  className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 rounded-md text-base font-bold shadow-sm"
+                  style={{ height: '40px' }} // Small fixed height to prevent overlap
                 >
                   {num}
                 </button>
               ))}
               
-              {/* Bottom Row */}
               <button 
                 onClick={handleClear}
-                className="bg-red-50 hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center font-bold"
+                className="bg-red-50 hover:bg-red-100 text-red-600 rounded-md flex items-center justify-center font-bold text-[10px]"
+                style={{ height: '40px' }}
               >
-                <X size={24} />
+                CLEAR
               </button>
               
               <button 
                 onClick={() => handleKeypadPress('0')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xl font-bold"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-base font-bold"
+                style={{ height: '40px' }}
               >
                 0
               </button>
               
               <button 
                 onClick={handleBackspace}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md flex items-center justify-center"
+                style={{ height: '40px' }}
               >
-                <Delete size={24} />
+                <Delete size={18} />
               </button>
             </div>
             
-            <div className="h-6 text-center">
-               {!isValidPhone && customerPhone.length > 0 && (
-                 <span className="text-red-500 text-xs font-medium">11 Digits Required</span>
-               )}
+            {/* Error Message - Small text */}
+            <div className="h-4 text-center mt-1">
+              {!isValidInput && (
+                <span className="text-red-500 text-[10px] leading-none">11 digits or clear to skip</span>
+              )}
             </div>
         </div>
 
@@ -417,16 +419,19 @@ const handleLock = async () => {
           flexShrink: 0 
       }}>
         <button 
-          onClick={() => onComplete(totalPrice, currentWeight, customerPhone)} 
-          disabled={!isValidPhone}
+          onClick={() => onComplete(totalPrice, displayWeight, customerPhone)} 
+          disabled={!isValidInput}
           className={`btn-full shadow-lg text-white ${
-            isValidPhone 
-              ? 'bg-green-600 hover:bg-green-700 shadow-green-100' 
+            isValidInput 
+              ? (isComplete ? 'bg-green-600 hover:bg-green-700 shadow-green-100' : 'bg-gray-600 hover:bg-gray-700') 
               : 'bg-gray-300 cursor-not-allowed shadow-none'
           }`}
           style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', transition: 'all 0.2s' }}
         >
-          {isValidPhone ? 'CONFIRM & DROP OFF' : 'ENTER PHONE NUMBER'}
+          {isValidInput 
+            ? (isComplete ? 'CONFIRM & DROP OFF' : 'CONFIRM (NO SMS)') 
+            : 'ENTER PHONE OR CLEAR'
+          }
         </button>
       </div>
     </div>

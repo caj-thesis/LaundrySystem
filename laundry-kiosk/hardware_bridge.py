@@ -1,0 +1,279 @@
+# --- IMPORTS ---
+import firebase_admin
+from firebase_admin import credentials, firestore
+import serial
+import serial.tools.list_ports
+import time
+import sys
+import os
+import json
+import datetime
+
+# FORCE FLUSHING OF LOGS
+sys.stdout.reconfigure(line_buffering=True)
+
+# --- CONFIGURATION ---
+BAUD_RATE = 115200 
+LOG_FILE = "gsm_logs.log"
+STATE_FILE = "sys_state.json" 
+UPDATE_INTERVAL = 0.2         
+
+# --- HARDWARE PORTS ---
+ARDUINO_PORT_ID = "/dev/ttyUSB0"  
+GSM_PORT_ID = "/dev/ttyUSB1"      
+
+# --- LED COLOR DEFINITIONS ---
+LED_OFF = 0
+LED_RED = 1
+LED_GREEN = 2
+LED_BLUE = 3
+LED_YELLOW = 4
+
+# --- LOGGING ---
+def log_gsm(message):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"📱 {timestamp} {message}")
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except:
+        pass
+
+# --- FIREBASE SETUP ---
+key_path = "serviceAccountKey.json" 
+
+if not os.path.exists(key_path):
+    print(f"❌ Error: {key_path} not found.")
+    db = None
+else:
+    try:
+        cred = credentials.Certificate(key_path)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        print("✅ [FIREBASE] Authenticated")
+    except Exception as e:
+        print(f"⚠️ [FIREBASE] Init Error: {e}")
+        db = None
+
+# --- HARDWARE CONNECTION ---
+def connect_hardware():
+    print("--- Connecting to Hardware ---")
+    ard = None
+    try:
+        print(f"🔎 Connecting to Arduino at {ARDUINO_PORT_ID}...")
+        ard = serial.Serial(ARDUINO_PORT_ID, BAUD_RATE, timeout=1)
+        time.sleep(2) 
+        print(f"✅ ARDUINO connected.")
+    except Exception as e:
+        print(f"⚠️ Arduino Connection Failed: {e}")
+
+    modem = None
+    try:
+        print(f"🔎 Connecting to GSM at {GSM_PORT_ID}...")
+        modem = serial.Serial(GSM_PORT_ID, BAUD_RATE, timeout=1)
+        modem.write(b'AT\r\n')
+        time.sleep(0.5)
+        print(f"✅ GSM connected.")
+    except Exception as e:
+        print(f"⚠️ GSM Connection Failed: {e}")
+
+    return ard, modem
+
+arduino, gsm = connect_hardware()
+
+# --- STATE TRACKING ---
+local_door_states = { "1": None, "2": None, "3": None }
+local_connection_states = { "1": None, "2": None, "3": None }
+
+# --- LED CONTROL FUNCTIONS ---
+def send_led_command(locker_id, color_code):0
+    action_char = None
+    if color_code == LED_RED:      action_char = 'r'
+    elif color_code == LED_GREEN:  action_char = 'g'
+    elif color_code == LED_YELLOW: action_char = 'y'
+    elif color_code == LED_BLUE:   action_char = 'r' 
+
+    if arduino and arduino.is_open and action_char:
+        try:
+            command = f"{action_char}{locker_id}\n"
+            arduino.write(command.encode('utf-8'))
+        except Exception as e:
+            print(f"❌ LED Write Error: {e}")
+
+def process_locker_leds(locker_id, locker_data):
+    raw_status = locker_data.get('collectionStatus', locker_data.get('status', ''))
+    
+    # If locker is disconnected, force RED LED
+    is_connected = locker_data.get('isConnected', True)
+    if not is_connected:
+        send_led_command(locker_id, LED_RED) 
+        return
+
+    status = raw_status.lower()
+    if status == 'available':
+        send_led_command(locker_id, LED_GREEN)
+        return 
+
+    current_tx_id = locker_data.get('currentTransactionId')
+    is_done = False
+    if current_tx_id and db:
+        try:
+            tx_ref = db.collection('transactions').document(current_tx_id)
+            tx_doc = tx_ref.get()
+            if tx_doc.exists:
+                tx_data = tx_doc.to_dict()
+                if tx_data.get('laundryStatus', '') == 'Done':
+                    is_done = True
+        except Exception as e:
+            pass
+
+    if is_done:
+        send_led_command(locker_id, LED_YELLOW)
+    else:
+        send_led_command(locker_id, LED_RED)
+
+# --- LISTENERS ---
+def on_transaction_snapshot(col_snapshot, changes, read_time):
+    for change in changes:
+        if change.type.name in ['ADDED', 'MODIFIED']:
+            data = change.document.to_dict()
+            status = data.get('laundryStatus')
+            phone = data.get('phoneNumber')
+            trans_id = data.get('transactionId', 'N/A')
+            pin = data.get('pin', 'N/A')
+
+            if not phone or not gsm: continue
+            msg = ""
+            if status == 'Pending':
+                msg = f"Locker Code: {pin}\nRef: {trans_id}"
+            elif status == 'Done':
+                msg = f"Laundry Ready!\nRef: {trans_id}"
+
+            if msg:
+                log_gsm(f"Sending SMS to {phone}")
+                try:
+                    gsm.write(b'AT+CMGF=1\r\n')
+                    time.sleep(0.5)
+                    gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
+                    time.sleep(0.5)
+                    gsm.write(msg.encode())
+                    gsm.write(bytes([26])) 
+                    time.sleep(3)
+                except Exception as e:
+                    log_gsm(f"SMS Error: {e}")
+
+def on_locker_snapshot(col_snapshot, changes, read_time):
+    for change in changes:
+        if change.type.name in ['ADDED', 'MODIFIED']: 
+            data = change.document.to_dict()
+            locker_id = change.document.id
+            process_locker_leds(locker_id, data)
+
+            action = data.get('action')
+            cmd_prefix = None
+            if action:
+                act = action.upper()
+                if act == 'UNLOCK': cmd_prefix = 'u'
+                elif act == 'LOCK': cmd_prefix = 'l'
+
+            if arduino and cmd_prefix:
+                try:
+                    command = f"{cmd_prefix}{locker_id}\n"
+                    arduino.write(command.encode('utf-8'))
+                    print(f"📤 Action: {action} -> Sent: '{command.strip()}'")
+                except Exception as e:
+                    print(f"❌ Serial Write Error: {e}")
+
+if db:
+    print("🎧 Listening for Firebase updates...")
+    try:
+        db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done']).on_snapshot(on_transaction_snapshot)
+        db.collection('lockers').on_snapshot(on_locker_snapshot)
+    except Exception as e:
+        print(f"Listener Error: {e}")
+
+# --- MAIN LOOP ---
+print("🚀 Hybrid Bridge Running...")
+last_file_update = 0
+last_heartbeat = time.time()
+
+while True:
+    if arduino and arduino.in_waiting:
+        try:
+            line = arduino.readline().decode('utf-8', errors='ignore').strip()
+            
+            if line.startswith("DATA"):
+                last_heartbeat = time.time()
+                
+                # --- FILE UPDATE FOR UI ---
+                if time.time() - last_file_update > UPDATE_INTERVAL:
+                    state = { "raw_data": line, "timestamp": time.time() }
+                    temp_file = STATE_FILE + ".tmp"
+                    with open(temp_file, "w") as f:
+                        json.dump(state, f)
+                    os.replace(temp_file, STATE_FILE)
+                    last_file_update = time.time()
+
+                # --- PARSE LOCKER STATUS ---
+                parts = line.split('|')
+                for part in parts:
+                    if part.startswith('L') and ':' in part:
+                        try:
+                            l_data = part.split(':')
+                            l_id = l_data[0].replace('L', '') 
+                            door_status = l_data[2]      
+                            
+                            # --- ROBUST CONNECTION CHECK ---
+                            # Extract the flag and STRIP whitespace/newlines
+                            conn_flag = l_data[3].strip() 
+                            
+                            # We check if it is '1' OR if user just wants it to work
+                            is_hw_connected = (conn_flag == "1")
+
+                            # DEBUG: Print if status changes unexpectedly
+                            if local_connection_states.get(l_id) != is_hw_connected:
+                                print(f"🔌 Locker {l_id} Status Change: Received Flag='{conn_flag}' -> Connected={is_hw_connected}")
+                                local_connection_states[l_id] = is_hw_connected
+                                
+                                if db:
+                                    db.collection('lockers').document(l_id).update({
+                                        'isConnected': is_hw_connected,
+                                        'doorStatus': door_status if is_hw_connected else "OFFLINE"
+                                    })
+
+                            # UPDATE DOOR STATUS ONLY IF CONNECTED
+                            if is_hw_connected:
+                                if local_door_states.get(l_id) != door_status:
+                                    local_door_states[l_id] = door_status
+                                    if db:
+                                        print(f"🔄 Locker {l_id} Door -> {door_status}")
+                                        db.collection('lockers').document(l_id).update({
+                                            'doorStatus': door_status 
+                                        })
+
+                        except Exception as e:
+                            # print(f"Parse Error: {e}")
+                            pass 
+
+            elif line.startswith("COIN_ADDED:"):
+                try:
+                    amount = int(line.split(":")[1])
+                    print(f"💰 COIN INSERTED: {amount}")
+                except ValueError:
+                    pass
+
+        except Exception as e:
+            print(f"Serial Read Error: {e}")
+
+    # WATCHDOG
+    if time.time() - last_heartbeat > 5.0:
+        if local_connection_states["1"] != False: 
+            print("⚠️ LOST CONNECTION TO MAIN CONTROLLER")
+            for l_id in ["1", "2", "3"]:
+                local_connection_states[l_id] = False
+                local_door_states[l_id] = "OFFLINE"
+                if db:
+                    db.collection('lockers').document(l_id).update({'doorStatus': 'OFFLINE', 'isConnected': False})
+        last_heartbeat = time.time() - 4.0 
+
+    time.sleep(0.01)

@@ -1,87 +1,79 @@
 import { CheckCircle } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react'; // Added useRef
 
 interface ThankYouPageProps {
   processType: 'dropoff' | 'pickup';
   generatedPin?: string | null;
   transactionId?: string | null;
-  price?: number;  // Added
-  weight?: number; // Added
+  weight: number; // Required
+  price: number;  // Required
   onReset: () => void;
 }
 
-export function ThankYouPage({ processType, generatedPin, transactionId, onReset }: ThankYouPageProps) {
-// Inside ThankYouPage component
-useEffect(() => {
-  const printReceipt = async () => {
-    try {
-      await fetch('http://localhost:3000/api/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionId: transactionId,
-          pin: generatedPin,
-          processType: processType,
-          weight: weight, // Ensure these props are passed to ThankYouPage
-          price: price
-        }),
-      });
-    } catch (error) {
-      console.error("Failed to print:", error);
-    }
-  };
+export function ThankYouPage({ processType, generatedPin, transactionId, price, weight, onReset }: ThankYouPageProps) {
+  const hasPrinted = useRef(false); // Track if printing already happened
 
-  if (transactionId) {
-    printReceipt();
-  }
+  useEffect(() => {
+    const triggerPrint = async () => {
+      // Only print if we have an ID and we haven't printed yet
+      if (!transactionId || hasPrinted.current) return;
+      
+      hasPrinted.current = true; // Mark as printed immediately
 
-  // Your existing reset timer
-  const timer = setTimeout(() => {
-    onReset();
-  }, 10000);
+      try {
+        await fetch('http://localhost:3000/api/print', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId,
+            pin: generatedPin,
+            processType,
+            weight,
+            price
+          }),
+        });
+      } catch (error) {
+        console.error("Print request failed:", error);
+      }
+    };
 
-  return () => clearTimeout(timer);
-}, [onReset, transactionId, generatedPin, processType]);
+    triggerPrint();
+
+    const timer = setTimeout(() => {
+      onReset();
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [onReset, transactionId, generatedPin, processType, weight, price]);
 
   return (
     <div className="thankyou-page">
       <div className="thankyou-content">
         <CheckCircle size={100} strokeWidth={1.5} />
-        
         <div className="thankyou-text">
           <h1 className="thankyou-title">Thank You!</h1>
-          
-          {/* Display Transaction ID for both processes */}
           {transactionId && (
             <div className="text-sm font-mono text-gray-500 mb-4 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full inline-block">
               Transaction #: {transactionId}
             </div>
           )}
-
-          {processType === 'dropoff' && (
-            <div className="thankyou-messages">
-              <p className="thankyou-message">Your laundry has been received</p>
-              
-              {generatedPin && (
-                <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px dashed currentColor' }}>
-                  <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.25rem' }}>Your Pickup PIN:</p>
-                  <p style={{ fontSize: '2.5rem', fontWeight: 'bold', letterSpacing: '0.2em' }}>{generatedPin}</p>
-                </div>
-              )}
-            </div>
-          )}
           
-          {processType === 'pickup' && (
-            <div className="thankyou-messages">
-              <p className="thankyou-message">Payment successful!</p>
-              <p className="thankyou-submessage">Locker is now open</p>
-            </div>
-          )}
+          <div className="thankyou-messages">
+            <p className="thankyou-message">
+              {processType === 'dropoff' ? 'Your laundry has been received' : 'Payment successful!'}
+            </p>
+            {processType === 'dropoff' && generatedPin && (
+              <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px dashed currentColor' }}>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.25rem' }}>Your Pickup PIN:</p>
+                <p style={{ fontSize: '2.5rem', fontWeight: 'bold', letterSpacing: '0.2em' }}>{generatedPin}</p>
+              </div>
+            )}
+            {processType === 'pickup' && <p className="thankyou-submessage">Locker is now open</p>}
+          </div>
         </div>
       </div>
-
       <div className="thankyou-footer">
-        <p>Returning to home screen...</p>
+        <p>Please take your receipt. Returning to home...</p>
       </div>
     </div>
   );
