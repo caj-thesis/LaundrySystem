@@ -9,7 +9,7 @@ interface PickupLockersPageProps {
 
 export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLockersPageProps) {
   
-  // Helper to format status text
+  // Helper to format status text for the UI
   const getStatusText = (status?: string) => {
     switch(status) {
       case 'Dropped': return 'Dropped (Waiting)';
@@ -24,11 +24,11 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
       display: 'flex', 
       flexDirection: 'column', 
       height: '100%', 
-      padding: '12px', // Minimal padding
+      padding: '12px', 
       backgroundColor: '#f9fafb' 
     }}>
       
-      {/* Header - Compacted */}
+      {/* Header */}
       <div className="page-header" style={{ marginBottom: '8px', textAlign: 'center', flexShrink: 0 }}>
         <h2 className="page-title" style={{ fontSize: '22px', fontWeight: 'bold', color: '#1f2937', marginBottom: '2px' }}>Pickup Locker</h2>
         <p className="page-subtitle" style={{ fontSize: '14px', color: '#4b5563' }}>Select your locker to proceed with payment</p>
@@ -49,7 +49,6 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
         
         <div className="pickup-grid-container" style={{
           display: 'grid',
-          // Auto-fit with a larger min-width (280px) since these cards have more info
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
           gap: '12px',
           width: '100%',
@@ -75,21 +74,24 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
             </div>
           ) : (
             lockers.map((locker) => {
+              // --- ACCESS CONTROL LOGIC ---
               const isReady = locker.laundryStatus === 'Done';
               
               return (
                 <button
                   key={locker.id}
+                  // Only allow selection if ready
                   onClick={() => isReady && onSelectLocker(locker.id)}
                   className={`pickup-locker-button ${!isReady ? 'disabled' : ''}`}
-                  disabled={!isReady}
+                  disabled={!isReady} // HTML disable attribute
                   style={{
                     display: 'flex',
-                    flexDirection: 'row', // Keeping Row layout for info density
+                    flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '24px', 
-                    backgroundColor: isReady ? 'white' : '#f3f4f6', // Grey out if not ready
+                    // Visual feedback for disabled state
+                    backgroundColor: isReady ? 'white' : '#f3f4f6', 
                     border: isReady ? '2px solid transparent' : '2px dashed #d1d5db',
                     borderRadius: '16px',
                     boxShadow: isReady ? '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' : 'none',
@@ -97,7 +99,7 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
                     opacity: isReady ? 1 : 0.7,
                     transition: 'all 0.2s ease',
                     minHeight: '140px',
-                    textAlign: 'left' // Reset text align for button contents
+                    textAlign: 'left'
                   }}
                 >
                   {/* LEFT SIDE: Icon & Details */}
