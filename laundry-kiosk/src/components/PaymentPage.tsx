@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
+import '../styles/BackgroundStyles.css';
 
 interface PaymentPageProps {
   lockerId: number;

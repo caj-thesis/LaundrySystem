@@ -1,5 +1,6 @@
 import { Lock, ArrowLeft } from 'lucide-react';
 import type { Locker } from '../types';
+import '../styles/BackgroundStyles.css';
 
 interface AvailableLockersPageProps {
   lockers: Locker[];
@@ -16,6 +17,13 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       padding: '12px', // Minimal padding to maximize internal space
       backgroundColor: '#f9fafb' 
     }}>
+
+        {/* Background Layer with TINTED bubbles */}
+      <div className="bubbles-container">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="bubble bubble-tinted"></div>
+        ))}
+      </div>
       
       {/* Header - Compacted */}
       <div className="page-header" style={{ marginBottom: '8px', textAlign: 'center', flexShrink: 0 }}>

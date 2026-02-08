@@ -1,5 +1,6 @@
 import { CheckCircle } from 'lucide-react';
 import { useEffect } from 'react';
+import '../styles/BackgroundStyles.css';
 
 interface ThankYouPageProps {
   processType: 'dropoff' | 'pickup';
@@ -20,6 +21,12 @@ export function ThankYouPage({ processType, generatedPin, transactionId, onReset
 
   return (
     <div className="thankyou-page">
+     {/* Background Layer with TINTED bubbles */}
+      <div className="bubbles-container">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="bubble bubble-tinted"></div>
+        ))}
+      </div>
       <div className="thankyou-content">
         <CheckCircle size={100} strokeWidth={1.5} />
         

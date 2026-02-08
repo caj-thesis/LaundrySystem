@@ -1,4 +1,5 @@
 import { PackagePlus, PackageCheck, ArrowLeft } from 'lucide-react';
+import '../styles/BackgroundStyles.css'; 
 
 interface ProcessSelectionPageProps {
   onSelect: (process: 'dropoff' | 'pickup') => void;
@@ -8,15 +9,23 @@ interface ProcessSelectionPageProps {
 export function ProcessSelectionPage({ onSelect, onBack }: ProcessSelectionPageProps) {
   return (
     <div className="process-selection-page">
+      {/* Background Layer with TINTED bubbles */}
+      <div className="bubbles-container">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="bubble bubble-tinted"></div>
+        ))}
+      </div>
+
+      {/* Rest of your layout remains identical */}
+      <button onClick={onBack} className="btn-return-absolute btn-return">
+        <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+        <span>Return</span>
+      </button>
+
       <div className="page-header">
         <h2 className="page-title">Select Service</h2>
         <p className="page-subtitle">What would you like to do?</p>
       </div>
-
-      <button onClick={onBack} className="btn-return-top">
-        <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-        Return
-      </button>
 
       <div className="process-selection-buttons">
         <button onClick={() => onSelect('dropoff')} className="process-button dropoff">

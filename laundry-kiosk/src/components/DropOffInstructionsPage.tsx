@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
+import '../styles/BackgroundStyles.css';
 
 interface DropOffInstructionsPageProps {
   onNext: () => void;
@@ -8,6 +9,13 @@ interface DropOffInstructionsPageProps {
 export function DropOffInstructionsPage({ onNext, onBack }: DropOffInstructionsPageProps) {
   return (
     <div className="dropoff-instructions-page">
+      {/* Background Layer with TINTED bubbles */}
+      <div className="bubbles-container">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="bubble bubble-tinted"></div>
+        ))}
+      </div>
+
       <button onClick={onBack} className="btn-return-absolute">
         <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
         Return

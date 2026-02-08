@@ -1,5 +1,6 @@
 import { PackageCheck, Clock, ArrowLeft, Lock } from 'lucide-react';
 import type { Locker } from '../types';
+import '../styles/BackgroundStyles.css';
 
 interface PickupLockersPageProps {
   lockers: Locker[];
@@ -28,6 +29,13 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
       backgroundColor: '#f9fafb' 
     }}>
       
+      {/* Background Layer with TINTED bubbles */}
+      <div className="bubbles-container">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="bubble bubble-tinted"></div>
+        ))}
+      </div>
+
       {/* Header - Compacted */}
       <div className="page-header" style={{ marginBottom: '8px', textAlign: 'center', flexShrink: 0 }}>
         <h2 className="page-title" style={{ fontSize: '22px', fontWeight: 'bold', color: '#1f2937', marginBottom: '2px' }}>Pickup Locker</h2>
