@@ -86,7 +86,7 @@ local_door_states = { "1": None, "2": None, "3": None }
 local_connection_states = { "1": None, "2": None, "3": None }
 
 # --- LED CONTROL FUNCTIONS ---
-def send_led_command(locker_id, color_code):0
+def send_led_command(locker_id, color_code):
     action_char = None
     if color_code == LED_RED:      action_char = 'r'
     elif color_code == LED_GREEN:  action_char = 'g'
