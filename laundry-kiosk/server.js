@@ -161,6 +161,42 @@ function startDatabaseListener() {
     });
 }
 
+// --- 3. OVERDUE LOGS LISTENER (Sync 'completed' status back to Transactions) ---
+function startOverdueListener() {
+    console.log("🎧 Listening to 'overdue_logs' collection...");
+    
+    onSnapshot(collection(db, "overdue_logs"), (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+            // We only care if an existing log was modified (e.g., status changed to completed)
+            if (change.type === 'modified') {
+                const data = change.doc.data();
+                
+                // Check if the status is now 'completed' (paid behind the scenes)
+                if (data.status === 'completed' && data.originalTransactionId) {
+                    console.log(`[OVERDUE SYNC] Overdue Log ${change.doc.id} marked as COMPLETED.`);
+                    
+                    try {
+                        const originalTransRef = doc(db, "transactions", data.originalTransactionId);
+                        
+                        // Update the original transaction to reflect the payment/completion
+                        await updateDoc(originalTransRef, {
+                            status: 'completed',
+                            paymentStatus: 'paid', // Explicitly mark as paid
+                            resolvedAt: new Date(),
+                            method: 'manual_overdue_resolution',
+                            note: 'Transaction completed via Overdue Admin Panel'
+                        });
+
+                        console.log(`[OVERDUE SYNC] Original Transaction ${data.originalTransactionId} updated to 'completed'.`);
+                    } catch (error) {
+                        console.error(`[OVERDUE SYNC ERROR] Could not update transaction ${data.originalTransactionId}:`, error);
+                    }
+                }
+            }
+        });
+    });
+}
+
 // --- INITIALIZE LOCKERS ---
 async function initializeLockers() {
   const lockers = ['1', '2', '3'];
@@ -196,7 +232,8 @@ async function initializeLockers() {
 signInAnonymously(auth).then(async () => {
     console.log("✅ [FIREBASE] Authenticated");
     await initializeLockers();   
-    startDatabaseListener();     
+    startDatabaseListener();
+    startOverdueListener();     
 });
 
 // --- API ENDPOINTS ---
