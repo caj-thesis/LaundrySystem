@@ -142,13 +142,39 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
             trans_id = data.get('transactionId', 'N/A')
             pin = data.get('pin', 'N/A')
 
+            # --- NEW: Check for Manual Reminder Trigger ---
+            trigger_reminder = data.get('triggerReminder', False)
+            # This flag prevents the standard "Laundry Ready" message from firing 
+            # immediately after we reset the reminder trigger (anti-loop)
+            reminder_sent_flag = data.get('reminderSent', False)
+
             if not phone or not gsm: continue
             msg = ""
-            if status == 'Pending':
-                msg = f"Locker Code: {pin}\nRef: {trans_id}"
-            elif status == 'Done':
-                msg = f"Laundry Ready!\nRef: {trans_id}"
 
+            # 1. Manual Reminder Priority Check
+            if trigger_reminder:
+                msg = f"REMINDER: Your laundry is ready for pickup! Ref: {trans_id}"
+                log_gsm(f"Triggering Manual Reminder for {phone}")
+                
+                # Reset the trigger in Firebase to prevent infinite loop
+                try:
+                    change.document.reference.update({
+                        'triggerReminder': False,
+                        'reminderSent': True
+                    })
+                except Exception as e:
+                    log_gsm(f"Error resetting reminder trigger: {e}")
+
+            # 2. Standard Status Checks
+            elif status == 'Pending':
+                msg = f"Locker Code: {pin}\nRef: {trans_id}"
+            
+            elif status == 'Done':
+                # Only send standard "Ready" msg if we aren't in the middle of a reminder loop
+                if not reminder_sent_flag:
+                    msg = f"Laundry Ready!\nRef: {trans_id}"
+
+            # 3. Send SMS if message exists
             if msg:
                 log_gsm(f"Sending SMS to {phone}")
                 try:
