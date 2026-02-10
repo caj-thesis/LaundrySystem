@@ -14,7 +14,7 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
       <BackgroundBubbles variant="tinted" />
 
       {/* Wrapping the main content to ensure it stays on top of the bubbles */}
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1 }}>t
         <div className="page-header">
           <h2 className="page-title">Laundry Type</h2>
           <p className="page-subtitle">Select the type of items you are washing</p>
