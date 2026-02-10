@@ -197,7 +197,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, 
 
           <div className="flex items-center gap-2 text-gray-400 text-xs">
              <Info size={14} />
-             <p>Close door when finished.</p>
+             <span>Close door when finished.</span>
           </div>
         </div>
 

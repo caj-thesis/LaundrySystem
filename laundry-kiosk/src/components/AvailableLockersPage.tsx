@@ -34,10 +34,9 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
           marginTop: '12px', 
           position: 'relative', 
           zIndex: 1,
-          marginBottom: '10px' // <-- FIXED: Reduced bottom space of the header container
+          marginBottom: '10px'
         }}>
           <div className="instructions-header">
-            {/* <-- FIXED: Removed default browser margins from text to pull grid closer */}
             <h2 style={{ margin: '0 0 4px 0' }}>Available Lockers</h2>
             <p style={{ margin: '0' }}>Select a locker for your laundry</p>
           </div>
@@ -56,18 +55,21 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
           paddingBottom: '4px',
           display: 'flex',
           flexDirection: 'column',
-          marginTop: '0px', // <-- FIXED: Removed the top gap completely
           justifyContent: 'flex-start' 
         }}>
           
-   <div className="lockers-grid-container" style={{
+          <div className="lockers-grid-container" style={{
             display: 'grid',
             gridTemplateColumns: isSingleLockerMode ? '1fr' : 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: '12px',
             padding: '4px',
             width: '100%',
-            // Optional: If single mode looks too wide, you can limit maxWidth here
-            maxWidth: isSingleLockerMode ? '100%' : '100%'
+            // --- FIX START ---
+            // 1. Constrain width for both modes so it doesn't get too wide
+            maxWidth: '600px', 
+            // 2. Center the container
+            margin: '0 auto'
+            // --- FIX END ---
           }}>
 
             {lockers.map((locker) => {
@@ -95,8 +97,11 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                     padding: '16px',
                     display: 'flex',
                     flexDirection: isSingleLockerMode ? 'row' : 'column',
-                    aspectRatio: isSingleLockerMode ? 'auto' : '1/1',
-                    height: isSingleLockerMode ? '140px' : 'auto', 
+                    // --- FIX START ---
+                    // 3. Removed aspect ratio 1/1 to prevent square boxes
+                    // 4. Set fixed height to keep them compact
+                    height: isSingleLockerMode ? '140px' : '130px', 
+                    // --- FIX END ---
                     gap: isSingleLockerMode ? '24px' : '0px',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -113,10 +118,10 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                     backgroundColor: 'white',
                     borderRadius: '50%',
                     padding: isSingleLockerMode ? '16px' : '12px',
-                    marginBottom: isSingleLockerMode ? '0px' : '12px',
+                    marginBottom: isSingleLockerMode ? '0px' : '8px', // Slightly reduced margin
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                   }}>
-                    <Lock size={isSingleLockerMode ? 32 : 28} color={iconColor} strokeWidth={2.5} />
+                    <Lock size={isSingleLockerMode ? 32 : 24} color={iconColor} strokeWidth={2.5} />
                   </div>
 
                   <div style={{
@@ -129,7 +134,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                       fontSize: isSingleLockerMode ? '24px' : '18px', 
                       fontWeight: 'bold', 
                       color: '#374151',
-                      marginBottom: '4px'
+                      marginBottom: '2px'
                     }}>
                       Locker {locker.id}
                     </span>
@@ -143,7 +148,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                       {statusText}
                     </span>
 
-                    <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
                       Max: {locker.capacity}
                     </span>
                   </div>

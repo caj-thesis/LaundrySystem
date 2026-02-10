@@ -37,7 +37,7 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         
         {/* Header Section */}
-        <div className="instructions-container" style={{ marginTop: '12px'}}>
+        <div className="available-lockers-container" style={{ marginTop: '12px'}}>
           <div className="instructions-header">
             <h2>Pickup Lockers</h2>
             <p>Select your locker to proceed with payment</p>
