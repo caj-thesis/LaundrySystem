@@ -78,8 +78,9 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
     <div className="payment-page">
       <div className="payment-header-section">
         <h2 className="payment-title">Cash Payment - Locker {lockerId}</h2>
-        <button onClick={onCancel} className="btn-return">
-          <ArrowLeft size={20} style={{ marginRight: '8px' }} /> Return
+        <button onClick={onCancel} className="btn-return-absolute" style={{ zIndex: 10 }}>
+          <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+          Return
         </button>
       </div>
 

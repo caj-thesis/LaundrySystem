@@ -30,7 +30,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         
         {/* Header Section */}
-        <div className="instructions-container" style={{ 
+        <div className="available-lockers-container" style={{ 
           marginTop: '12px', 
           position: 'relative', 
           zIndex: 1,

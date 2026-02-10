@@ -208,6 +208,11 @@ body {
   padding: 24px;
 }
 
+.available-lockers-container {
+  display: flex;
+  flex-direction: column;
+}
+
 .lockers-grid {
   flex: 1;
   overflow-y: auto;

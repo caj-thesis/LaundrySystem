@@ -14,7 +14,7 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
       <BackgroundBubbles variant="tinted" />
 
       {/* Wrapping the main content to ensure it stays on top of the bubbles */}
-         <div className="instructions-container" style={{ marginTop: '12px'}}>
+         <div className="available-lockers-container" style={{ marginTop: '12px'}}>
           <div className="instructions-header">
             <h2>Laundry Type</h2>
             <p>Select the type of your laundry items</p>
