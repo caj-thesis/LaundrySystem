@@ -1,4 +1,6 @@
-import { Package } from 'lucide-react';
+import { WashingMachine } from 'lucide-react';
+import '../styles/BackgroundStyles.css';
+import { BackgroundBubbles } from '../components/BackgroundBubbles';
 
 interface WelcomePageProps {
   onNext: () => void;
@@ -6,16 +8,18 @@ interface WelcomePageProps {
 
 export function WelcomePage({ onNext }: WelcomePageProps) {
   return (
-    <div className="welcome-page">
+    <div className="welcome-page" style={{ position: 'relative' }}>
+      <BackgroundBubbles variant="white" />
+
       <div className="welcome-content">
-        <Package size={100} strokeWidth={1.5} />
+        <WashingMachine size={100} strokeWidth={1.5} />
         <div className="welcome-text">
           <h1 className="welcome-title">Welcome</h1>
           <p className="welcome-subtitle">Laundry Locker System</p>
         </div>
       </div>
       
-      <button onClick={onNext} className="btn-primary">
+      <button onClick={onNext} className="btn-primary" style={{ position: 'relative', zIndex: 1 }}>
         Get Started
       </button>
     </div>
