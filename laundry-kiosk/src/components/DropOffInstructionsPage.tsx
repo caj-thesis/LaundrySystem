@@ -19,7 +19,10 @@ export function DropOffInstructionsPage({ onNext, onBack }: DropOffInstructionsP
         Return
       </button>
       
-      <div className="instructions-container" style={{ position: 'relative', zIndex: 1 }}>
+      <div className="instructions-container" 
+        style={{ 
+          position: 'relative', 
+          zIndex: 1}}>
         <div className="instructions-header">
           <h2>Drop Off Service</h2>
           <p>How it works</p>

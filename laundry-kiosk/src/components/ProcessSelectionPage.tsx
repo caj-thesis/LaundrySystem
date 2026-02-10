@@ -21,7 +21,7 @@ export function ProcessSelectionPage({ onSelect, onBack }: ProcessSelectionPageP
           <p className="page-subtitle">What would you like to do?</p>
         </div>
 
-        <button onClick={onBack} className="btn-return-top">
+        <button onClick={onBack} className="btn-return-top" style={{ zIndex: 2 }}>
           <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
           Return
         </button>

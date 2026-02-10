@@ -14,8 +14,8 @@ export function WelcomePage({ onNext }: WelcomePageProps) {
       <div className="welcome-content">
         <WashingMachine size={100} strokeWidth={1.5} />
         <div className="welcome-text">
-          <h1 className="welcome-title">Welcome</h1>
-          <p className="welcome-subtitle">Laundry Locker System</p>
+          <h1 className="welcome-title">WELCOME</h1>
+          <p className="welcome-subtitle">CAJ Laundry Locker System</p>
         </div>
       </div>
       

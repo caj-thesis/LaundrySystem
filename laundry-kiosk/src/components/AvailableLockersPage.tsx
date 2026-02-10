@@ -19,28 +19,26 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       height: '100%', 
       padding: '12px', 
       backgroundColor: '#f9fafb',
-      position: 'relative', // Necessary for absolute bubbles
-      overflow: 'hidden'    // Contain the bubbles
+      position: 'relative', 
+      overflow: 'hidden'    
     }}>
       
       {/* 1. Background Layer */}
       <BackgroundBubbles variant="tinted" />
 
-      {/* 2. Content Layer - Relative & Z-Index to stay above bubbles */}
+      {/* 2. Content Layer */}
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         
-        {/* Header */}
-        <div className="page-header" style={{ marginBottom: '8px', textAlign: 'center', flexShrink: 0 }}>
-          <h2 className="page-title" style={{ fontSize: '22px', fontWeight: 'bold', color: '#1f2937', marginBottom: '2px' }}>Available Lockers</h2>
-          <p className="page-subtitle" style={{ fontSize: '14px', color: '#4b5563' }}>Select a locker for your laundry</p>
+        {/* Header Section */}
+        <div className="instructions-container" style={{ marginTop: '12px', position: 'relative', zIndex: 1 }}>
+          <div className="instructions-header">
+            <h2>Available Lockers</h2>
+            <p>Select a locker for your laundry</p>
+          </div>
         </div>
 
         {/* Return Button */}
-        <button 
-          onClick={onBack} 
-          className="btn-return-top" 
-          style={{ top: '12px', right: '12px', zIndex: 10 }}
-        >
+        <button onClick={onBack} className="btn-return-absolute" style={{ zIndex: 10 }}>
           <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
           Return
         </button>
@@ -51,7 +49,8 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
           overflowY: 'auto', 
           paddingBottom: '4px',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          marginTop: '20px' // Added a little gap since return is absolute
         }}>
           
           <div className="lockers-grid-container" style={{
@@ -68,21 +67,11 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
               const isAvailable = locker.status === 'available';
               const isOccupied = locker.status === 'occupied';
 
-              let bgColor = 'white';
-              let borderColor = '#e5e7eb';
-              let iconColor = '#9ca3af';
-              let statusText = isAvailable ? 'Available' : 'Occupied';
-              let statusColor = isAvailable ? '#10b981' : '#ef4444';
-
-              if (isOccupied) {
-                bgColor = '#fef2f2';
-                borderColor = '#fecaca';
-                iconColor = '#ef4444';
-              } else {
-                bgColor = '#ecfdf5';
-                borderColor = '#a7f3d0';
-                iconColor = '#10b981';
-              }
+              let bgColor = isOccupied ? '#fef2f2' : '#ecfdf5';
+              let borderColor = isOccupied ? '#fecaca' : '#a7f3d0';
+              let iconColor = isOccupied ? '#ef4444' : '#10b981';
+              let statusText = isOccupied ? 'In Use' : 'Available';
+              let statusColor = isOccupied ? '#ef4444' : '#10b981';
 
               return (
                 <button
@@ -107,7 +96,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                     transition: 'all 0.2s ease',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                     width: '100%',
-                    position: 'relative', // Ensure content inside button stays above bubble layer
+                    position: 'relative',
                     zIndex: 2
                   }}
                 >
@@ -127,32 +116,27 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                      alignItems: isSingleLockerMode ? 'flex-start' : 'center',
                      justifyContent: 'center'
                   }}>
-                      <span className="locker-id" style={{ 
-                        fontSize: isSingleLockerMode ? '24px' : '18px', 
-                        fontWeight: 'bold', 
-                        color: '#374151',
-                        marginBottom: '4px'
-                      }}>
-                        Locker {locker.id}
-                      </span>
+                    <span style={{ 
+                      fontSize: isSingleLockerMode ? '24px' : '18px', 
+                      fontWeight: 'bold', 
+                      color: '#374151',
+                      marginBottom: '4px'
+                    }}>
+                      Locker {locker.id}
+                    </span>
 
-                      <span className="locker-status" style={{ 
-                        fontSize: isSingleLockerMode ? '16px' : '14px', 
-                        fontWeight: '600', 
-                        color: statusColor,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em'
-                      }}>
-                        {statusText}
-                      </span>
+                    <span style={{ 
+                      fontSize: isSingleLockerMode ? '16px' : '14px', 
+                      fontWeight: '600', 
+                      color: statusColor,
+                      textTransform: 'uppercase'
+                    }}>
+                      {statusText}
+                    </span>
 
-                      <span className="locker-capacity" style={{ 
-                        fontSize: '12px', 
-                        color: '#6b7280', 
-                        marginTop: '4px' 
-                      }}>
-                        Max: {locker.capacity}
-                      </span>
+                    <span style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Max: {locker.capacity}
+                    </span>
                   </div>
                 </button>
               );
