@@ -127,11 +127,15 @@ export default function App() {
           weight: finalWeight,
           pricePerKg: selectedPricePerKg,
           phoneNumber: phoneNumber || "N/A", 
-          // UPDATED: Use the selected laundry type (e.g., 'Clothes' or 'Bed Sheets') 
-          // instead of the hardcoded 'dropoff'
           type: selectedLaundryType, 
           status: 'paid_pending',
           laundryStatus: 'Pending', 
+          
+          // --- NEW: Initialize Reminder Fields ---
+          triggerReminder: false,
+          reminderSent: false,
+          // ---------------------------------------
+
           timestamp: new Date()
         });
 

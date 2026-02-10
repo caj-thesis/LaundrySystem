@@ -1,3 +1,4 @@
+//
 import { exec } from 'child_process';
 import express from 'express';
 import cors from 'cors';
@@ -7,7 +8,18 @@ import { fileURLToPath } from 'url';
 
 // --- FIREBASE IMPORTS ---
 import { db, auth } from './firebaseConfig.js'; 
-import { doc, setDoc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  collection, 
+  onSnapshot, 
+  addDoc,       
+  updateDoc,    
+  query,        
+  where,        
+  getDocs
+} from "firebase/firestore";
 import { signInAnonymously } from "firebase/auth"; 
 
 const app = express();
@@ -16,11 +28,11 @@ app.use(express.json());
 
 const STATE_FILE = 'sys_state.json';
 
-// --- LOCAL STATE CONTAINER (Added L3) ---
+// --- LOCAL STATE CONTAINER ---
 let systemState = {
   l1: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, 
   l2: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
-  l3: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true }, // <--- ADDED
+  l3: { door: 'CLOSED', weight: 0.0, status: 'available', action: 'lock', isConnected: true },
   credit: 0.0,
   lastUpdated: 0
 };
@@ -38,25 +50,21 @@ function updateStateFromFile() {
         if (data.raw_data && data.raw_data.startsWith('DATA')) {
             const parts = data.raw_data.split('|');
             parts.forEach(part => {
-                // L1 Logic
                 if (part.startsWith('L1:')) {
                     const d = part.split(':');
                     systemState.l1.weight = parseFloat(d[1]) || 0;
                     systemState.l1.door = d[2];
                 }
-                // L2 Logic
                 if (part.startsWith('L2:')) {
                     const d = part.split(':');
                     systemState.l2.weight = parseFloat(d[1]) || 0;
                     systemState.l2.door = d[2];
                 }
-                // L3 Logic (THIS WAS MISSING)
                 if (part.startsWith('L3:')) {
                     const d = part.split(':');
                     systemState.l3.weight = parseFloat(d[1]) || 0;
                     systemState.l3.door = d[2];
                 }
-                
                 if (part.startsWith('CREDIT:')) {
                     const d = part.split(':');
                     systemState.credit = parseFloat(d[1]) || 0.0;
@@ -71,6 +79,63 @@ function updateStateFromFile() {
 
 setInterval(updateStateFromFile, 200);
 
+// --- HELPER: PROCESS OVERDUE RESET ---
+async function processOverdueReset(lockerId) {
+    console.log(`[OVERDUE] Received database command to reset Locker ${lockerId}...`);
+
+    try {
+        // 1. Find and Archive the Active Transaction
+        const transRef = collection(db, "transactions");
+        const q = query(
+            transRef, 
+            where("lockerId", "==", Number(lockerId)), 
+            where("status", "in", ["paid_pending", "processing", "occupied"])
+        );
+        
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const batchPromises = querySnapshot.docs.map(async (docSnapshot) => {
+                const transData = docSnapshot.data();
+                
+                await addDoc(collection(db, "overdue_logs"), {
+                    ...transData,
+                    originalTransactionId: docSnapshot.id,
+                    archivedAt: new Date(),
+                    reason: "ADMIN_RESET",
+                    note: "Triggered via Admin Database Command"
+                });
+
+                await updateDoc(docSnapshot.ref, {
+                    status: 'overdue_archived',
+                    lockerId: null, 
+                    archivedAt: new Date()
+                });
+            });
+            await Promise.all(batchPromises);
+            console.log(`[OVERDUE] Archived transaction(s) for Locker ${lockerId}`);
+        } else {
+            console.log(`[OVERDUE] No active transaction found for Locker ${lockerId}, proceeding to reset.`);
+        }
+
+        // 2. Reset the Locker & Reset the Command to NULL (Persist Field)
+        const lockerRef = doc(db, "lockers", String(lockerId));
+        await updateDoc(lockerRef, {
+            status: 'available',
+            action: 'lock',
+            currentTransactionId: null,
+            // CRITICAL FIX: Set to null instead of deleting it
+            adminCommand: null, 
+            timestamp: new Date()
+        });
+
+        console.log(`[OVERDUE] Locker ${lockerId} is now AVAILABLE.`);
+
+    } catch (error) {
+        console.error(`[OVERDUE ERROR] Locker ${lockerId}:`, error);
+    }
+}
+
 // --- 2. DATABASE LISTENER ---
 function startDatabaseListener() {
     console.log("🎧 Listening to 'lockers' collection...");
@@ -78,15 +143,55 @@ function startDatabaseListener() {
     onSnapshot(collection(db, "lockers"), (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const data = change.doc.data();
-            const id = change.doc.id; // "1", "2", or "3"
+            const id = change.doc.id; 
             const key = `l${id}`;
+
+            // --- CHECK FOR ADMIN COMMANDS ---
+            if (data.adminCommand === 'RESET_OVERDUE') {
+                processOverdueReset(id);
+                return; 
+            }
 
             if (systemState[key]) {
                 systemState[key].status = data.status || 'available'; 
                 systemState[key].action = data.action || 'lock';
                 systemState[key].isConnected = (data.isConnected !== undefined) ? data.isConnected : true;
+            }
+        });
+    });
+}
 
-                // console.log(`[SYNC] Locker ${id}: ${systemState[key].status.toUpperCase()}`);
+// --- 3. OVERDUE LOGS LISTENER (Sync 'completed' status back to Transactions) ---
+function startOverdueListener() {
+    console.log("🎧 Listening to 'overdue_logs' collection...");
+    
+    onSnapshot(collection(db, "overdue_logs"), (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+            // We only care if an existing log was modified (e.g., status changed to completed)
+            if (change.type === 'modified') {
+                const data = change.doc.data();
+                
+                // Check if the status is now 'completed' (paid behind the scenes)
+                if (data.status === 'completed' && data.originalTransactionId) {
+                    console.log(`[OVERDUE SYNC] Overdue Log ${change.doc.id} marked as COMPLETED.`);
+                    
+                    try {
+                        const originalTransRef = doc(db, "transactions", data.originalTransactionId);
+                        
+                        // Update the original transaction to reflect the payment/completion
+                        await updateDoc(originalTransRef, {
+                            status: 'completed',
+                            paymentStatus: 'paid', // Explicitly mark as paid
+                            resolvedAt: new Date(),
+                            method: 'manual_overdue_resolution',
+                            note: 'Transaction completed via Overdue Admin Panel'
+                        });
+
+                        console.log(`[OVERDUE SYNC] Original Transaction ${data.originalTransactionId} updated to 'completed'.`);
+                    } catch (error) {
+                        console.error(`[OVERDUE SYNC ERROR] Could not update transaction ${data.originalTransactionId}:`, error);
+                    }
+                }
             }
         });
     });
@@ -94,7 +199,7 @@ function startDatabaseListener() {
 
 // --- INITIALIZE LOCKERS ---
 async function initializeLockers() {
-  const lockers = ['1', '2', '3']; // <--- ADDED '3' HERE
+  const lockers = ['1', '2', '3'];
   
   for (const id of lockers) {
     const ref = doc(db, "lockers", id);
@@ -107,8 +212,18 @@ async function initializeLockers() {
         action: 'lock',      
         status: 'available', 
         isConnected: true,
+        adminCommand: null, 
         timestamp: new Date()
       });
+    } else {
+      // --- FIX: PATCH EXISTING LOCKERS ---
+      const data = snap.data();
+      if (data.adminCommand === undefined) {
+          console.log(`[INIT] Patching Locker ${id}: Adding 'adminCommand' field...`);
+          await updateDoc(ref, { 
+              adminCommand: null 
+          });
+      }
     }
   }
 }
@@ -117,7 +232,8 @@ async function initializeLockers() {
 signInAnonymously(auth).then(async () => {
     console.log("✅ [FIREBASE] Authenticated");
     await initializeLockers();   
-    startDatabaseListener();     
+    startDatabaseListener();
+    startOverdueListener();     
 });
 
 // --- API ENDPOINTS ---
