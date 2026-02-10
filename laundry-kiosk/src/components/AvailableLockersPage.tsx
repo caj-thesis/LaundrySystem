@@ -30,10 +30,16 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         
         {/* Header Section */}
-        <div className="instructions-container" style={{ marginTop: '12px', position: 'relative', zIndex: 1 }}>
+        <div className="instructions-container" style={{ 
+          marginTop: '12px', 
+          position: 'relative', 
+          zIndex: 1,
+          marginBottom: '10px' // <-- FIXED: Reduced bottom space of the header container
+        }}>
           <div className="instructions-header">
-            <h2>Available Lockers</h2>
-            <p>Select a locker for your laundry</p>
+            {/* <-- FIXED: Removed default browser margins from text to pull grid closer */}
+            <h2 style={{ margin: '0 0 4px 0' }}>Available Lockers</h2>
+            <p style={{ margin: '0' }}>Select a locker for your laundry</p>
           </div>
         </div>
 
@@ -50,20 +56,23 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
           paddingBottom: '4px',
           display: 'flex',
           flexDirection: 'column',
-          marginTop: '20px' // Added a little gap since return is absolute
+          marginTop: '0px', // <-- FIXED: Removed the top gap completely
+          justifyContent: 'flex-start' 
         }}>
           
-          <div className="lockers-grid-container" style={{
+   <div className="lockers-grid-container" style={{
             display: 'grid',
-            gridTemplateColumns: isSingleLockerMode ? '1fr' : 'repeat(auto-fit, minmax(140px, 1fr))', 
+            gridTemplateColumns: isSingleLockerMode ? '1fr' : 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: '12px',
             padding: '4px',
-            width: '100%'
+            width: '100%',
+            // Optional: If single mode looks too wide, you can limit maxWidth here
+            maxWidth: isSingleLockerMode ? '100%' : '100%'
           }}>
+
             {lockers.map((locker) => {
               const isOnline = locker.isConnected !== false;
-              if (!isOnline) return null; 
-
+              if (!isOnline) return null;
               const isAvailable = locker.status === 'available';
               const isOccupied = locker.status === 'occupied';
 
@@ -111,10 +120,10 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
                   </div>
 
                   <div style={{
-                     display: 'flex',
-                     flexDirection: 'column',
-                     alignItems: isSingleLockerMode ? 'flex-start' : 'center',
-                     justifyContent: 'center'
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: isSingleLockerMode ? 'flex-start' : 'center',
+                      justifyContent: 'center'
                   }}>
                     <span style={{ 
                       fontSize: isSingleLockerMode ? '24px' : '18px', 

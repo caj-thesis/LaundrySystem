@@ -14,13 +14,14 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
       <BackgroundBubbles variant="tinted" />
 
       {/* Wrapping the main content to ensure it stays on top of the bubbles */}
-      <div style={{ position: 'relative', zIndex: 1 }}>t
-        <div className="page-header">
-          <h2 className="page-title">Laundry Type</h2>
-          <p className="page-subtitle">Select the type of items you are washing</p>
+         <div className="instructions-container" style={{ marginTop: '12px'}}>
+          <div className="instructions-header">
+            <h2>Laundry Type</h2>
+            <p>Select the type of your laundry items</p>
+          </div>
         </div>
 
-        <button onClick={onBack} className="btn-return-top">
+        <button onClick={onBack} className="btn-return-absolute" style={{ zIndex: 10 }}>
           <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
           Return
         </button>
@@ -73,6 +74,5 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
           </button>
         </div>
       </div>
-    </div>
   );
 }
