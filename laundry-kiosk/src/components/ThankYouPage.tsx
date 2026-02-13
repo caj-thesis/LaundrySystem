@@ -14,30 +14,6 @@ export function ThankYouPage({ processType, generatedPin, transactionId, price, 
   const hasPrinted = useRef(false); // Track if printing already happened
 
   useEffect(() => {
-    const triggerPrint = async () => {
-      // Only print if we have an ID and we haven't printed yet
-      if (!transactionId || hasPrinted.current) return;
-      
-      hasPrinted.current = true; // Mark as printed immediately
-
-      try {
-        await fetch('http://localhost:3000/api/print', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transactionId,
-            pin: generatedPin,
-            processType,
-            weight,
-            price
-          }),
-        });
-      } catch (error) {
-        console.error("Print request failed:", error);
-      }
-    };
-
-    triggerPrint();
 
     const timer = setTimeout(() => {
       onReset();
