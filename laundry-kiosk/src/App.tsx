@@ -45,7 +45,6 @@ export default function App() {
   
   // --- 1. DYNAMIC PRICING & SETTINGS STATE ---
   const [pricing, setPricing] = useState({ clothesPrice: 25, bedSheetPrice: 40 });
-  // Default fallback name
   const [shopName, setShopName] = useState<string>("CAJ Laundry Locker System"); 
 
   const [selectedPricePerKg, setSelectedPricePerKg] = useState<number>(25);
@@ -60,30 +59,24 @@ export default function App() {
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
-  // --- 2. LISTENER FOR PRICING ---
+  // --- 2. CONSOLIDATED LISTENER (General + Pricing) ---
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "pricing"), (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        console.log("✅ Pricing fetched:", data);
-        setPricing({
-          clothesPrice: data.clothesPrice || 25,
-          bedSheetPrice: data.bedSheetPrice || 40
-        });
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  // --- 3. LISTENER FOR GENERAL SETTINGS (Shop Name) ---
-  useEffect(() => {
+    // We now listen ONLY to "settings/general" for both Shop Name and Prices
     const unsub = onSnapshot(doc(db, "settings", "general"), (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
-        console.log("✅ General Settings fetched:", data);
+        console.log("✅ Settings Update:", data);
+        
+        // Update Shop Name
         if (data.laundryShopName) {
             setShopName(data.laundryShopName);
         }
+
+        // Update Pricing (Check for fields, default if missing)
+        setPricing({
+          clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : 25,
+          bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : 40
+        });
       }
     });
     return () => unsub();
@@ -261,7 +254,6 @@ export default function App() {
   return (
     <div className="app-container">
       <div className="kiosk-screen">
-        {/* Pass the dynamic shopName to the WelcomePage */}
         {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} shopName={shopName} />}
         
         {currentScreen === 'process-selection' && (
@@ -283,7 +275,6 @@ export default function App() {
           />
         )}
 
-        {/* --- 6. PASS PRICING TO SELECTION PAGE --- */}
         {currentScreen === 'laundry-type-selection' && (
           <LaundryTypeSelectionPage 
             onSelect={handleLaundryTypeSelect}
