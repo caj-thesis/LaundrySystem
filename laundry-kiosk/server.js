@@ -76,7 +76,11 @@ function updateStateFromFile() {
 }
 setInterval(updateStateFromFile, 200);
 
-// --- 2. AUTO-INITIALIZE SETTINGS ---
+// ==========================================================
+// INITIALIZATION & SETTINGS
+// ==========================================================
+
+// --- 2. AUTO-INITIALIZE SETTINGS (Shop Name & Timer) ---
 async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
@@ -89,6 +93,7 @@ async function initializeSettings() {
                 overdueHours: 48
             });
         } else {
+            // Patch overdueHours if missing
             if (generalSnap.data().overdueHours === undefined) {
                 await setDoc(generalRef, { overdueHours: 48 }, { merge: true });
             }
@@ -107,7 +112,36 @@ async function initializeSettings() {
     }
 }
 
-// --- 3. SETTINGS LISTENER (Dynamic Timer) ---
+// --- 3. INITIALIZE LOCKERS (Ensures DB Docs Exist) ---
+async function initializeLockers() {
+  const lockers = ['1', '2', '3'];
+  
+  for (const id of lockers) {
+    const ref = doc(db, "lockers", id);
+    const snap = await getDoc(ref);
+    
+    if (!snap.exists()) {
+      console.log(`[INIT] Creating default doc for Locker ${id}`);
+      await setDoc(ref, {
+        lockerId: id,
+        action: 'lock',      
+        status: 'available', 
+        isConnected: true,
+        adminCommand: null, 
+        timestamp: new Date()
+      });
+    } else {
+      // Patch: Ensure adminCommand field exists
+      const data = snap.data();
+      if (data.adminCommand === undefined) {
+          console.log(`[INIT] Patching Locker ${id}: Adding 'adminCommand' field...`);
+          await updateDoc(ref, { adminCommand: null });
+      }
+    }
+  }
+}
+
+// --- 4. SETTINGS LISTENER (Dynamic Timer) ---
 function startSettingsListener() {
     console.log("🎧 Listening to 'settings/general'...");
     
@@ -132,10 +166,102 @@ function startSettingsListener() {
 }
 
 // ==========================================================
-// NEW FEATURE: DYNAMIC REMINDER SYSTEM (Debugged)
+// ADMIN & OVERDUE RECOVERY SYSTEM
 // ==========================================================
 
-// --- 4. LAUNDRY STATUS LISTENER ---
+// --- 5. HELPER: PROCESS OVERDUE RESET (Admin Force Clear) ---
+async function processOverdueReset(lockerId) {
+    console.log(`[OVERDUE] Received database command to reset Locker ${lockerId}...`);
+
+    try {
+        // A. Archive Active Transaction
+        const transRef = collection(db, "transactions");
+        const q = query(
+            transRef, 
+            where("lockerId", "==", Number(lockerId)), 
+            where("status", "in", ["paid_pending", "processing", "occupied"])
+        );
+        
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const batchPromises = querySnapshot.docs.map(async (docSnapshot) => {
+                const transData = docSnapshot.data();
+                
+                await addDoc(collection(db, "overdue_logs"), {
+                    ...transData,
+                    originalTransactionId: docSnapshot.id,
+                    archivedAt: new Date(),
+                    reason: "ADMIN_RESET",
+                    note: "Triggered via Admin Database Command"
+                });
+
+                await updateDoc(docSnapshot.ref, {
+                    status: 'overdue_archived',
+                    lockerId: null, 
+                    archivedAt: new Date()
+                });
+            });
+            await Promise.all(batchPromises);
+            console.log(`[OVERDUE] Archived transaction(s) for Locker ${lockerId}`);
+        } else {
+            console.log(`[OVERDUE] No active transaction found for Locker ${lockerId}, proceeding to reset.`);
+        }
+
+        // B. Reset the Locker
+        const lockerRef = doc(db, "lockers", String(lockerId));
+        await updateDoc(lockerRef, {
+            status: 'available',
+            action: 'lock',
+            currentTransactionId: null,
+            adminCommand: null, // Reset command to null
+            timestamp: new Date()
+        });
+
+        console.log(`[OVERDUE] Locker ${lockerId} is now AVAILABLE.`);
+
+    } catch (error) {
+        console.error(`[OVERDUE ERROR] Locker ${lockerId}:`, error);
+    }
+}
+
+// --- 6. OVERDUE LOGS LISTENER (Sync 'Completed' Status) ---
+function startOverdueListener() {
+    console.log("🎧 Listening to 'overdue_logs' for manual resolutions...");
+    
+    onSnapshot(collection(db, "overdue_logs"), (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+            if (change.type === 'modified') {
+                const data = change.doc.data();
+                
+                // If Admin marks log as 'completed', update original TRX
+                if (data.status === 'completed' && data.originalTransactionId) {
+                    console.log(`[OVERDUE SYNC] Log ${change.doc.id} COMPLETED. Updating original...`);
+                    
+                    try {
+                        const originalTransRef = doc(db, "transactions", data.originalTransactionId);
+                        await updateDoc(originalTransRef, {
+                            status: 'completed',
+                            paymentStatus: 'paid',
+                            resolvedAt: new Date(),
+                            method: 'manual_overdue_resolution',
+                            note: 'Transaction completed via Overdue Admin Panel'
+                        });
+                        console.log(`[OVERDUE SYNC] Original TRX ${data.originalTransactionId} updated.`);
+                    } catch (error) {
+                        console.error(`[OVERDUE SYNC ERROR]`, error);
+                    }
+                }
+            }
+        });
+    });
+}
+
+// ==========================================================
+// AUTOMATED REMINDER SYSTEM
+// ==========================================================
+
+// --- 7. LAUNDRY STATUS LISTENER (Start Timer) ---
 function startLaundryStatusListener() {
     console.log("🎧 Listening to 'transactions' for 'Done' status...");
     
@@ -145,11 +271,9 @@ function startLaundryStatusListener() {
         snapshot.docChanges().forEach(async (change) => {
             const data = change.doc.data();
             
-            // FIX: Listen to 'added' events too! 
-            // This catches items that are ALREADY 'Done' when server starts.
+            // Listen to ADDED & MODIFIED to catch existing 'Done' items on startup
             if (change.type === 'added' || change.type === 'modified') {
                 if (data.laundryStatus === 'Done') {
-                    // Only update if 'doneAt' is missing
                     if (!data.doneAt) {
                         console.log(`[STATUS] Found DONE transaction ${data.transactionId} without timestamp. Fixing...`);
                         try {
@@ -168,13 +292,12 @@ function startLaundryStatusListener() {
     });
 }
 
-// --- 5. OVERDUE POLLER (With Debug Logs) ---
+// --- 8. OVERDUE POLLER (Check Timer) ---
 async function checkOverduePickups() {
     const currentLimitMs = SYSTEM_SETTINGS.overdueLimitMs;
     const now = new Date();
-
-    // Debug Log to confirm what the server sees as the limit
     const limitMins = (currentLimitMs / 60000).toFixed(1);
+
     console.log(`\n⏰ [POLL] Checking for overdue items (Limit: ${limitMins} mins)...`);
 
     try {
@@ -201,10 +324,8 @@ async function checkOverduePickups() {
                 if (!data.reminderSent) {
                     console.log(`   -> TRX ${data.transactionId}: ${diffMins} mins elapsed / Target: ${limitMins} mins`);
                     
-                    // CHECK: Time passed?
                     if (diffMs > currentLimitMs) {
                         console.log(`      ⚡ OVERDUE! Sending reminder...`);
-
                         await updateDoc(docSnap.ref, {
                             triggerReminder: true,  
                             reminderSent: true,     
@@ -213,24 +334,23 @@ async function checkOverduePickups() {
                         });
                         console.log(`      ✅ Reminder Sent Flag Updated.`);
                     }
-                } else {
-                    // console.log(`   -> TRX ${data.transactionId}: Reminder already sent.`);
                 }
             } else {
-                console.log(`   -> TRX ${data.transactionId}: 'Done' but missing 'doneAt' timestamp (Waiting for Listener fix...)`);
+                console.log(`   -> TRX ${data.transactionId}: 'Done' but missing 'doneAt' timestamp.`);
             }
         });
     } catch (error) {
         console.error("Error checking overdue pickups:", error);
     }
 }
-
-// Run check every 30 seconds for faster testing
+// Run check every 30 seconds
 setInterval(checkOverduePickups, 30 * 1000);
 
 // ==========================================================
+// CORE LISTENERS (DB & PRINTER)
+// ==========================================================
 
-// --- 6. DATABASE LISTENER (Lockers) ---
+// --- 9. DATABASE LISTENER (Lockers & Admin Commands) ---
 function startDatabaseListener() {
     console.log("🎧 Listening to 'lockers' collection...");
     onSnapshot(collection(db, "lockers"), (snapshot) => {
@@ -239,7 +359,11 @@ function startDatabaseListener() {
             const id = change.doc.id; 
             const key = `l${id}`;
             
-            if (data.adminCommand === 'RESET_OVERDUE') return; 
+            // --- CHECK FOR ADMIN RESET COMMAND ---
+            if (data.adminCommand === 'RESET_OVERDUE') {
+                processOverdueReset(id);
+                return; 
+            }
 
             if (systemState[key]) {
                 systemState[key].status = data.status || 'available'; 
@@ -250,7 +374,7 @@ function startDatabaseListener() {
     });
 }
 
-// --- 7. PRINTER LISTENER ---
+// --- 10. PRINTER LISTENER (Auto-Print) ---
 function startPrinterListener() {
     console.log("🎧 Listening to 'transactions' for print jobs...");
     const q = query(collection(db, "transactions"), where("triggerPrint", "==", true));
@@ -320,30 +444,54 @@ function executePrintCommand(data) {
   });
 }
 
-// --- AUTH & STARTUP ---
+// ==========================================================
+// STARTUP
+// ==========================================================
+
 signInAnonymously(auth).then(async () => {
     console.log("✅ [FIREBASE] Authenticated");
-    await initializeSettings();
-
-    startDatabaseListener();
-    startSettingsListener(); 
-    startPrinterListener(); 
-    startLaundryStatusListener();
     
+    // 1. Initialize DB Docs
+    await initializeSettings();
+    await initializeLockers();
+
+    // 2. Start Listeners
+    startDatabaseListener();      // Hardware & Admin Reset
+    startSettingsListener();      // Dynamic Timer
+    startPrinterListener();       // Auto Print
+    startLaundryStatusListener(); // Watch for "Done"
+    startOverdueListener();       // Watch for Manual Fixes
+    
+    // 3. Start Poller
     checkOverduePickups(); 
 });
 
-// --- API ENDPOINTS ---
+// ==========================================================
+// API ENDPOINTS
+// ==========================================================
+
 app.get('/api/status', (req, res) => res.json(systemState));
+
 app.post('/api/unlock', async (req, res) => {
     const { lockerId } = req.body;
     await setDoc(doc(db, "lockers", String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true });
     res.json({ success: true });
 });
+
 app.post('/api/lock', async (req, res) => {
     const { lockerId } = req.body;
     await setDoc(doc(db, "lockers", String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true });
     res.json({ success: true });
+});
+
+// [BACKUP] Manual Print API (For legacy support)
+app.post('/api/print', (req, res) => {
+  const { transactionId, pin, processType, weight, price } = req.body;
+  const payload = {
+      transactionId, pin, processType, weight, price, type: 'Manual', shopName: 'CAJ LAUNDRY'
+  };
+  executePrintCommand(payload);
+  res.json({ success: true });
 });
 
 app.listen(3000, () => console.log('🚀 Server running on 3000'));
