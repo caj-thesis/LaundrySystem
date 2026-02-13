@@ -29,6 +29,9 @@ LED_GREEN = 2
 LED_BLUE = 3
 LED_YELLOW = 4
 
+# --- GLOBAL STATE ---
+SHOP_NAME = "CAJ LAUNDRY LOCKER CO." # Default name
+
 # --- LOGGING ---
 def log_gsm(message):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -133,6 +136,18 @@ def process_locker_leds(locker_id, locker_data):
         send_led_command(locker_id, LED_RED)
 
 # --- LISTENERS ---
+
+# 1. Settings Listener (Dynamic Shop Name)
+def on_settings_snapshot(col_snapshot, changes, read_time):
+    global SHOP_NAME
+    for change in changes:
+        if change.type.name in ['ADDED', 'MODIFIED']:
+            data = change.document.to_dict()
+            name = data.get('laundryShopName', "CAJ LAUNDRY LOCKER CO.")
+            SHOP_NAME = name.upper() # Ensure it is uppercase for the receipt style
+            print(f"⚙️ Shop Name Updated: {SHOP_NAME}")
+
+# 2. Transaction Listener (SMS Logic)
 def on_transaction_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name in ['ADDED', 'MODIFIED']:
@@ -141,40 +156,66 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
             phone = data.get('phoneNumber')
             trans_id = data.get('transactionId', 'N/A')
             pin = data.get('pin', 'N/A')
-
-            # --- NEW: Check for Manual Reminder Trigger ---
+            
+            # Retrieve flags
             trigger_reminder = data.get('triggerReminder', False)
-            # This flag prevents the standard "Laundry Ready" message from firing 
-            # immediately after we reset the reminder trigger (anti-loop)
-            reminder_sent_flag = data.get('reminderSent', False)
+            reminder_sent_flag = data.get('reminderSent', False) 
+            code_sms_sent = data.get('codeSmsSent', False)       
+            done_sms_sent = data.get('doneSmsSent', False)       
+
+            # Get Receipt Details
+            weight = float(data.get('weight', 0))
+            price = float(data.get('price', 0))
+            current_time = datetime.datetime.now().strftime("%m/%d/%Y %H:%M")
 
             if not phone or not gsm: continue
-            msg = ""
-
-            # 1. Manual Reminder Priority Check
-            if trigger_reminder:
-                msg = f"REMINDER: Your laundry is ready for pickup! Ref: {trans_id}"
-                log_gsm(f"Triggering Manual Reminder for {phone}")
-                
-                # Reset the trigger in Firebase to prevent infinite loop
-                try:
-                    change.document.reference.update({
-                        'triggerReminder': False,
-                        'reminderSent': True
-                    })
-                except Exception as e:
-                    log_gsm(f"Error resetting reminder trigger: {e}")
-
-            # 2. Standard Status Checks
-            elif status == 'Pending':
-                msg = f"Locker Code: {pin}\nRef: {trans_id}"
             
-            elif status == 'Done':
-                # Only send standard "Ready" msg if we aren't in the middle of a reminder loop
-                if not reminder_sent_flag:
-                    msg = f"Laundry Ready!\nRef: {trans_id}"
+            msg = ""
+            updates = {} 
 
-            # 3. Send SMS if message exists
+            # A. Manual Reminder
+            if trigger_reminder:
+                msg = (
+                    f"{SHOP_NAME}\n"
+                    f"REMINDER: Your laundry is ready!\n"
+                    f"Ref: {trans_id}\n"
+                    f"Please pickup within 24 hours."
+                )
+                log_gsm(f"Triggering Manual Reminder for {phone}")
+                updates['triggerReminder'] = False
+                updates['reminderSent'] = True
+
+            # B. Dropoff Receipt (Standard)
+            elif status == 'Pending':
+                if not code_sms_sent:
+                    msg = (
+                        f"{SHOP_NAME}\n"
+                        f"Date: {current_time}\n"
+                        f"Trans #: {trans_id}\n"
+                        f"Service: DROPOFF\n"
+                        f"Weight: {weight:.2f} kg\n"
+                        f"Price: PHP {price:.2f}\n"
+                        f"----------------\n"
+                        f"PIN: {pin}\n"
+                        f"Keep this PIN safe!"
+                    )
+                    updates['codeSmsSent'] = True
+
+            # C. Pickup/Ready Notification
+            elif status == 'Done':
+                if not done_sms_sent and not reminder_sent_flag:
+                    msg = (
+                        f"{SHOP_NAME}\n"
+                        f"Date: {current_time}\n"
+                        f"Trans #: {trans_id}\n"
+                        f"Service: READY FOR PICKUP\n"
+                        f"----------------\n"
+                        f"Status: WASHING COMPLETE\n"
+                        f"Please proceed to payment."
+                    )
+                    updates['doneSmsSent'] = True
+
+            # D. Send SMS & Update DB
             if msg:
                 log_gsm(f"Sending SMS to {phone}")
                 try:
@@ -185,6 +226,14 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
                     gsm.write(msg.encode())
                     gsm.write(bytes([26])) 
                     time.sleep(3)
+                    
+                    if updates:
+                        try:
+                            change.document.reference.update(updates)
+                            print(f"📝 Updated flags: {list(updates.keys())}")
+                        except Exception as e:
+                            log_gsm(f"Error updating DB flags: {e}")
+
                 except Exception as e:
                     log_gsm(f"SMS Error: {e}")
 
@@ -213,8 +262,13 @@ def on_locker_snapshot(col_snapshot, changes, read_time):
 if db:
     print("🎧 Listening for Firebase updates...")
     try:
+        # Start Listeners
         db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done']).on_snapshot(on_transaction_snapshot)
         db.collection('lockers').on_snapshot(on_locker_snapshot)
+        
+        # New Settings Listener
+        db.collection('settings').document('general').on_snapshot(on_settings_snapshot)
+        
     except Exception as e:
         print(f"Listener Error: {e}")
 
@@ -248,15 +302,10 @@ while True:
                             l_data = part.split(':')
                             l_id = l_data[0].replace('L', '') 
                             door_status = l_data[2]      
-                            
-                            # --- ROBUST CONNECTION CHECK ---
-                            # Extract the flag and STRIP whitespace/newlines
                             conn_flag = l_data[3].strip() 
                             
-                            # We check if it is '1' OR if user just wants it to work
                             is_hw_connected = (conn_flag == "1")
 
-                            # DEBUG: Print if status changes unexpectedly
                             if local_connection_states.get(l_id) != is_hw_connected:
                                 print(f"🔌 Locker {l_id} Status Change: Received Flag='{conn_flag}' -> Connected={is_hw_connected}")
                                 local_connection_states[l_id] = is_hw_connected
@@ -267,7 +316,6 @@ while True:
                                         'doorStatus': door_status if is_hw_connected else "OFFLINE"
                                     })
 
-                            # UPDATE DOOR STATUS ONLY IF CONNECTED
                             if is_hw_connected:
                                 if local_door_states.get(l_id) != door_status:
                                     local_door_states[l_id] = door_status
@@ -278,7 +326,6 @@ while True:
                                         })
 
                         except Exception as e:
-                            # print(f"Parse Error: {e}")
                             pass 
 
             elif line.startswith("COIN_ADDED:"):

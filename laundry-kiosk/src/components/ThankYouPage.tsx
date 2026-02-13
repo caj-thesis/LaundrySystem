@@ -49,7 +49,8 @@ export function ThankYouPage({ processType, generatedPin, transactionId, price, 
         </div>
       </div>
       <div className="thankyou-footer">
-        <p>Please take your receipt. Returning to home...</p>
+        <p>Please take your receipt.</p>
+        <p>Returning to home...</p>
       </div>
     </div>
   );
