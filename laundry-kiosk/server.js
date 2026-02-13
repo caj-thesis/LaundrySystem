@@ -71,7 +71,41 @@ function updateStateFromFile() {
 }
 setInterval(updateStateFromFile, 200);
 
-// --- 2. DATABASE LISTENER ---
+// --- 2. AUTO-INITIALIZE SETTINGS ---
+// This function checks if settings exist; if not, it creates them.
+async function initializeSettings() {
+    try {
+        // A. Check/Create General Settings (Shop Name)
+        const generalRef = doc(db, "settings", "general");
+        const generalSnap = await getDoc(generalRef);
+
+        if (!generalSnap.exists()) {
+            console.log("⚙️  Initializing 'settings/general' with default values...");
+            await setDoc(generalRef, {
+                laundryShopName: "CAJ Laundry Locker System"
+            });
+        }
+
+        // B. Check/Create Pricing Settings
+        const pricingRef = doc(db, "settings", "pricing");
+        const pricingSnap = await getDoc(pricingRef);
+
+        if (!pricingSnap.exists()) {
+            console.log("⚙️  Initializing 'settings/pricing' with default values...");
+            await setDoc(pricingRef, {
+                clothesPrice: 25,
+                bedSheetPrice: 40
+            });
+        }
+        
+        console.log("✅ Settings verification complete.");
+
+    } catch (error) {
+        console.error("❌ Error initializing settings:", error);
+    }
+}
+
+// --- 3. DATABASE LISTENER ---
 function startDatabaseListener() {
     console.log("🎧 Listening to 'lockers' collection...");
     onSnapshot(collection(db, "lockers"), (snapshot) => {
@@ -82,7 +116,7 @@ function startDatabaseListener() {
             
             // Handle Admin Overdue Reset
             if (data.adminCommand === 'RESET_OVERDUE') {
-                processOverdueReset(id); // (Helper function assumed to be same as before)
+                // processOverdueReset(id); // Uncomment if helper exists
                 return; 
             }
 
@@ -95,7 +129,7 @@ function startDatabaseListener() {
     });
 }
 
-// --- 3. PRINTER LISTENER (With Toggle Check) ---
+// --- 4. PRINTER LISTENER (With Dynamic Name) ---
 function startPrinterListener() {
     console.log("🎧 Listening to 'transactions' for print jobs...");
 
@@ -110,16 +144,25 @@ function startPrinterListener() {
                 
                 console.log(`🖨️  Print Trigger Detected: ${id}`);
 
-                // 1. CHECK ADMIN TOGGLE
+                // 1. CHECK ADMIN TOGGLE & FETCH SHOP NAME
                 let isPrintEnabled = true;
+                let shopName = "CAJ LAUNDRY LOCKER CO."; // Default
+
                 try {
-                    const settingsSnap = await getDoc(doc(db, "settings", "printer"));
-                    if (settingsSnap.exists()) {
-                        // If 'enabled' is false, we disable printing. Default is true.
-                        if (settingsSnap.data().enabled === false) isPrintEnabled = false;
+                    // Check toggle
+                    const printerSnap = await getDoc(doc(db, "settings", "printer"));
+                    if (printerSnap.exists()) {
+                        if (printerSnap.data().enabled === false) isPrintEnabled = false;
                     }
+
+                    // Fetch Shop Name from 'settings/general' (Separate from pricing)
+                    const generalSnap = await getDoc(doc(db, "settings", "general"));
+                    if (generalSnap.exists() && generalSnap.data().laundryShopName) {
+                        shopName = generalSnap.data().laundryShopName.toUpperCase();
+                    }
+
                 } catch (e) {
-                    console.error("Error reading printer settings:", e);
+                    console.error("Error reading settings:", e);
                 }
 
                 // 2. EXECUTE OR SKIP
@@ -131,7 +174,8 @@ function startPrinterListener() {
                         processType: context,
                         weight: data.weight,
                         price: data.price,
-                        type: data.type
+                        type: data.type,
+                        shopName: shopName
                     };
                     executePrintCommand(printPayload);
                 } else {
@@ -153,10 +197,11 @@ function startPrinterListener() {
 
 // --- HELPER: EXECUTE PRINT ---
 function executePrintCommand(data) {
-  const { transactionId, pin, processType, weight, price, type } = data;
+  const { transactionId, pin, processType, weight, price, type, shopName } = data;
   
+  // Use the shopName passed from the listener
   const receiptText = `
-      CAJ LAUNDRY LOCKER CO.
+      ${shopName || "CAJ LAUNDRY LOCKER CO."}
    --------------------------
    Date: ${new Date().toLocaleString()}
    Trans #: ${transactionId || 'N/A'}
@@ -183,21 +228,22 @@ function executePrintCommand(data) {
 // --- AUTH & STARTUP ---
 signInAnonymously(auth).then(async () => {
     console.log("✅ [FIREBASE] Authenticated");
+    
+    // Initialize settings if they don't exist
+    await initializeSettings();
+
     startDatabaseListener();
-    startPrinterListener(); // <--- This handles printing now
-    // startOverdueListener(); // Uncomment if you have the overdue listener function
+    startPrinterListener(); 
 });
 
 // --- API ENDPOINTS (Legacy support only) ---
 app.get('/api/status', (req, res) => res.json(systemState));
 app.post('/api/unlock', async (req, res) => {
-    // ... same unlock logic ...
     const { lockerId } = req.body;
     await setDoc(doc(db, "lockers", String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true });
     res.json({ success: true });
 });
 app.post('/api/lock', async (req, res) => {
-    // ... same lock logic ...
     const { lockerId } = req.body;
     await setDoc(doc(db, "lockers", String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true });
     res.json({ success: true });

@@ -43,8 +43,10 @@ export default function App() {
   const [selectedLockerId, setSelectedLockerId] = useState<number | null>(null);
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
   
-  // --- 1. DYNAMIC PRICING STATE ---
+  // --- 1. DYNAMIC PRICING & SETTINGS STATE ---
   const [pricing, setPricing] = useState({ clothesPrice: 25, bedSheetPrice: 40 });
+  // Default fallback name
+  const [shopName, setShopName] = useState<string>("CAJ Laundry Locker System"); 
 
   const [selectedPricePerKg, setSelectedPricePerKg] = useState<number>(25);
   const [selectedLaundryType, setSelectedLaundryType] = useState<string>('Clothes');
@@ -58,20 +60,30 @@ export default function App() {
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
-  // --- 2. LISTENER FOR PRICING UPDATES ---
+  // --- 2. LISTENER FOR PRICING ---
   useEffect(() => {
-    // Listen to the 'pricing' document in 'settings' collection
     const unsub = onSnapshot(doc(db, "settings", "pricing"), (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
-        console.log("✅ Prices fetched from DB:", data);
-
+        console.log("✅ Pricing fetched:", data);
         setPricing({
           clothesPrice: data.clothesPrice || 25,
           bedSheetPrice: data.bedSheetPrice || 40
         });
-      } else {
-        console.log("❌ Pricing document not found. Using defaults.");
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // --- 3. LISTENER FOR GENERAL SETTINGS (Shop Name) ---
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "general"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        console.log("✅ General Settings fetched:", data);
+        if (data.laundryShopName) {
+            setShopName(data.laundryShopName);
+        }
       }
     });
     return () => unsub();
@@ -136,7 +148,7 @@ export default function App() {
           body: JSON.stringify({ lockerId: selectedLockerId }),
         }).catch(e => console.error("Hardware Error:", e));
 
-        // --- 3. CREATE TRANSACTION WITH PRINT TRIGGER ---
+        // --- 4. CREATE TRANSACTION ---
         await addDoc(collection(db, "transactions"), {
           transactionId: newTransactionId,
           lockerId: selectedLockerId,
@@ -152,7 +164,6 @@ export default function App() {
           triggerReminder: false,
           reminderSent: false,
           
-          // TRIGGER PRINT HERE
           triggerPrint: true, 
 
           timestamp: new Date()
@@ -199,7 +210,7 @@ export default function App() {
           body: JSON.stringify({ lockerId: selectedLockerId })
         }).catch(err => console.error("Unlock failed:", err));
 
-        // --- 4. UPDATE TRANSACTION WITH PRINT TRIGGER ---
+        // --- 5. UPDATE TRANSACTION ---
         const q = query(
           collection(db, "transactions"),
           where("lockerId", "==", selectedLockerId),
@@ -212,7 +223,6 @@ export default function App() {
             status: 'completed',
             pickedUpAt: new Date(),
             paymentId: paymentId,
-            // TRIGGER PRINT HERE
             triggerPrint: true
           })
         );
@@ -251,7 +261,8 @@ export default function App() {
   return (
     <div className="app-container">
       <div className="kiosk-screen">
-        {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} />}
+        {/* Pass the dynamic shopName to the WelcomePage */}
+        {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} shopName={shopName} />}
         
         {currentScreen === 'process-selection' && (
           <ProcessSelectionPage onSelect={handleProcessSelection} onBack={handleProcessBack} />
@@ -272,7 +283,7 @@ export default function App() {
           />
         )}
 
-        {/* --- 5. PASS PRICING TO SELECTION PAGE --- */}
+        {/* --- 6. PASS PRICING TO SELECTION PAGE --- */}
         {currentScreen === 'laundry-type-selection' && (
           <LaundryTypeSelectionPage 
             onSelect={handleLaundryTypeSelect}

@@ -4,9 +4,10 @@ import { BackgroundBubbles } from '../components/BackgroundBubbles';
 
 interface WelcomePageProps {
   onNext: () => void;
+  shopName?: string; // Add optional prop
 }
 
-export function WelcomePage({ onNext }: WelcomePageProps) {
+export function WelcomePage({ onNext, shopName }: WelcomePageProps) {
   return (
     <div className="welcome-page" style={{ position: 'relative' }}>
       <BackgroundBubbles variant="white" />
@@ -15,7 +16,8 @@ export function WelcomePage({ onNext }: WelcomePageProps) {
         <WashingMachine size={100} strokeWidth={1.5} />
         <div className="welcome-text">
           <h1 className="welcome-title">WELCOME</h1>
-          <p className="welcome-subtitle">CAJ Laundry Locker System</p>
+          {/* Use the dynamic shopName or fallback to default */}
+          <p className="welcome-subtitle">{shopName || "CAJ Laundry Locker System"}</p>
         </div>
       </div>
       
