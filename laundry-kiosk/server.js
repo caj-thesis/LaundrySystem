@@ -80,33 +80,41 @@ setInterval(updateStateFromFile, 200);
 // INITIALIZATION & SETTINGS
 // ==========================================================
 
-// --- 2. AUTO-INITIALIZE SETTINGS (Shop Name & Timer) ---
+// --- 2. AUTO-INITIALIZE SETTINGS (Consolidated to settings/general) ---
 async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
         const generalSnap = await getDoc(generalRef);
 
+        // Define all settings in ONE place
+        const defaultSettings = {
+            laundryShopName: "CAJ Laundry Locker System",
+            overdueHours: 48,
+            clothesPrice: 25,     // Consolidated
+            bedSheetPrice: 40,    // Consolidated
+            printerEnabled: true  // Consolidated
+        };
+
         if (!generalSnap.exists()) {
-            console.log("⚙️  Initializing 'settings/general'...");
-            await setDoc(generalRef, {
-                laundryShopName: "CAJ Laundry Locker System",
-                overdueHours: 48
-            });
+            console.log("⚙️  Initializing 'settings/general' with default values...");
+            await setDoc(generalRef, defaultSettings);
         } else {
-            // Patch overdueHours if missing
-            if (generalSnap.data().overdueHours === undefined) {
-                await setDoc(generalRef, { overdueHours: 48 }, { merge: true });
+            // Patch missing fields (Merge strategy)
+            const data = generalSnap.data();
+            const updates = {};
+
+            if (data.overdueHours === undefined) updates.overdueHours = 48;
+            if (data.clothesPrice === undefined) updates.clothesPrice = 25;
+            if (data.bedSheetPrice === undefined) updates.bedSheetPrice = 40;
+            if (data.printerEnabled === undefined) updates.printerEnabled = true;
+
+            if (Object.keys(updates).length > 0) {
+                console.log(`[INIT] Patching 'settings/general' with missing fields: ${Object.keys(updates).join(', ')}`);
+                await setDoc(generalRef, updates, { merge: true });
             }
         }
-
-        const pricingRef = doc(db, "settings", "pricing");
-        const pricingSnap = await getDoc(pricingRef);
-
-        if (!pricingSnap.exists()) {
-            await setDoc(pricingRef, { clothesPrice: 25, bedSheetPrice: 40 });
-        }
         
-        console.log("✅ Settings verification complete.");
+        console.log("✅ Settings verification complete (All in settings/general).");
     } catch (error) {
         console.error("❌ Error initializing settings:", error);
     }
@@ -131,7 +139,6 @@ async function initializeLockers() {
         timestamp: new Date()
       });
     } else {
-      // Patch: Ensure adminCommand field exists
       const data = snap.data();
       if (data.adminCommand === undefined) {
           console.log(`[INIT] Patching Locker ${id}: Adding 'adminCommand' field...`);
@@ -174,7 +181,6 @@ async function processOverdueReset(lockerId) {
     console.log(`[OVERDUE] Received database command to reset Locker ${lockerId}...`);
 
     try {
-        // A. Archive Active Transaction
         const transRef = collection(db, "transactions");
         const q = query(
             transRef, 
@@ -208,13 +214,12 @@ async function processOverdueReset(lockerId) {
             console.log(`[OVERDUE] No active transaction found for Locker ${lockerId}, proceeding to reset.`);
         }
 
-        // B. Reset the Locker
         const lockerRef = doc(db, "lockers", String(lockerId));
         await updateDoc(lockerRef, {
             status: 'available',
             action: 'lock',
             currentTransactionId: null,
-            adminCommand: null, // Reset command to null
+            adminCommand: null, 
             timestamp: new Date()
         });
 
@@ -234,7 +239,6 @@ function startOverdueListener() {
             if (change.type === 'modified') {
                 const data = change.doc.data();
                 
-                // If Admin marks log as 'completed', update original TRX
                 if (data.status === 'completed' && data.originalTransactionId) {
                     console.log(`[OVERDUE SYNC] Log ${change.doc.id} COMPLETED. Updating original...`);
                     
@@ -271,7 +275,6 @@ function startLaundryStatusListener() {
         snapshot.docChanges().forEach(async (change) => {
             const data = change.doc.data();
             
-            // Listen to ADDED & MODIFIED to catch existing 'Done' items on startup
             if (change.type === 'added' || change.type === 'modified') {
                 if (data.laundryStatus === 'Done') {
                     if (!data.doneAt) {
@@ -343,7 +346,6 @@ async function checkOverduePickups() {
         console.error("Error checking overdue pickups:", error);
     }
 }
-// Run check every 30 seconds
 setInterval(checkOverduePickups, 30 * 1000);
 
 // ==========================================================
@@ -359,7 +361,6 @@ function startDatabaseListener() {
             const id = change.doc.id; 
             const key = `l${id}`;
             
-            // --- CHECK FOR ADMIN RESET COMMAND ---
             if (data.adminCommand === 'RESET_OVERDUE') {
                 processOverdueReset(id);
                 return; 
@@ -388,12 +389,22 @@ function startPrinterListener() {
 
                 let isPrintEnabled = true;
                 let shopName = "CAJ LAUNDRY LOCKER CO.";
+                
                 try {
-                    const printerSnap = await getDoc(doc(db, "settings", "printer"));
-                    if (printerSnap.exists() && printerSnap.data().enabled === false) isPrintEnabled = false;
+                    // Fetch ALL config from settings/general
                     const generalSnap = await getDoc(doc(db, "settings", "general"));
-                    if (generalSnap.exists() && generalSnap.data().laundryShopName) shopName = generalSnap.data().laundryShopName.toUpperCase();
-                } catch (e) {}
+                    if (generalSnap.exists()) {
+                        const settings = generalSnap.data();
+                        
+                        // 1. Check Printer Status
+                        if (settings.printerEnabled === false) isPrintEnabled = false;
+                        
+                        // 2. Check Shop Name
+                        if (settings.laundryShopName) shopName = settings.laundryShopName.toUpperCase();
+                    }
+                } catch (e) {
+                    console.error("Error reading settings/general for print:", e);
+                }
 
                 if (isPrintEnabled) {
                     const context = (data.status === 'completed') ? 'pickup' : 'dropoff';
@@ -408,7 +419,7 @@ function startPrinterListener() {
                     };
                     executePrintCommand(printPayload);
                 } else {
-                    console.log("🚫 Printing Skipped");
+                    console.log("🚫 Printing Skipped (Disabled in settings/general)");
                 }
                 try { await updateDoc(doc(db, "transactions", id), { triggerPrint: false }); } catch (e) {}
             }
@@ -451,16 +462,16 @@ function executePrintCommand(data) {
 signInAnonymously(auth).then(async () => {
     console.log("✅ [FIREBASE] Authenticated");
     
-    // 1. Initialize DB Docs
+    // 1. Initialize DB Docs (Everything in General)
     await initializeSettings();
     await initializeLockers();
 
     // 2. Start Listeners
-    startDatabaseListener();      // Hardware & Admin Reset
-    startSettingsListener();      // Dynamic Timer
-    startPrinterListener();       // Auto Print
-    startLaundryStatusListener(); // Watch for "Done"
-    startOverdueListener();       // Watch for Manual Fixes
+    startDatabaseListener();      
+    startSettingsListener();      
+    startPrinterListener();       
+    startLaundryStatusListener(); 
+    startOverdueListener();       
     
     // 3. Start Poller
     checkOverduePickups(); 
@@ -484,7 +495,6 @@ app.post('/api/lock', async (req, res) => {
     res.json({ success: true });
 });
 
-// [BACKUP] Manual Print API (For legacy support)
 app.post('/api/print', (req, res) => {
   const { transactionId, pin, processType, weight, price } = req.body;
   const payload = {
