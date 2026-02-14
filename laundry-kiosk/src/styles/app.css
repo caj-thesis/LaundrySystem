@@ -792,7 +792,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-right: 32px;
+  padding-right: 26px;
   border-right: 1px solid #e5e7eb;
 }
 
