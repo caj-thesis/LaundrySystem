@@ -323,6 +323,7 @@ export default function App() {
             lockerId={selectedLockerId} 
             currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
             pricePerKg={selectedPricePerKg}
+            doorStatus={lockers.find(l => l.id === selectedLockerId)?.doorStatus || 'CLOSED'}
             // @ts-ignore 
             onComplete={handleDropOffComplete} 
             onBack={handleWeighingBack}
