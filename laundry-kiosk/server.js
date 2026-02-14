@@ -373,6 +373,8 @@ function executePrintCommand(data) {
    }
    --------------------------
    Thank you!
+
+
   `;
   exec(`printf "${receiptText}" > /dev/usb/lp0`, (error) => {});
 }

@@ -12,7 +12,8 @@ import { ThankYouPage } from './components/ThankYouPage';
 import './styles/app.css';
 
 // --- FIREBASE IMPORTS ---
-import { db } from '../firebaseConfig'; 
+import { db, auth } from '../firebaseConfig'; 
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { 
   collection, 
   addDoc, 
@@ -59,9 +60,24 @@ export default function App() {
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
-  // --- 2. CONSOLIDATED LISTENER (General + Pricing) ---
+  // --- 2. AUTHENTICATION LISTENER (SYSTEM LOGIN) ---
   useEffect(() => {
-    // We now listen ONLY to "settings/general" for both Shop Name and Prices
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("✅ System Authenticated:", user.uid); 
+      } else {
+        console.log("⚠️ System not signed in. Signing in now..."); 
+        signInAnonymously(auth).catch((error) => {
+          console.error("❌ Auth Error:", error);
+          alert("System Error: Could not sign in to database. Check internet.");
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- 3. SETTINGS LISTENER (General + Pricing) ---
+  useEffect(() => {
     const unsub = onSnapshot(doc(db, "settings", "general"), (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
@@ -126,50 +142,61 @@ export default function App() {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
     
+    // 1. Set the data for the Thank You page (don't navigate yet)
     setLastGeneratedPin(newPin);
     setLastTransactionId(newTransactionId);
     setLastWeight(finalWeight);
     setLastPrice(finalPrice);
 
-    setCurrentScreen('thank-you');
+    // 2. Check for Locker ID
+    if (!selectedLockerId) {
+      console.error("No locker selected!");
+      alert("Error: No locker selected. Please try again.");
+      return;
+    }
 
-    if (selectedLockerId) {
-      try {
-        fetch('http://localhost:3000/api/lock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lockerId: selectedLockerId }),
-        }).catch(e => console.error("Hardware Error:", e));
+    try {
+      // 3. Hardware Lock (Non-blocking)
+      fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId: selectedLockerId }),
+      }).catch(e => console.error("Hardware Error:", e));
 
-        // --- 4. CREATE TRANSACTION ---
-        await addDoc(collection(db, "transactions"), {
-          transactionId: newTransactionId,
-          lockerId: selectedLockerId,
-          pin: newPin,
-          price: finalPrice,
-          weight: finalWeight,
-          pricePerKg: selectedPricePerKg,
-          phoneNumber: phoneNumber || "N/A", 
-          type: selectedLaundryType, 
-          status: 'paid_pending',
-          laundryStatus: 'Pending', 
-          
-          triggerReminder: false,
-          reminderSent: false,
-          
-          triggerPrint: true, 
+      // 4. CREATE TRANSACTION (Wait for this to finish!)
+      await addDoc(collection(db, "transactions"), {
+        transactionId: newTransactionId,
+        lockerId: selectedLockerId,
+        pin: newPin,
+        price: finalPrice,
+        weight: finalWeight,
+        pricePerKg: selectedPricePerKg,
+        phoneNumber: phoneNumber || "N/A", 
+        type: selectedLaundryType, 
+        status: 'paid_pending',
+        laundryStatus: 'Pending', 
+        
+        triggerReminder: false,
+        reminderSent: false,
+        
+        triggerPrint: true, 
 
-          timestamp: new Date()
-        });
+        timestamp: new Date()
+      });
 
-        await updateDoc(doc(db, "lockers", String(selectedLockerId)), { 
-          status: 'occupied',
-          currentTransactionId: newTransactionId 
-        });
+      // 5. Update Locker Status
+      await updateDoc(doc(db, "lockers", String(selectedLockerId)), { 
+        status: 'occupied',
+        currentTransactionId: newTransactionId 
+      });
 
-      } catch (e) {
-        console.error("CRITICAL ERROR SAVING DATA:", e);
-      }
+      // 6. SUCCESS: Now render the Thank You page
+      setCurrentScreen('thank-you');
+
+    } catch (e) {
+      console.error("CRITICAL ERROR SAVING DATA:", e);
+      // 7. Alert the user if something goes wrong
+      alert("Failed to save transaction. Please check your internet connection.");
     }
   };
 
@@ -226,11 +253,19 @@ export default function App() {
           currentTransactionId: null 
         });
 
+        // 6. SUCCESS: Move to Thank You screen ONLY after updates succeed
+        setCurrentScreen('thank-you');
+
       } catch (e) {
         console.error("Error completing payment:", e);
+        alert("Payment recorded locally, but failed to sync. Please check connection.");
+        // Still show thank you to user since they paid
+        setCurrentScreen('thank-you'); 
       }
+    } else {
+        // Fallback if no locker selected
+        setCurrentScreen('thank-you');
     }
-    setCurrentScreen('thank-you');
   };
 
   const handleReset = useCallback(() => {
