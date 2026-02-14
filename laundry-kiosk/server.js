@@ -357,7 +357,7 @@ function startPrinterListener() {
 function executePrintCommand(data) {
   const { transactionId, pin, processType, weight, price, type, shopName } = data;
   const receiptText = `
-      ${shopName || "CAJ LAUNDRY LOCKER CO."}
+   ${shopName || "CAJ LAUNDRY LOCKER CO."}
    --------------------------
    Date: ${new Date().toLocaleString()}
    Trans #: ${transactionId || 'N/A'}
