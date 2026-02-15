@@ -69,7 +69,6 @@ body {
   border: none;
   border-radius: 12px;
   font-size: 24px;
-  cursor: pointer;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   transition: background-color 0.2s;
 }
@@ -85,7 +84,6 @@ body {
   border: none;
   border-radius: 8px;
   font-size: 16px;
-  cursor: pointer;
   transition: background-color 0.2s;
 }
 
@@ -95,15 +93,14 @@ body {
 
 .btn-return-top {
   position: absolute;
-  top: 32px;
-  right: 32px;
+  top: 18px;
+  left: 32px;
   padding: 12px 24px;
   background-color: #6b7280;
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 16px;
-  cursor: pointer;
   transition: background-color 0.2s;
   z-index: 10;
 }
@@ -115,14 +112,13 @@ body {
 .btn-return-absolute {
   position: absolute;
   top: 32px;
-  right: 32px;
+  left: 32px;
   padding: 12px 24px;
   background-color: #6b7280;
   color: white;
   border: none;
   border-radius: 8px;
   font-size: 16px;
-  cursor: pointer;
   transition: background-color 0.2s;
   z-index: 10;
 }
@@ -176,7 +172,6 @@ body {
   border-radius: 16px;
   width: 256px;
   height: 256px;
-  cursor: pointer;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }
@@ -213,6 +208,11 @@ body {
   padding: 24px;
 }
 
+.available-lockers-container {
+  display: flex;
+  flex-direction: column;
+}
+
 .lockers-grid {
   flex: 1;
   overflow-y: auto;
@@ -233,7 +233,6 @@ body {
   background-color: white;
   border: 2px solid transparent;
   border-radius: 12px;
-  cursor: pointer;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }
@@ -279,10 +278,12 @@ body {
 
 .instructions-header {
   margin-bottom: 24px;
+  text-align: center;
 }
 
 .instructions-header h2 {
   font-size: 30px;
+  text-align: center;
   color: #1f2937;
   margin-bottom: 8px;
 }
@@ -340,7 +341,6 @@ body {
   border: none;
   border-radius: 12px;
   font-size: 20px;
-  cursor: pointer;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   transition: background-color 0.2s;
 }
@@ -567,7 +567,6 @@ body {
   background-color: white;
   border: 2px solid transparent;
   border-radius: 12px;
-  cursor: pointer;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }
@@ -720,7 +719,6 @@ body {
   border-radius: 12px;
   font-size: 24px;
   color: #1f2937;
-  cursor: pointer;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }
@@ -769,7 +767,7 @@ body {
 }
 
 .payment-header {
-  text-align: left;
+  text-align: center;
 }
 
 .payment-title {
@@ -794,7 +792,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-right: 32px;
+  padding-right: 26px;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -914,7 +912,6 @@ body {
   border: none;
   border-radius: 12px;
   font-size: 18px;
-  cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }
@@ -942,7 +939,6 @@ body {
   border: none;
   border-radius: 12px;
   font-size: 18px;
-  cursor: pointer;
   transition: background-color 0.2s;
 }
 
@@ -958,7 +954,6 @@ body {
   border: none;
   border-radius: 12px;
   font-size: 18px;
-  cursor: pointer;
   transition: background-color 0.2s;
 }
 
@@ -983,7 +978,6 @@ body {
   border-radius: 12px;
   width: 192px;
   height: 192px;
-  cursor: pointer;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   transition: all 0.2s;
 }

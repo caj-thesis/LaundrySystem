@@ -4,9 +4,11 @@ interface LaundryTypeSelectionPageProps {
   // UPDATED: Now accepts both price and the type name
   onSelect: (price: number, type: string) => void;
   onBack: () => void;
+  pricing: { clothesPrice: number, bedSheetPrice: number };
 }
 
-export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelectionPageProps) {
+// Update: Destructure 'pricing' from props here
+export function LaundryTypeSelectionPage({ onSelect, onBack, pricing }: LaundryTypeSelectionPageProps) {
   return (
     <div className="process-selection-page">
       <div className="page-header">
@@ -22,8 +24,8 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
       <div className="process-selection-buttons">
         {/* Option 1: Regular Clothes */}
         <button 
-          // UPDATED: Pass price AND type name
-          onClick={() => onSelect(25, 'Clothes')} 
+          // UPDATED: Use dynamic price from props
+          onClick={() => onSelect(pricing.clothesPrice, 'Clothes')} 
           className="process-button"
           style={{ borderColor: '#3b82f6', backgroundColor: '#eff6ff' }} // Blue theme
         >
@@ -39,15 +41,16 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
               fontWeight: 'bold', 
               color: '#2563eb' 
             }}>
-              ₱25 <span style={{ fontSize: '16px', fontWeight: 'normal' }}>/ kg</span>
+              {/* UPDATED: Display dynamic price */}
+              ₱{pricing.clothesPrice} <span style={{ fontSize: '16px', fontWeight: 'normal' }}>/ kg</span>
             </div>
           </div>
         </button>
 
         {/* Option 2: Bed Sheets / Heavy */}
         <button 
-          // UPDATED: Pass price AND type name
-          onClick={() => onSelect(40, 'Bed Sheets')} 
+          // UPDATED: Use dynamic price from props
+          onClick={() => onSelect(pricing.bedSheetPrice, 'Bed Sheets')} 
           className="process-button"
           style={{ borderColor: '#8b5cf6', backgroundColor: '#f5f3ff' }} // Violet theme
         >
@@ -63,7 +66,8 @@ export function LaundryTypeSelectionPage({ onSelect, onBack }: LaundryTypeSelect
               fontWeight: 'bold', 
               color: '#7c3aed' 
             }}>
-              ₱40 <span style={{ fontSize: '16px', fontWeight: 'normal' }}>/ kg</span>
+              {/* UPDATED: Display dynamic price */}
+              ₱{pricing.bedSheetPrice} <span style={{ fontSize: '16px', fontWeight: 'normal' }}>/ kg</span>
             </div>
           </div>
         </button>

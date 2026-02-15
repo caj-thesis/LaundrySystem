@@ -1,10 +1,13 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-
-  apiKey: "AIzaSyDOcQa3lv6_qBSlVlGf3o-jOWElx0ax0R0",
+  apiKey: "AIzaSyARrGx7wbz8ZPPIxmG8hoMcLCwtjdzjr8w",
 
   authDomain: "caj-laundry-management-49191.firebaseapp.com",
 
@@ -14,12 +17,20 @@ const firebaseConfig = {
 
   messagingSenderId: "82008219104",
 
-  appId: "1:82008219104:web:8723f28cd7d5a27a899f85",
+  appId: "1:82008219104:web:96ae4d2453248270899f85",
 
-  measurementId: "G-7VJMSZMKT6"
-
+  measurementId: "G-HD7R1PKYLK"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// Initialize Firestore with Offline Persistence Enabled
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    // allow the kiosk to work even if opened in multiple tabs
+    tabManager: persistentMultipleTabManager() 
+  })
+});
+
 export const auth = getAuth(app);

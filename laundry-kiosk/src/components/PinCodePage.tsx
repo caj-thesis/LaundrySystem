@@ -51,10 +51,7 @@ export function PinCodePage({ lockerId, correctPin, onVerified, onCancel }: PinC
         <div className="pin-info">
           <Lock size={64} className="pin-icon" />
           <h2 className="pin-title">Enter PIN Code</h2>
-          <p className="pin-locker">Locker {lockerId}</p>
-          {/* Displays the dynamic PIN so you can access it for testing */}
-          <p className="pin-demo">(Demo PIN: {correctPin})</p>
-          
+          <p className="pin-locker">Locker {lockerId}</p>          
           <div className="pin-display">
             <div className="pin-dots">
               {[0, 1, 2, 3].map((i) => (

@@ -6,11 +6,13 @@ interface WeighingPageProps {
   currentWeight: number; 
   // NEW: Accept dynamic price from parent
   pricePerKg: number; 
+  // NEW: Accept door status for validation
+  doorStatus: string;
   onComplete: (price: number, weight: number, customerPhone: string) => void;
   onBack: () => void;
 }
 
-export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, onBack }: WeighingPageProps) {
+export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
 
   // State to freeze the weight when the user locks the locker
@@ -46,6 +48,12 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, 
 
   // 2. Handle User Confirmation ("Lock & Pay")
   const handleLock = async () => {
+    // --- NEW CHECK: Ensure door is closed ---
+    if (doorStatus === 'OPEN') {
+      alert("Please close the locker door before proceeding.");
+      return;
+    }
+
     setFrozenWeight(currentWeight);
     setStep('weighing'); 
     
@@ -140,10 +148,10 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, 
           gap: '16px'
         }}>
           
-          {/* Status Badge */}
-          <div className="bg-white border border-green-200 text-green-700 px-4 py-1 rounded-full flex items-center gap-2 font-medium shadow-sm text-sm">
+          {/* Status Badge - Updated to reflect Door Status if needed, but keeping logic focused */}
+          <div className={`border px-4 py-1 rounded-full flex items-center gap-2 font-medium shadow-sm text-sm ${doorStatus === 'OPEN' ? 'bg-white border-green-200 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
             <DoorOpen size={16} />
-            <span>Door Unlocked & Scale Active</span>
+            <span>{doorStatus === 'OPEN' ? 'Door Open' : 'Door Closed'} & Scale Active</span>
           </div>
 
           {/* Cards */}
@@ -197,7 +205,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, onComplete, 
 
           <div className="flex items-center gap-2 text-gray-400 text-xs">
              <Info size={14} />
-             <p>Close door when finished.</p>
+             <span>Close door when finished.</span>
           </div>
         </div>
 

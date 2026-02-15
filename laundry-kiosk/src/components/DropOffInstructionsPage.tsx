@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
+import { BackgroundBubbles } from '../components/BackgroundBubbles';
 
 interface DropOffInstructionsPageProps {
   onNext: () => void;
@@ -7,13 +8,21 @@ interface DropOffInstructionsPageProps {
 
 export function DropOffInstructionsPage({ onNext, onBack }: DropOffInstructionsPageProps) {
   return (
-    <div className="dropoff-instructions-page">
-      <button onClick={onBack} className="btn-return-absolute">
+    <div className="dropoff-instructions-page" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* 1. Bubbles are placed here. Since they are position: absolute, 
+            they float "above" the flow and won't push the elements below. */}
+      <BackgroundBubbles variant="tinted" />
+
+      {/* 2. Content remains exactly as it was, no extra wrapper div. */}
+      <button onClick={onBack} className="btn-return-absolute" style={{ zIndex: 2 }}>
         <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
         Return
       </button>
       
-      <div className="instructions-container">
+      <div className="instructions-container" 
+        style={{ 
+          position: 'relative', 
+          zIndex: 1}}>
         <div className="instructions-header">
           <h2>Drop Off Service</h2>
           <p>How it works</p>
@@ -45,7 +54,7 @@ export function DropOffInstructionsPage({ onNext, onBack }: DropOffInstructionsP
           </div>
         </div>
 
-        <button onClick={onNext} className="btn-full">
+        <button onClick={onNext} className="btn-full" style={{ position: 'relative', zIndex: 2 }}>
           Proceed to Locker Selection
         </button>
       </div>

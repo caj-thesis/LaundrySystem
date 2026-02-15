@@ -1,0 +1,41 @@
+/* --- Base Bubble Styles --- */
+.bubble {
+  position: absolute;
+  bottom: -150px;
+  border-radius: 50%;
+  animation: float-up 12s infinite ease-in;
+  pointer-events: none;
+}
+
+/* 1. Subtle White Bubbles (For Blue/Dark Backgrounds) */
+.bubble-white {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 2. Subtle Tinted Bubbles (For Light/Grey Backgrounds) */
+.bubble-tinted {
+  background: rgba(59, 130, 246, 0.08); /* Very light blue tint */
+  border: 1px solid rgba(59, 130, 246, 0.15); /* More visible border */
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.5); /* Inner shine */
+}
+
+/* --- Animation & Variations (Keep these the same) --- */
+@keyframes float-up {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-120vh) scale(1.3); opacity: 0; }
+}
+
+/* Bubble variations */
+.bubble:nth-child(1) { width: 80px; height: 80px; left: 10%; animation-duration: 10s; }
+.bubble:nth-child(2) { width: 40px; height: 40px; left: 25%; animation-duration: 15s; animation-delay: 2s; }
+.bubble:nth-child(3) { width: 120px; height: 120px; left: 40%; animation-duration: 12s; animation-delay: 4s; }
+.bubble:nth-child(4) { width: 60px; height: 60px; left: 55%; animation-duration: 18s; }
+.bubble:nth-child(5) { width: 90px; height: 90px; left: 70%; animation-duration: 11s; animation-delay: 1s; }
+.bubble:nth-child(6) { width: 30px; height: 30px; left: 85%; animation-duration: 14s; }
+.bubble:nth-child(7) { width: 50px; height: 50px; left: 95%; animation-duration: 16s; animation-delay: 3s; }
+.bubble:nth-child(8) { width: 100px; height: 100px; left: 15%; animation-duration: 13s; animation-delay: 5s; }
+.bubble:nth-child(9) { width: 70px; height: 70px; left: 30%; animation-duration: 17s; }
+
+

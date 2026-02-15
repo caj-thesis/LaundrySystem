@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { WelcomePage } from './components/WelcomePage';
 import { ProcessSelectionPage } from './components/ProcessSelectionPage';
 import { AvailableLockersPage } from './components/AvailableLockersPage';
@@ -12,7 +12,8 @@ import { ThankYouPage } from './components/ThankYouPage';
 import './styles/app.css';
 
 // --- FIREBASE IMPORTS ---
-import { db } from '../firebaseConfig'; 
+import { db, auth } from '../firebaseConfig'; 
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { 
   collection, 
   addDoc, 
@@ -20,7 +21,8 @@ import {
   where, 
   getDocs, 
   updateDoc, 
-  doc 
+  doc,
+  onSnapshot 
 } from 'firebase/firestore'; 
 
 import { useLockerSystem } from './lockerSystem'; 
@@ -42,12 +44,13 @@ export default function App() {
   const [selectedLockerId, setSelectedLockerId] = useState<number | null>(null);
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
   
-  // State for pricing and laundry type
+  // --- 1. DYNAMIC PRICING & SETTINGS STATE ---
+  const [pricing, setPricing] = useState({ clothesPrice: 25, bedSheetPrice: 40 });
+  const [shopName, setShopName] = useState<string>("CAJ Laundry Locker System"); 
+
   const [selectedPricePerKg, setSelectedPricePerKg] = useState<number>(25);
-  // NEW: State to store the selected laundry type name (e.g., 'Clothes' or 'Bed Sheets')
   const [selectedLaundryType, setSelectedLaundryType] = useState<string>('Clothes');
 
-  // Use the centralized hook for locker state
   const { lockers } = useLockerSystem();
 
   const [lastGeneratedPin, setLastGeneratedPin] = useState<string | null>(null);
@@ -56,6 +59,44 @@ export default function App() {
   const [lastPrice, setLastPrice] = useState<number>(0);   
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
+
+  // --- 2. AUTHENTICATION LISTENER (SYSTEM LOGIN) ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("✅ System Authenticated:", user.uid); 
+      } else {
+        console.log("⚠️ System not signed in. Signing in now..."); 
+        signInAnonymously(auth).catch((error) => {
+          console.error("❌ Auth Error:", error);
+          alert("System Error: Could not sign in to database. Check internet.");
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- 3. SETTINGS LISTENER (General + Pricing) ---
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "general"), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        console.log("✅ Settings Update:", data);
+        
+        // Update Shop Name
+        if (data.laundryShopName) {
+            setShopName(data.laundryShopName);
+        }
+
+        // Update Pricing (Check for fields, default if missing)
+        setPricing({
+          clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : 25,
+          bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : 40
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // --- NAVIGATION HANDLERS ---
   const handleWelcomeNext = () => setCurrentScreen('process-selection');
@@ -84,10 +125,9 @@ export default function App() {
     setCurrentScreen('laundry-type-selection');
   };
 
-  // UPDATED: Handler for Laundry Type Selection captures both price and type name
   const handleLaundryTypeSelect = (price: number, type: string) => {
     setSelectedPricePerKg(price);
-    setSelectedLaundryType(type); // Store the type name
+    setSelectedLaundryType(type); 
     setCurrentScreen('weighing-process');
   };
 
@@ -97,84 +137,82 @@ export default function App() {
 
   const handleAvailableLockersBack = () => setCurrentScreen('dropoff-instructions');
 
-  // --- HANDLE DROP OFF (LOCKER BECOMES OCCUPIED) ---
+  // --- HANDLE DROP OFF ---
   const handleDropOffComplete = async (finalPrice: number, finalWeight: number, phoneNumber?: string) => { 
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
     
+    // 1. Set the data for the Thank You page (don't navigate yet)
     setLastGeneratedPin(newPin);
     setLastTransactionId(newTransactionId);
     setLastWeight(finalWeight);
     setLastPrice(finalPrice);
 
-    setCurrentScreen('thank-you');
+    // 2. Check for Locker ID
+    if (!selectedLockerId) {
+      console.error("No locker selected!");
+      alert("Error: No locker selected. Please try again.");
+      return;
+    }
 
-    if (selectedLockerId) {
-      try {
-        // 1. Hardware Call
-        fetch('http://localhost:3000/api/lock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lockerId: selectedLockerId }),
-        }).catch(e => console.error("Hardware Error:", e));
+    try {
+      // 3. Hardware Lock (Non-blocking)
+      fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId: selectedLockerId }),
+      }).catch(e => console.error("Hardware Error:", e));
 
-        // 2. Create Transaction Record
-        await addDoc(collection(db, "transactions"), {
-          transactionId: newTransactionId,
-          lockerId: selectedLockerId,
-          pin: newPin,
-          price: finalPrice,
-          weight: finalWeight,
-          pricePerKg: selectedPricePerKg,
-          phoneNumber: phoneNumber || "N/A", 
-          type: selectedLaundryType, 
-          status: 'paid_pending',
-          laundryStatus: 'Pending', 
-          
-          // --- NEW: Initialize Reminder Fields ---
-          triggerReminder: false,
-          reminderSent: false,
-          // ---------------------------------------
-
-          timestamp: new Date()
-        });
-
-        // 3. Update Locker Status in DB
-        console.log(`Updating Locker ${selectedLockerId} to occupied...`);
+      // 4. CREATE TRANSACTION (Wait for this to finish!)
+      await addDoc(collection(db, "transactions"), {
+        transactionId: newTransactionId,
+        lockerId: selectedLockerId,
+        pin: newPin,
+        price: finalPrice,
+        weight: finalWeight,
+        pricePerKg: selectedPricePerKg,
+        phoneNumber: phoneNumber || "N/A", 
+        type: selectedLaundryType, 
+        status: 'paid_pending',
+        laundryStatus: 'Pending', 
         
-        const lockerRef = doc(db, "lockers", String(selectedLockerId)); 
+        triggerReminder: false,
+        reminderSent: false,
         
-        await updateDoc(lockerRef, { 
-          status: 'occupied',
-          currentTransactionId: newTransactionId 
-        });
-        
-        console.log("Locker DB update successful.");
+        triggerPrint: true, 
 
-      } catch (e) {
-        console.error("CRITICAL ERROR SAVING DATA:", e);
-      }
+        timestamp: new Date()
+      });
+
+      // 5. Update Locker Status
+      await updateDoc(doc(db, "lockers", String(selectedLockerId)), { 
+        status: 'occupied',
+        currentTransactionId: newTransactionId 
+      });
+
+      // 6. SUCCESS: Now render the Thank You page
+      setCurrentScreen('thank-you');
+
+    } catch (e) {
+      console.error("CRITICAL ERROR SAVING DATA:", e);
+      // 7. Alert the user if something goes wrong
+      alert("Failed to save transaction. Please check your internet connection.");
     }
   };
 
-  const handleWeighingBack = () => {
-    setCurrentScreen('laundry-type-selection');
-  };
-
+  const handleWeighingBack = () => setCurrentScreen('laundry-type-selection');
+  
   const handlePickupLockerSelect = (lockerId: number) => {
     setSelectedLockerId(lockerId);
     setCurrentScreen('pin-entry');
   };
 
   const handlePickupLockersBack = () => setCurrentScreen('process-selection');
-
   const handlePinVerified = () => setCurrentScreen('payment');
-
   const handlePinCancel = () => setCurrentScreen('pickup-lockers');
-
   const handlePaymentCancel = () => setCurrentScreen('pickup-lockers');
 
-  // --- HANDLE PICKUP (LOCKER BECOMES AVAILABLE) ---
+  // --- HANDLE PICKUP ---
   const handlePaymentComplete = async () => {
     const paymentId = `PAY-${Math.floor(Date.now() / 1000)}`;
     setLastTransactionId(paymentId);
@@ -186,14 +224,13 @@ export default function App() {
 
     if (selectedLockerId) {
       try {
-        // 1. Hardware Call (Unlocks the door)
         fetch('http://localhost:3000/api/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lockerId: selectedLockerId })
         }).catch(err => console.error("Unlock failed:", err));
 
-        // 2. Update Transaction to Completed
+        // --- 5. UPDATE TRANSACTION ---
         const q = query(
           collection(db, "transactions"),
           where("lockerId", "==", selectedLockerId),
@@ -205,33 +242,34 @@ export default function App() {
           updateDoc(doc(db, "transactions", d.id), {
             status: 'completed',
             pickedUpAt: new Date(),
-            paymentId: paymentId
+            paymentId: paymentId,
+            triggerPrint: true
           })
         );
         await Promise.all(updates);
 
-        // 3. Update Locker Status in DB
-        console.log(`Updating Locker ${selectedLockerId} to available...`);
-        
-        const lockerRef = doc(db, "lockers", String(selectedLockerId));
-        
-        await updateDoc(lockerRef, { 
+        await updateDoc(doc(db, "lockers", String(selectedLockerId)), { 
           status: 'available',
           currentTransactionId: null 
         });
 
-        console.log("Locker DB update successful.");
+        // 6. SUCCESS: Move to Thank You screen ONLY after updates succeed
+        setCurrentScreen('thank-you');
 
       } catch (e) {
         console.error("Error completing payment:", e);
+        alert("Payment recorded locally, but failed to sync. Please check connection.");
+        // Still show thank you to user since they paid
+        setCurrentScreen('thank-you'); 
       }
+    } else {
+        // Fallback if no locker selected
+        setCurrentScreen('thank-you');
     }
-    setCurrentScreen('thank-you');
   };
 
   const handleReset = useCallback(() => {
     if (processType === 'pickup' && selectedLockerId) {
-      console.log(`[RESET] Auto-locking Locker ${selectedLockerId} after pickup`);
       fetch('http://localhost:3000/api/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -244,7 +282,6 @@ export default function App() {
     setProcessType(null);
     setLastGeneratedPin(null);
     setLastTransactionId(null);
-    // Reset price and type to defaults
     setSelectedPricePerKg(25);
     setSelectedLaundryType('Clothes');
   }, [processType, selectedLockerId]);
@@ -252,7 +289,7 @@ export default function App() {
   return (
     <div className="app-container">
       <div className="kiosk-screen">
-        {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} />}
+        {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} shopName={shopName} />}
         
         {currentScreen === 'process-selection' && (
           <ProcessSelectionPage onSelect={handleProcessSelection} onBack={handleProcessBack} />
@@ -273,21 +310,20 @@ export default function App() {
           />
         )}
 
-        {/* LAUNDRY TYPE SELECTION */}
         {currentScreen === 'laundry-type-selection' && (
           <LaundryTypeSelectionPage 
             onSelect={handleLaundryTypeSelect}
             onBack={handleLaundryTypeBack}
+            pricing={pricing}
           />
         )}
         
-        {/* WEIGHING PROCESS */}
         {currentScreen === 'weighing-process' && selectedLockerId && (
           <WeighingPage 
             lockerId={selectedLockerId} 
             currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
-            // UPDATED: Pass the dynamic price
             pricePerKg={selectedPricePerKg}
+            doorStatus={lockers.find(l => l.id === selectedLockerId)?.doorStatus || 'CLOSED'}
             // @ts-ignore 
             onComplete={handleDropOffComplete} 
             onBack={handleWeighingBack}
