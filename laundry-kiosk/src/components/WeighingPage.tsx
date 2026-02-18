@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, X } from 'lucide-react';
+import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, X, AlertTriangle } from 'lucide-react';
 
 interface WeighingPageProps {
   lockerId: number;
@@ -23,6 +23,10 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
 
   // UPDATED: Calculate price based on the passed prop, not a hardcoded value
   const totalPrice = displayWeight * pricePerKg;
+
+  // --- NEW: Weight Limit Logic ---
+  const MAX_WEIGHT = 20.0;
+  const isOverweight = displayWeight > MAX_WEIGHT;
 
   // 1. Auto-Unlock on Mount
   useEffect(() => {
@@ -51,6 +55,11 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
     // --- NEW CHECK: Ensure door is closed ---
     if (doorStatus === 'OPEN') {
       alert("Please close the locker door before proceeding.");
+      return;
+    }
+
+    if (isOverweight) {
+      alert("Weight limit exceeded. Please reduce the load to under 20kg.");
       return;
     }
 
@@ -83,10 +92,11 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
   }, [step]);
 
   // --- STATE & HANDLERS FOR SMS ---
-  const [customerPhone, setCustomerPhone] = useState('');
+  // UPDATED: Default to '09'
+  const [customerPhone, setCustomerPhone] = useState('09');
 
-  // Valid if empty (skip) OR exactly 11 digits
-  const isSkipped = customerPhone.length === 0;
+  // UPDATED: Valid if it's just '09' (skipped) OR exactly 11 digits
+  const isSkipped = customerPhone === '09' || customerPhone.length === 0;
   const isComplete = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
   const isValidInput = isSkipped || isComplete;
 
@@ -97,11 +107,15 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
   };
 
   const handleBackspace = () => {
-    setCustomerPhone(prev => prev.slice(0, -1));
+    // UPDATED: Prevent deleting the '09' prefix
+    if (customerPhone.length > 2) {
+      setCustomerPhone(prev => prev.slice(0, -1));
+    }
   };
 
   const handleClear = () => {
-    setCustomerPhone('');
+    // UPDATED: Reset to '09' instead of empty string
+    setCustomerPhone('09');
   };
 
   // --- RENDER: STEP 1 - OPENING ---
@@ -148,7 +162,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
           gap: '16px'
         }}>
           
-          {/* Status Badge - Updated to reflect Door Status if needed, but keeping logic focused */}
+          {/* Status Badge */}
           <div className={`border px-4 py-1 rounded-full flex items-center gap-2 font-medium shadow-sm text-sm ${doorStatus === 'OPEN' ? 'bg-white border-green-200 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
             <DoorOpen size={16} />
             <span>{doorStatus === 'OPEN' ? 'Door Open' : 'Door Closed'} & Scale Active</span>
@@ -157,9 +171,9 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
           {/* Cards */}
           <div style={{ display: 'flex', width: '100%', maxWidth: '900px', gap: '24px', alignItems: 'stretch' }}>
              
-             {/* Weight Card */}
+             {/* Weight Card - UPDATED WITH WARNING */}
              <div style={{ 
-                 backgroundColor: '#2563eb', 
+                 backgroundColor: isOverweight ? '#ef4444' : '#2563eb', // Red if overweight, Blue otherwise
                  color: 'white',
                  borderRadius: '24px',
                  padding: '24px',
@@ -168,7 +182,8 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
                  flexDirection: 'column',
                  alignItems: 'center',
                  justifyContent: 'center',
-                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                 transition: 'background-color 0.3s ease'
              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px', opacity: 0.9 }}>
                    <Scale size={28} />
@@ -177,6 +192,14 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    {displayWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
                 </div>
+                
+                {/* Warning Message */}
+                {isOverweight && (
+                  <div className="flex items-center gap-2 mt-2 bg-white/20 px-3 py-1 rounded-full animate-pulse">
+                    <AlertTriangle size={18} className="text-white" />
+                    <span className="text-sm font-bold">Max 20kg Exceeded!</span>
+                  </div>
+                )}
              </div>
 
              {/* Price Card */}
@@ -205,19 +228,30 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
 
           <div className="flex items-center gap-2 text-gray-400 text-xs">
              <Info size={14} />
-             <span>Close door when finished.</span>
+             <span>Close door when finished. Maximum load is 20kg.</span>
           </div>
         </div>
 
-        {/* Action Button */}
+        {/* Action Button - UPDATED FOR OVERWEIGHT STATE */}
         <div style={{ padding: '16px 24px', width: '100%', borderTop: '1px solid #f3f4f6', backgroundColor: 'white' }}>
           <button 
             onClick={handleLock} 
-            disabled={displayWeight <= 0}
-            className={`btn-full ${displayWeight > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+            disabled={displayWeight <= 0 || isOverweight}
+            className={`btn-full ${
+              isOverweight 
+                ? 'bg-red-50 text-red-500 border-2 border-red-100 cursor-not-allowed' // Overweight style
+                : displayWeight > 0 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
             style={{ padding: '16px', fontSize: '20px' }}
           >
-            {displayWeight > 0 ? (
+            {isOverweight ? (
+               <div className="flex items-center justify-center gap-3">
+                  <AlertTriangle size={24} />
+                  <span>Limit Exceeded - Reduce Load</span>
+               </div>
+            ) : displayWeight > 0 ? (
                <div className="flex items-center justify-center gap-3">
                   <Lock size={24} />
                   <span>Lock Locker & Pay</span>
