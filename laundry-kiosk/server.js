@@ -355,28 +355,36 @@ function startPrinterListener() {
 }
 
 function executePrintCommand(data) {
-  const { transactionId, pin, processType, weight, price, type, shopName } = data;
-  const receiptText = `
-   ${shopName || "CAJ LAUNDRY LOCKER CO."}
+    // Dynamically find the printer port
+    const printerPorts = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
+    const PRINTER_PATH = printerPorts.find(p => fs.existsSync(p));
+
+    if (!PRINTER_PATH) {
+        console.error("❌ No USB Printer detected in /dev/usb/");
+        return;
+    }
+
+    const { transactionId, pin, processType, weight, price, shopName } = data;
+    const receiptText = `
+   ${shopName}
    --------------------------
    Date: ${new Date().toLocaleString()}
-   Trans #: ${transactionId || 'N/A'}
-   Service: ${processType ? processType.toUpperCase() : 'SERVICE'}
-   Type: ${type || 'Standard'}
+   Trans #: ${transactionId}
+   Service: ${processType.toUpperCase()}
    --------------------------
    Weight: ${Number(weight).toFixed(2)} kg
    Price:  PHP ${Number(price).toFixed(2)}
    --------------------------
-   ${processType === 'dropoff' 
-     ? `YOUR PIN: ${pin}\\n   Keep this PIN safe!` 
-     : `Status: PAID\\n   Locker is now open`
-   }
+   ${processType === 'dropoff' ? `PIN: ${pin}` : 'Status: PAID'}
    --------------------------
-   Thank you!
+   Thank you!\n\n\n
+    `;
 
-
-  `;
-  exec(`printf "${receiptText}" > /dev/usb/lp0`, (error) => {});
+    // Use echo with -e to interpret the newlines correctly
+    exec(`echo -e "${receiptText}" > ${PRINTER_PATH}`, (error) => {
+        if (error) console.error("Printer Error:", error);
+        else console.log(`📝 Printed to ${PRINTER_PATH}`);
+    });
 }
 
 // ==========================================================

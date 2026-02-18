@@ -18,10 +18,6 @@ LOG_FILE = "gsm_logs.log"
 STATE_FILE = "sys_state.json" 
 UPDATE_INTERVAL = 0.2         
 
-# --- HARDWARE PORTS ---
-ARDUINO_PORT_ID = "/dev/ttyUSB0"  
-GSM_PORT_ID = "/dev/ttyUSB1"      
-
 # --- LED COLOR DEFINITIONS ---
 LED_OFF = 0
 LED_RED = 1
@@ -58,30 +54,90 @@ else:
         print(f"⚠️ [FIREBASE] Init Error: {e}")
         db = None
 
+# --- DYNAMIC PORT DISCOVERY ---
+def find_ports():
+    """
+    Scans all available USB serial ports to identify which is the GSM module
+    and which is the Arduino based on their responses.
+    """
+    print("🔎 Scanning ports for devices...")
+    ports = serial.tools.list_ports.comports()
+    found_arduino = None
+    found_gsm = None
+
+    for port in ports:
+        # Skip internal Raspberry Pi Bluetooth/Serial ports
+        if "ttyAMA" in port.device: 
+            continue
+        
+        print(f"   👉 Testing {port.device}...")
+        try:
+            # Open port temporarily for testing
+            with serial.Serial(port.device, BAUD_RATE, timeout=1.5) as s:
+                time.sleep(2) # Wait for device reset (Arduino auto-resets on connect)
+                
+                # 1. TEST FOR GSM (Send AT command)
+                s.write(b'AT\r\n')
+                time.sleep(0.5)
+                response = s.read_all().decode('utf-8', errors='ignore')
+                
+                if "OK" in response:
+                    print(f"      📱 IDENTIFIED: GSM Module on {port.device}")
+                    found_gsm = port.device
+                    continue # Move to next port
+
+                # 2. TEST FOR ARDUINO (Listen for data stream)
+                # Arduino continuously sends "DATA|..."
+                start_time = time.time()
+                while time.time() - start_time < 3.0:
+                    line = s.readline().decode('utf-8', errors='ignore').strip()
+                    if line.startswith("DATA"):
+                        print(f"      🤖 IDENTIFIED: Arduino on {port.device}")
+                        found_arduino = port.device
+                        break
+        except Exception as e:
+            print(f"      ⚠️ Could not read {port.device}: {e}")
+            continue
+            
+    return found_arduino, found_gsm
+
 # --- HARDWARE CONNECTION ---
 def connect_hardware():
     print("--- Connecting to Hardware ---")
+    
+    # 1. Find the correct ports dynamically
+    ard_path, gsm_path = find_ports()
+    
+    # 2. Connect to Arduino
     ard = None
-    try:
-        print(f"🔎 Connecting to Arduino at {ARDUINO_PORT_ID}...")
-        ard = serial.Serial(ARDUINO_PORT_ID, BAUD_RATE, timeout=1)
-        time.sleep(2) 
-        print(f"✅ ARDUINO connected.")
-    except Exception as e:
-        print(f"⚠️ Arduino Connection Failed: {e}")
+    if ard_path:
+        try:
+            print(f"🔌 Opening Arduino Connection at {ard_path}...")
+            ard = serial.Serial(ard_path, BAUD_RATE, timeout=1)
+            time.sleep(2) 
+            print(f"✅ ARDUINO connected.")
+        except Exception as e:
+            print(f"⚠️ Arduino Connection Failed: {e}")
+    else:
+        print("❌ ARDUINO NOT DETECTED during scan.")
 
+    # 3. Connect to GSM
     modem = None
-    try:
-        print(f"🔎 Connecting to GSM at {GSM_PORT_ID}...")
-        modem = serial.Serial(GSM_PORT_ID, BAUD_RATE, timeout=1)
-        modem.write(b'AT\r\n')
-        time.sleep(0.5)
-        print(f"✅ GSM connected.")
-    except Exception as e:
-        print(f"⚠️ GSM Connection Failed: {e}")
+    if gsm_path:
+        try:
+            print(f"🔌 Opening GSM Connection at {gsm_path}...")
+            modem = serial.Serial(gsm_path, BAUD_RATE, timeout=1)
+            modem.write(b'AT\r\n')
+            time.sleep(0.5)
+            print(f"✅ GSM connected.")
+        except Exception as e:
+            print(f"⚠️ GSM Connection Failed: {e}")
+    else:
+        print("❌ GSM MODULE NOT DETECTED during scan.")
 
     return ard, modem
 
+# Initialize connections
 arduino, gsm = connect_hardware()
 
 # --- STATE TRACKING ---
