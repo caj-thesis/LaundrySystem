@@ -43,7 +43,8 @@ export function useLockerSystem() {
             price: trx.price, 
             pin: trx.pin, 
             laundryStatus: trx.laundryStatus,
-            weight: trx.weight // Ensure stored weight is loaded
+            weight: trx.weight, // Ensure stored weight is loaded
+            currentTransactionId: trx.transactionId // <-- ADDED: Map transaction ID here
           };
         } else {
           // If no active transaction, ensure it is available
@@ -54,7 +55,8 @@ export function useLockerSystem() {
               price: undefined, 
               pin: undefined, 
               laundryStatus: undefined,
-              weight: 0 
+              weight: 0,
+              currentTransactionId: undefined // <-- ADDED: Clear it out when available
             };
           }
           return locker;

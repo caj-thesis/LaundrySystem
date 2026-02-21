@@ -9,4 +9,5 @@ export interface Locker {
   doorStatus?: string;
   laundryStatus?: 'Dropped' | 'Processing' | 'Done';
   isConnected?: boolean; 
+  currentTransactionId?: string;
 }

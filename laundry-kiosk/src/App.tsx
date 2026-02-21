@@ -342,6 +342,7 @@ export default function App() {
           <PinCodePage 
             lockerId={selectedLocker.id}
             correctPin={selectedLocker.pin || '0000'}
+            transactionId={selectedLocker.currentTransactionId}
             onVerified={handlePinVerified}
             onCancel={handlePinCancel}
           />
