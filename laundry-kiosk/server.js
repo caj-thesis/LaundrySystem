@@ -365,6 +365,8 @@ function executePrintCommand(data) {
     }
 
     const { transactionId, pin, processType, weight, price, shopName } = data;
+    
+    // We use actual empty lines at the bottom to feed the paper
     const receiptText = `
    ${shopName}
    --------------------------
@@ -377,13 +379,19 @@ function executePrintCommand(data) {
    --------------------------
    ${processType === 'dropoff' ? `PIN: ${pin}` : 'Status: PAID'}
    --------------------------
-   Thank you!\n\n\n
-    `;
+   Thank you!
 
-    // Use echo with -e to interpret the newlines correctly
-    exec(`echo -e "${receiptText}" > ${PRINTER_PATH}`, (error) => {
-        if (error) console.error("Printer Error:", error);
-        else console.log(`📝 Printed to ${PRINTER_PATH}`);
+
+
+`; // The empty space above pushes the paper out so it can be torn
+
+    // 🚀 Use Node.js native file system to write directly to the printer
+    fs.writeFile(PRINTER_PATH, receiptText, (error) => {
+        if (error) {
+            console.error("Printer Error:", error);
+        } else {
+            console.log(`📝 Printed directly to ${PRINTER_PATH}`);
+        }
     });
 }
 
