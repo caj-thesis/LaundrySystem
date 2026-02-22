@@ -174,7 +174,7 @@ export default function App() {
         phoneNumber: phoneNumber || "N/A", 
         type: selectedLaundryType, 
         status: 'paid_pending',
-        laundryStatus: 'Pending', 
+        laundryStatus: 'Dropped', 
         
         triggerReminder: false,
         reminderSent: false,
