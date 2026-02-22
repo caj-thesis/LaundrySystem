@@ -260,6 +260,14 @@ function startLaundryStatusListener() {
                             reminderSent: false,    
                             triggerReminder: false
                         });
+                        
+                        // 👇 ADD THIS: Update the locker to trigger the Python LED listener
+                        if (data.lockerId) {
+                            await updateDoc(doc(db, "lockers", String(data.lockerId)), {
+                                laundryFinishedAt: new Date()
+                            });
+                        }
+                        
                     } catch (e) {}
                 }
             }
@@ -383,7 +391,7 @@ function executePrintCommand(data) {
 
 
 
-`; // The empty space above pushes the paper out so it can be torn
+`;
 
     // 🚀 Use Node.js native file system to write directly to the printer
     fs.writeFile(PRINTER_PATH, receiptText, (error) => {

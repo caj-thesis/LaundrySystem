@@ -213,6 +213,9 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
             trans_id = data.get('transactionId', 'N/A')
             pin = data.get('pin', 'N/A')
             
+            # 👇 ADD THIS: Get the locker ID from the transaction
+            locker_id = data.get('lockerId')
+            
             # Retrieve flags
             trigger_reminder = data.get('triggerReminder', False)
             reminder_sent_flag = data.get('reminderSent', False) 
@@ -259,6 +262,11 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
 
             # C. Pickup/Ready Notification
             elif status == 'Done':
+                
+                # 👇 ADD THIS: Force the LED to turn yellow immediately
+                if locker_id:
+                    send_led_command(str(locker_id), LED_YELLOW)
+
                 if not done_sms_sent and not reminder_sent_flag:
                     msg = (
                         f"{SHOP_NAME}\n"
