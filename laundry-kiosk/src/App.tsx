@@ -3,7 +3,6 @@ import { WelcomePage } from './components/WelcomePage';
 import { ProcessSelectionPage } from './components/ProcessSelectionPage';
 import { AvailableLockersPage } from './components/AvailableLockersPage';
 import { LaundryTypeSelectionPage } from './components/LaundryTypeSelectionPage'; 
-import { DropOffInstructionsPage } from './components/DropOffInstructionsPage';
 import { WeighingPage } from './components/WeighingPage';
 import { PickupLockersPage } from './components/PickupLockersPage';
 import { PinCodePage } from './components/PinCodePage';
@@ -30,7 +29,6 @@ import { useLockerSystem } from './lockerSystem';
 type Screen = 
   | 'welcome'
   | 'process-selection'
-  | 'dropoff-instructions'
   | 'available-lockers'
   | 'laundry-type-selection'
   | 'weighing-process'
@@ -104,21 +102,13 @@ export default function App() {
   const handleProcessSelection = (process: 'dropoff' | 'pickup') => {
     setProcessType(process);
     if (process === 'dropoff') {
-      setCurrentScreen('dropoff-instructions');
+      setCurrentScreen('available-lockers');
     } else {
       setCurrentScreen('pickup-lockers');
     }
   };
 
   const handleProcessBack = () => setCurrentScreen('welcome');
-
-  const handleInstructionsNext = () => {
-    setCurrentScreen('available-lockers');
-  };
-
-  const handleInstructionsBack = () => {
-    setCurrentScreen('process-selection');
-  };
 
   const handleLockerSelect = (lockerId: number) => {
     setSelectedLockerId(lockerId);
@@ -135,7 +125,7 @@ export default function App() {
     setCurrentScreen('available-lockers');
   };
 
-  const handleAvailableLockersBack = () => setCurrentScreen('dropoff-instructions');
+  const handleAvailableLockersBack = () => setCurrentScreen('process-selection');
 
   // --- HANDLE DROP OFF ---
   const handleDropOffComplete = async (finalPrice: number, finalWeight: number, phoneNumber?: string) => { 
@@ -293,13 +283,6 @@ export default function App() {
         
         {currentScreen === 'process-selection' && (
           <ProcessSelectionPage onSelect={handleProcessSelection} onBack={handleProcessBack} />
-        )}
-        
-        {currentScreen === 'dropoff-instructions' && (
-           <DropOffInstructionsPage 
-             onNext={handleInstructionsNext}
-             onBack={handleInstructionsBack}
-           />
         )}
         
         {currentScreen === 'available-lockers' && (
