@@ -420,74 +420,21 @@ signInAnonymously(auth).then(async () => {
 });
 
 // ==========================================================
-// API ENDPOINTS (Local & Offline Control)
+// API ENDPOINTS
 // ==========================================================
 
 app.get('/api/status', (req, res) => res.json(systemState));
 
-// Local Unlock Command
 app.post('/api/unlock', async (req, res) => {
     const { lockerId } = req.body;
-    
-    // 1. Instantly update local state for hardware to open NOW
-    const key = `l${lockerId}`;
-    if (systemState[key]) {
-        systemState[key].action = 'unlock';
-    }
-
-    // 2. Try to update Firebase so the Admin app knows (caches if offline)
-    try {
-        await setDoc(doc(db, "lockers", String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true });
-    } catch (e) {
-        console.log("Offline: Unlock synced to cache, will upload later.");
-    }
-    
+    await setDoc(doc(db, "lockers", String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true });
     res.json({ success: true });
 });
 
-// Local Lock Command
 app.post('/api/lock', async (req, res) => {
     const { lockerId } = req.body;
-    
-    // 1. Instantly update local state for hardware to lock NOW
-    const key = `l${lockerId}`;
-    if (systemState[key]) {
-        systemState[key].action = 'lock';
-    }
-
-    // 2. Try to update Firebase so the Admin app knows (caches if offline)
-    try {
-        await setDoc(doc(db, "lockers", String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true });
-    } catch (e) {
-        console.log("Offline: Lock synced to cache, will upload later.");
-    }
-
+    await setDoc(doc(db, "lockers", String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true });
     res.json({ success: true });
 });
 
-// Local Print Command
-app.post('/api/print', async (req, res) => {
-    try {
-        const data = req.body;
-        
-        let shopName = "CAJ LAUNDRY LOCKER CO.";
-        try {
-            const generalSnap = await getDoc(doc(db, "settings", "general"));
-            if (generalSnap.exists() && generalSnap.data().laundryShopName) {
-                shopName = generalSnap.data().laundryShopName.toUpperCase();
-            }
-        } catch (e) {
-            console.log("⚠️ Offline: Using default shop name for receipt.");
-        }
-
-        data.shopName = shopName;
-        executePrintCommand(data); // Calls your existing print function
-        
-        res.json({ success: true });
-    } catch (error) {
-        console.error("❌ Print API Error:", error);
-        res.status(500).json({ error: "Failed to print" });
-    }
-});
-
-app.listen(3000, () => console.log('🚀 Server running on 3000 with Hybrid Cloud/Local Control'));
+app.listen(3000, () => console.log('🚀 Server running on 3000'));
