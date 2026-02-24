@@ -480,6 +480,74 @@ function startPrinterListener() {
     });
 }
 
+// --- REMOTE ADMIN SYNC LISTENER ---
+function startRemoteTransactionSyncListener() {
+    console.log("🎧 Listening to 'transactions' for remote Admin changes...");
+    
+    startResilientSnapshotListener(collection(db, "transactions"), "transactions_sync", (snapshot) => {
+        let hasChanges = false;
+        
+        snapshot.docChanges().forEach((change) => {
+            // We only care if an existing transaction was modified or deleted remotely
+            if (change.type === 'modified' || change.type === 'removed') {
+                const remoteTx = change.doc.data();
+                const docId = change.doc.id;
+                const txId = remoteTx.transactionId || docId;
+                
+                // See if this transaction is actively tracked by the local kiosk
+                const localIndex = localTransactions.findIndex(tx => 
+                    tx.transactionId === txId || tx.firebaseDocId === docId
+                );
+
+                if (localIndex !== -1) {
+                    const localTx = localTransactions[localIndex];
+                    
+                    // If the Admin changed the status (e.g., forced 'completed', 'cancelled', or 'overdue')
+                    if (remoteTx.status !== localTx.status) {
+                        console.log(`[SYNC] 📥 Admin remotely changed TRX ${txId} status to: ${remoteTx.status}`);
+                        
+                        // Update the local database
+                        localTransactions[localIndex] = { 
+                            ...localTx, 
+                            ...remoteTx, 
+                            sync: { ...localTx.sync, transactionSynced: true } 
+                        };
+                        hasChanges = true;
+                        
+                        // If it's no longer pending, free up the physical locker on the UI!
+                        if (['completed', 'cancelled', 'overdue_archived'].includes(remoteTx.status)) {
+                            const lockerKey = `l${localTx.lockerId}`;
+                            if (systemState[lockerKey] && systemState[lockerKey].status === 'occupied') {
+                                systemState[lockerKey].status = 'available';
+                                console.log(`[SYNC] 🔓 Locker ${localTx.lockerId} forcefully marked as available.`);
+                            }
+                        }
+                    } 
+                    // Or if the Admin just updated the price, weight, or laundry status
+                    else if (
+                        remoteTx.price !== localTx.price || 
+                        remoteTx.weight !== localTx.weight ||
+                        remoteTx.laundryStatus !== localTx.laundryStatus
+                    ) {
+                         console.log(`[SYNC] 📥 Admin remotely updated details for TRX ${txId}`);
+                         localTransactions[localIndex] = { 
+                             ...localTx, 
+                             ...remoteTx, 
+                             sync: { ...localTx.sync, transactionSynced: true } 
+                         };
+                         hasChanges = true;
+                    }
+                }
+            }
+        });
+
+        // Save changes to the JSON file so they persist if the kiosk reboots
+        if (hasChanges) {
+            persistLocalTransactions();
+        }
+    });
+}
+
 function executePrintCommand(data) {
     // Dynamically find the printer port
     const printerPorts = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
@@ -538,7 +606,18 @@ async function syncTransactionToFirebase(tx) {
     }
 
     try {
+        // 1. Save the transaction itself
         await setDoc(doc(db, 'transactions', transactionDocId), payload, { merge: true });
+        
+        // 2. NEW: Update the locker document to show it is occupied by this transaction
+        if (payload.status === 'paid_pending' || payload.status === 'processing') {
+             await setDoc(doc(db, 'lockers', String(tx.lockerId)), {
+                 status: 'occupied',
+                 currentTransactionId: transactionDocId,
+                 timestamp: new Date()
+             }, { merge: true });
+        }
+
         tx.firebaseDocId = transactionDocId;
         tx.sync = { ...tx.sync, transactionSynced: true, lastError: null };
         persistLocalTransactions();
@@ -553,6 +632,7 @@ async function syncPickupToFirebase(tx) {
     if (tx.sync?.pickupSynced) return;
 
     try {
+        // 1. Mark transaction as completed
         if (tx.firebaseDocId) {
             await updateDoc(doc(db, 'transactions', tx.firebaseDocId), {
                 status: 'completed',
@@ -576,6 +656,13 @@ async function syncPickupToFirebase(tx) {
             }));
             await Promise.all(updates);
         }
+
+        // 2. NEW: Clear the locker document so it shows as available in the Admin Panel
+        await updateDoc(doc(db, 'lockers', String(tx.lockerId)), {
+            status: 'available',
+            currentTransactionId: null,
+            timestamp: new Date()
+        });
 
         tx.sync = { ...tx.sync, pickupSynced: true, lastError: null };
         persistLocalTransactions();
@@ -608,6 +695,7 @@ signInAnonymously(auth).then(async () => {
     startPrinterListener();
     startLaundryStatusListener();
     startOverdueListener();
+    startRemoteTransactionSyncListener();
     checkOverduePickups();
 }).catch((error) => {
     console.error('⚠️ [FIREBASE] Running in offline-first mode:', error?.message || error);
