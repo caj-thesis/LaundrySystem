@@ -16,6 +16,7 @@ sys.stdout.reconfigure(line_buffering=True)
 BAUD_RATE = 115200 
 LOG_FILE = "gsm_logs.log"
 STATE_FILE = "sys_state.json" 
+LOCKER_ACTIONS_FILE = "locker_actions.json"
 UPDATE_INTERVAL = 0.2         
 
 # --- LED COLOR DEFINITIONS ---
@@ -336,12 +337,54 @@ if db:
     except Exception as e:
         print(f"Listener Error: {e}")
 
+
+
+def consume_local_actions():
+    if not arduino or not arduino.is_open:
+        return
+
+    if not os.path.exists(LOCKER_ACTIONS_FILE):
+        return
+
+    try:
+        with open(LOCKER_ACTIONS_FILE, 'r') as f:
+            commands = json.load(f)
+    except Exception:
+        return
+
+    if not isinstance(commands, list) or len(commands) == 0:
+        return
+
+    remaining = []
+    for cmd in commands:
+        locker_id = str(cmd.get('lockerId', ''))
+        action = str(cmd.get('action', '')).upper()
+        prefix = 'u' if action == 'UNLOCK' else 'l' if action == 'LOCK' else None
+
+        if prefix and locker_id in ['1', '2', '3']:
+            try:
+                arduino.write(f"{prefix}{locker_id}\n".encode('utf-8'))
+                print(f"📤 Local Action: {action} -> Locker {locker_id}")
+            except Exception as e:
+                print(f"❌ Local command failed: {e}")
+                remaining.append(cmd)
+        else:
+            remaining.append(cmd)
+
+    try:
+        with open(LOCKER_ACTIONS_FILE, 'w') as f:
+            json.dump(remaining, f)
+    except Exception:
+        pass
+
 # --- MAIN LOOP ---
 print("🚀 Hybrid Bridge Running...")
 last_file_update = 0
 last_heartbeat = time.time()
 
 while True:
+    consume_local_actions()
+
     if arduino and arduino.in_waiting:
         try:
             line = arduino.readline().decode('utf-8', errors='ignore').strip()
