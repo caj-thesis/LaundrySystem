@@ -10,20 +10,6 @@ import { PaymentPage } from './components/PaymentPage';
 import { ThankYouPage } from './components/ThankYouPage';
 import './styles/app.css';
 
-// --- FIREBASE IMPORTS ---
-import { db, auth } from '../firebaseConfig'; 
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
-  updateDoc, 
-  doc,
-  onSnapshot 
-} from 'firebase/firestore'; 
-
 import { useLockerSystem } from './lockerSystem'; 
 
 type Screen = 
@@ -58,43 +44,29 @@ export default function App() {
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
-  // --- 2. AUTHENTICATION LISTENER (SYSTEM LOGIN) ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log("✅ System Authenticated:", user.uid); 
-      } else {
-        console.log("⚠️ System not signed in. Signing in now..."); 
-        signInAnonymously(auth).catch((error) => {
-          console.error("❌ Auth Error:", error);
-          alert("System Error: Could not sign in to database. Check internet.");
-        });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/settings');
+        if (!response.ok) return;
+        const data = await response.json();
 
-  // --- 3. SETTINGS LISTENER (General + Pricing) ---
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "general"), (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        console.log("✅ Settings Update:", data);
-        
-        // Update Shop Name
-        if (data.laundryShopName) {
-            setShopName(data.laundryShopName);
-        }
-
-        // Update Pricing (Check for fields, default if missing)
+        if (data.laundryShopName) setShopName(data.laundryShopName);
         setPricing({
           clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : 25,
           bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : 40
         });
+      } catch (error) {
+        // Keep defaults in offline mode
       }
-    });
-    return () => unsub();
+    };
+
+    fetchSettings();
+    const interval = setInterval(fetchSettings, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+
 
   // --- NAVIGATION HANDLERS ---
   const handleWelcomeNext = () => setCurrentScreen('process-selection');
@@ -153,31 +125,26 @@ export default function App() {
         body: JSON.stringify({ lockerId: selectedLockerId }),
       }).catch(e => console.error("Hardware Error:", e));
 
-      // 4. CREATE TRANSACTION (Wait for this to finish!)
-      await addDoc(collection(db, "transactions"), {
-        transactionId: newTransactionId,
-        lockerId: selectedLockerId,
-        pin: newPin,
-        price: finalPrice,
-        weight: finalWeight,
-        pricePerKg: selectedPricePerKg,
-        phoneNumber: phoneNumber || "N/A", 
-        type: selectedLaundryType, 
-        status: 'paid_pending',
-        laundryStatus: 'Dropped', 
-        
-        triggerReminder: false,
-        reminderSent: false,
-        
-        triggerPrint: true, 
-
-        timestamp: new Date()
-      });
-
-      // 5. Update Locker Status
-      await updateDoc(doc(db, "lockers", String(selectedLockerId)), { 
-        status: 'occupied',
-        currentTransactionId: newTransactionId 
+      // 4. Save local transaction first, then server syncs to Firebase when available
+      await fetch('http://localhost:3000/api/dropoff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: newTransactionId,
+          lockerId: selectedLockerId,
+          pin: newPin,
+          price: finalPrice,
+          weight: finalWeight,
+          pricePerKg: selectedPricePerKg,
+          phoneNumber: phoneNumber || 'N/A',
+          type: selectedLaundryType,
+          status: 'paid_pending',
+          laundryStatus: 'Dropped',
+          triggerReminder: false,
+          reminderSent: false,
+          triggerPrint: true,
+          timestamp: new Date()
+        })
       });
 
       // 6. SUCCESS: Now render the Thank You page
@@ -186,7 +153,7 @@ export default function App() {
     } catch (e) {
       console.error("CRITICAL ERROR SAVING DATA:", e);
       // 7. Alert the user if something goes wrong
-      alert("Failed to save transaction. Please check your internet connection.");
+      alert("Failed to save local transaction. Please check kiosk service.");
     }
   };
 
@@ -220,27 +187,11 @@ export default function App() {
           body: JSON.stringify({ lockerId: selectedLockerId })
         }).catch(err => console.error("Unlock failed:", err));
 
-        // --- 5. UPDATE TRANSACTION ---
-        const q = query(
-          collection(db, "transactions"),
-          where("lockerId", "==", selectedLockerId),
-          where("status", "==", "paid_pending")
-        );
-
-        const querySnapshot = await getDocs(q);
-        const updates = querySnapshot.docs.map(d => 
-          updateDoc(doc(db, "transactions", d.id), {
-            status: 'completed',
-            pickedUpAt: new Date(),
-            paymentId: paymentId,
-            triggerPrint: true
-          })
-        );
-        await Promise.all(updates);
-
-        await updateDoc(doc(db, "lockers", String(selectedLockerId)), { 
-          status: 'available',
-          currentTransactionId: null 
+        // --- 5. UPDATE TRANSACTION (local-first) ---
+        await fetch('http://localhost:3000/api/pickup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lockerId: selectedLockerId, paymentId })
         });
 
         // 6. SUCCESS: Move to Thank You screen ONLY after updates succeed
@@ -248,7 +199,7 @@ export default function App() {
 
       } catch (e) {
         console.error("Error completing payment:", e);
-        alert("Payment recorded locally, but failed to sync. Please check connection.");
+        alert("Payment completed, but local sync service had an issue.");
         // Still show thank you to user since they paid
         setCurrentScreen('thank-you'); 
       }
