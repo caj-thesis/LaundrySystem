@@ -131,6 +131,15 @@ function enqueueLockerAction(lockerId, action) {
     writeJsonFile(LOCKER_ACTIONS_FILE, commands);
 }
 
+function markLockerAvailableAndLock(lockerId) {
+    const key = `l${lockerId}`;
+    if (systemState[key]) {
+        systemState[key].status = 'available';
+        systemState[key].action = 'lock';
+    }
+    enqueueLockerAction(lockerId, 'lock');
+}
+
 function getActiveTransactionByLocker(lockerId) {
     return localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.status === 'paid_pending');
 }
@@ -522,7 +531,7 @@ function startRemoteTransactionSyncListener() {
                         if (['completed', 'cancelled', 'overdue_archived'].includes(remoteTx.status)) {
                             const lockerKey = `l${localTx.lockerId}`;
                             if (systemState[lockerKey] && systemState[lockerKey].status === 'occupied') {
-                                systemState[lockerKey].status = 'available';
+                                markLockerAvailableAndLock(localTx.lockerId);
                                 console.log(`[SYNC] 🔓 Locker ${localTx.lockerId} forcefully marked as available.`);
                             }
                         }
@@ -670,6 +679,7 @@ async function syncPickupToFirebase(tx) {
         // 2. NEW: Clear the locker document so it shows as available in the Admin Panel
         await updateDoc(doc(db, 'lockers', String(tx.lockerId)), {
             status: 'available',
+            action: 'lock',
             currentTransactionId: null,
             timestamp: new Date()
         });
@@ -788,17 +798,19 @@ app.post('/api/pickup', (req, res) => {
     });
     persistLocalTransactions();
 
-    const key = `l${lockerId}`;
-    if (systemState[key]) {
-        systemState[key].status = 'available';
-    }
+    markLockerAvailableAndLock(lockerId);
 
-    const completedTx = localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.paymentId === paymentId);
-    if (completedTx) {
+    const completedTransactions = localTransactions.filter((tx) =>
+        tx.lockerId === Number(lockerId) &&
+        tx.status === 'completed' &&
+        !tx.sync?.pickupSynced
+    );
+
+    completedTransactions.forEach((completedTx) => {
         syncPickupToFirebase(completedTx).catch(() => {
             console.error('⚠️ Pickup sync queued for Firebase retry.');
         });
-    }
+    });
 
     res.json({ success: true });
 });
