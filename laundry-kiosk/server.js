@@ -43,6 +43,10 @@ let systemState = {
   lastUpdated: 0
 };
 
+let firebaseReady = false;
+let firebaseBootstrapped = false;
+let authRetryTimer = null;
+
 function readJsonFile(filePath, fallback) {
     try {
         if (!fs.existsSync(filePath)) return fallback;
@@ -595,6 +599,9 @@ function executePrintCommand(data) {
 
 async function syncTransactionToFirebase(tx) {
     if (tx.sync?.transactionSynced) return;
+    if (!firebaseReady) {
+        throw new Error('Firebase unavailable. Transaction queued for retry.');
+    }
 
     const payload = { ...tx };
     delete payload.sync;
@@ -630,6 +637,9 @@ async function syncTransactionToFirebase(tx) {
 
 async function syncPickupToFirebase(tx) {
     if (tx.sync?.pickupSynced) return;
+    if (!firebaseReady) {
+        throw new Error('Firebase unavailable. Pickup sync queued for retry.');
+    }
 
     try {
         // 1. Mark transaction as completed
@@ -686,8 +696,10 @@ async function reconcileLocalTransactions() {
     }
 }
 
-signInAnonymously(auth).then(async () => {
-    console.log('✅ [FIREBASE] Authenticated');
+async function bootstrapFirebaseServices() {
+    if (firebaseBootstrapped) return;
+
+    firebaseBootstrapped = true;
     await initializeSettings();
     await initializeLockers();
     startDatabaseListener();
@@ -697,9 +709,36 @@ signInAnonymously(auth).then(async () => {
     startOverdueListener();
     startRemoteTransactionSyncListener();
     checkOverduePickups();
-}).catch((error) => {
-    console.error('⚠️ [FIREBASE] Running in offline-first mode:', error?.message || error);
-});
+}
+
+async function connectFirebaseAuth() {
+    try {
+        await signInAnonymously(auth);
+        firebaseReady = true;
+
+        if (authRetryTimer) {
+            clearTimeout(authRetryTimer);
+            authRetryTimer = null;
+        }
+
+        console.log('✅ [FIREBASE] Authenticated');
+        await bootstrapFirebaseServices();
+        await reconcileLocalTransactions();
+    } catch (error) {
+        firebaseReady = false;
+        console.error('⚠️ [FIREBASE] Running in offline-first mode:', error?.message || error);
+
+        if (!authRetryTimer) {
+            authRetryTimer = setTimeout(() => {
+                authRetryTimer = null;
+                console.log('🔁 [FIREBASE] Retrying anonymous auth...');
+                connectFirebaseAuth();
+            }, 15000);
+        }
+    }
+}
+
+connectFirebaseAuth();
 
 // ==========================================================
 // API ENDPOINTS
@@ -768,9 +807,11 @@ app.post('/api/unlock', (req, res) => {
     const { lockerId } = req.body;
     enqueueLockerAction(lockerId, 'unlock');
 
-    setDoc(doc(db, 'lockers', String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true }).catch((error) => {
-        console.error('⚠️ Remote unlock command not sent to Firebase:', error);
-    });
+    if (firebaseReady) {
+        setDoc(doc(db, 'lockers', String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true }).catch((error) => {
+            console.error('⚠️ Remote unlock command not sent to Firebase:', error);
+        });
+    }
 
     res.json({ success: true });
 });
@@ -779,9 +820,11 @@ app.post('/api/lock', (req, res) => {
     const { lockerId } = req.body;
     enqueueLockerAction(lockerId, 'lock');
 
-    setDoc(doc(db, 'lockers', String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true }).catch((error) => {
-        console.error('⚠️ Remote lock command not sent to Firebase:', error);
-    });
+    if (firebaseReady) {
+        setDoc(doc(db, 'lockers', String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true }).catch((error) => {
+            console.error('⚠️ Remote lock command not sent to Firebase:', error);
+        });
+    }
 
     res.json({ success: true });
 });
