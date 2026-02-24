@@ -1,0 +1,24 @@
+[
+  {
+    "transactionId": "TRX-1771929377",
+    "lockerId": 1,
+    "pin": "7357",
+    "price": 62.5,
+    "weight": 2.5,
+    "pricePerKg": 25,
+    "phoneNumber": "09978533024",
+    "type": "Clothes",
+    "status": "paid_pending",
+    "laundryStatus": "Dropped",
+    "triggerReminder": false,
+    "reminderSent": false,
+    "triggerPrint": true,
+    "timestamp": "2026-02-24T10:36:17.469Z",
+    "sync": {
+      "transactionSynced": true,
+      "pickupSynced": false,
+      "lastError": null
+    },
+    "firebaseDocId": "TRX-1771929377"
+  }
+]
