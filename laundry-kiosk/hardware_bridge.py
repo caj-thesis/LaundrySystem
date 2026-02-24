@@ -17,7 +17,8 @@ BAUD_RATE = 115200
 LOG_FILE = "gsm_logs.log"
 STATE_FILE = "sys_state.json" 
 LOCKER_ACTIONS_FILE = "locker_actions.json"
-UPDATE_INTERVAL = 0.2         
+UPDATE_INTERVAL = 0.2 
+RECONNECT_INTERVAL = 3.0        
 
 # --- LED COLOR DEFINITIONS ---
 LED_OFF = 0
@@ -137,6 +138,27 @@ def connect_hardware():
         print("❌ GSM MODULE NOT DETECTED during scan.")
 
     return ard, modem
+
+def reconnect_arduino_if_needed(current_arduino, last_attempt_ts):
+    """
+    Recover from transient serial disconnects (common when the USB device resets).
+    Keeps the kiosk operational offline by restoring local DATA stream updates.
+    """
+    if current_arduino and current_arduino.is_open:
+        return current_arduino, last_attempt_ts
+
+    now = time.time()
+    if now - last_attempt_ts < RECONNECT_INTERVAL:
+        return current_arduino, last_attempt_ts
+
+    print("🔁 Attempting Arduino reconnection...")
+    new_arduino, _ = connect_hardware()
+    if new_arduino and new_arduino.is_open:
+        print("✅ Arduino reconnected. Restoring local hardware stream.")
+        return new_arduino, now
+
+    return current_arduino, now
+
 
 # Initialize connections
 arduino, gsm = connect_hardware()
@@ -381,8 +403,10 @@ def consume_local_actions():
 print("🚀 Hybrid Bridge Running...")
 last_file_update = 0
 last_heartbeat = time.time()
+last_reconnect_attempt = 0
 
 while True:
+    arduino, last_reconnect_attempt = reconnect_arduino_if_needed(arduino, last_reconnect_attempt)
     consume_local_actions()
 
     if arduino and arduino.in_waiting:
@@ -409,12 +433,16 @@ while True:
                             l_data = part.split(':')
                             l_id = l_data[0].replace('L', '') 
                             door_status = l_data[2]      
-                            conn_flag = l_data[3].strip() 
+                            conn_flag = l_data[3].strip() if len(l_data) > 3 else None
                             
-                            is_hw_connected = (conn_flag == "1")
-
+                            # Support both payload formats:
+                            # 1) DATA|L1:1.2:OPEN:1 (with connectivity flag)
+                            # 2) DATA|L1:1.2:OPEN   (legacy/no flag -> assume connected)
+                            is_hw_connected = (conn_flag == "1") if conn_flag is not None else True
+                            
                             if local_connection_states.get(l_id) != is_hw_connected:
-                                print(f"🔌 Locker {l_id} Status Change: Received Flag='{conn_flag}' -> Connected={is_hw_connected}")
+                                conn_display = conn_flag if conn_flag is not None else "(missing)"
+                                print(f"🔌 Locker {l_id} Status Change: Received Flag='{conn_display}' -> Connected={is_hw_connected}")
                                 local_connection_states[l_id] = is_hw_connected
                                 
                                 if db:
@@ -444,6 +472,11 @@ while True:
 
         except Exception as e:
             print(f"Serial Read Error: {e}")
+            try:
+                if arduino and arduino.is_open:
+                    arduino.close()
+            except Exception:
+                pass
 
     # WATCHDOG
     if time.time() - last_heartbeat > 5.0:
