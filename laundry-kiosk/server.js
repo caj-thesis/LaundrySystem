@@ -61,6 +61,45 @@ function writeJsonFile(filePath, data) {
     }
 }
 
+function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs = 5000) {
+    let unsubscribe = null;
+    let retryTimer = null;
+
+    const connect = () => {
+        if (unsubscribe) {
+            unsubscribe();
+            unsubscribe = null;
+        }
+
+        unsubscribe = onSnapshot(
+            targetRef,
+            (snapshot) => {
+                if (retryTimer) {
+                    clearTimeout(retryTimer);
+                    retryTimer = null;
+                }
+                onNext(snapshot);
+            },
+            (error) => {
+                console.error(`[FIREBASE LISTENER] ${label} failed:`, error?.message || error);
+                if (unsubscribe) {
+                    unsubscribe();
+                    unsubscribe = null;
+                }
+                if (!retryTimer) {
+                    retryTimer = setTimeout(() => {
+                        retryTimer = null;
+                        console.log(`[FIREBASE LISTENER] Reconnecting ${label}...`);
+                        connect();
+                    }, retryDelayMs);
+                }
+            }
+        );
+    };
+
+    connect();
+}
+
 let localSettings = readJsonFile(LOCAL_SETTINGS_FILE, {
     laundryShopName: 'CAJ Laundry Locker System',
     clothesPrice: 25,
@@ -221,7 +260,7 @@ async function initializeLockers() {
 function startSettingsListener() {
     console.log("🎧 Listening to 'settings/general'...");
 
-    onSnapshot(doc(db, "settings", "general"), (docSnap) => {
+    startResilientSnapshotListener(doc(db, "settings", "general"), "settings/general", (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
 
@@ -299,7 +338,7 @@ async function processOverdueReset(lockerId) {
 
 function startOverdueListener() {
     console.log("🎧 Listening to 'overdue_logs'...");
-    onSnapshot(collection(db, "overdue_logs"), (snapshot) => {
+    startResilientSnapshotListener(collection(db, "overdue_logs"), "overdue_logs", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'modified') {
                 const data = change.doc.data();
@@ -328,7 +367,7 @@ function startOverdueListener() {
 function startLaundryStatusListener() {
     console.log("🎧 Listening to 'transactions' for 'Done' status...");
     const q = query(collection(db, "transactions"), where("status", "==", "paid_pending"));
-    onSnapshot(q, (snapshot) => {
+    startResilientSnapshotListener(q, "transactions(paid_pending)", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             const data = change.doc.data();
             if (change.type === 'added' || change.type === 'modified') {
@@ -390,7 +429,7 @@ setInterval(checkOverduePickups, 30 * 1000);
 
 function startDatabaseListener() {
     console.log("🎧 Listening to 'lockers' collection...");
-    onSnapshot(collection(db, "lockers"), (snapshot) => {
+    startResilientSnapshotListener(collection(db, "lockers"), "lockers", (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const data = change.doc.data();
             const id = change.doc.id; 
@@ -410,7 +449,7 @@ function startDatabaseListener() {
 
 function startPrinterListener() {
     const q = query(collection(db, "transactions"), where("triggerPrint", "==", true));
-    onSnapshot(q, (snapshot) => {
+    startResilientSnapshotListener(q, "transactions(triggerPrint)", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added' || change.type === 'modified') {
                 const data = change.doc.data();
