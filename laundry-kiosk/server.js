@@ -215,16 +215,16 @@ async function initializeSettings() {
             laundryShopName: "CAJ Laundry Locker System",
             overdueHours: 48,
             clothesPrice: 25,  
-            bedSheetPrice: 40    
+            bedSheetPrice: 40,
             minClothesPrice: 50,   
-            minBedSheetPrice: 50
+            minBedSheetPrice: 50,
+            receiptFootnote: "Thank you for using our service!" 
         };
 
         if (!generalSnap.exists()) {
             console.log("⚙️  Initializing 'settings/general' with default prices...");
             await setDoc(generalRef, defaultSettings);
         } else {
-            // Patch missing fields if they don't exist
             const data = generalSnap.data();
             const updates = {};
             
@@ -234,6 +234,7 @@ async function initializeSettings() {
             if (data.minBedSheetPrice === undefined) updates.minBedSheetPrice = defaultSettings.minBedSheetPrice;    
             if (data.overdueHours === undefined) updates.overdueHours = defaultSettings.overdueHours;
             if (data.laundryShopName === undefined) updates.laundryShopName = defaultSettings.laundryShopName;
+            if (data.receiptFootnote === undefined) updates.receiptFootnote = defaultSettings.receiptFootnote; 
 
             if (Object.keys(updates).length > 0) {
                  console.log("⚙️  Patching 'settings/general' with new merged fields...", updates);
@@ -289,6 +290,7 @@ function startSettingsListener() {
                 bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : localSettings.bedSheetPrice
                 minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : localSettings.minClothesPrice,     
                 minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice
+                receiptFootnote: data.receiptFootnote !== undefined ? data.receiptFootnote : localSettings.receiptFootnote
             };
             writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
@@ -476,10 +478,17 @@ function startPrinterListener() {
                 const id = change.doc.id;
                 
                 let shopName = "CAJ LAUNDRY LOCKER CO.";
+                let receiptFootnote = "Thank you!"; 
+                
                 try {
                     const generalSnap = await getDoc(doc(db, "settings", "general"));
-                    if (generalSnap.exists() && generalSnap.data().laundryShopName) {
-                        shopName = generalSnap.data().laundryShopName.toUpperCase();
+                    if (generalSnap.exists()) {
+                        if (generalSnap.data().laundryShopName) {
+                            shopName = generalSnap.data().laundryShopName.toUpperCase();
+                        }
+                        if (generalSnap.data().receiptFootnote) {
+                            receiptFootnote = generalSnap.data().receiptFootnote;
+                        }
                     }
                 } catch (e) {}
 
@@ -491,7 +500,8 @@ function startPrinterListener() {
                     weight: data.weight,
                     price: data.price,
                     type: data.type,
-                    shopName: shopName
+                    shopName: shopName,
+                    receiptFootnote: receiptFootnote 
                 };
                 executePrintCommand(printPayload);
                 try { await updateDoc(doc(db, "transactions", id), { triggerPrint: false }); } catch (e) {}
@@ -578,7 +588,8 @@ function executePrintCommand(data) {
         return;
     }
 
-    const { transactionId, pin, processType, weight, price, shopName } = data;
+    // Extract receiptFootnote here
+    const { transactionId, pin, processType, weight, price, shopName, receiptFootnote } = data;
     
     // We use actual empty lines at the bottom to feed the paper
     const receiptText = `
@@ -593,7 +604,7 @@ function executePrintCommand(data) {
    --------------------------
    ${processType === 'dropoff' ? `PIN: ${pin}` : 'Status: PAID'}
    --------------------------
-   Thank you!
+   ${receiptFootnote || 'Thank you!'}
 
 
 
