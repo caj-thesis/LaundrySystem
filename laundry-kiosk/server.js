@@ -107,9 +107,10 @@ function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs =
 let localSettings = readJsonFile(LOCAL_SETTINGS_FILE, {
     laundryShopName: 'CAJ Laundry Locker System',
     clothesPrice: 25,
-    bedSheetPrice: 40
+    bedSheetPrice: 40,
     minClothesPrice: 50,
-    minBedSheetPrice: 50
+    minBedSheetPrice: 50,
+    receiptFootnote: 'Thank you for using our service!'
 });
 writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
@@ -228,13 +229,13 @@ async function initializeSettings() {
             const data = generalSnap.data();
             const updates = {};
             
-            if (data.clothesPrice === undefined) updates.clothesPrice = defaultSettings.clothesPrice;
-            if (data.bedSheetPrice === undefined) updates.bedSheetPrice = defaultSettings.bedSheetPrice;
-            if (data.minClothesPrice === undefined) updates.minClothesPrice = defaultSettings.minClothesPrice;   
-            if (data.minBedSheetPrice === undefined) updates.minBedSheetPrice = defaultSettings.minBedSheetPrice;    
-            if (data.overdueHours === undefined) updates.overdueHours = defaultSettings.overdueHours;
-            if (data.laundryShopName === undefined) updates.laundryShopName = defaultSettings.laundryShopName;
-            if (data.receiptFootnote === undefined) updates.receiptFootnote = defaultSettings.receiptFootnote; 
+            if (data.clothesPrice === undefined || data.clothesPrice === null) updates.clothesPrice = defaultSettings.clothesPrice;
+            if (data.bedSheetPrice === undefined || data.bedSheetPrice === null) updates.bedSheetPrice = defaultSettings.bedSheetPrice;
+            if (data.minClothesPrice === undefined || data.minClothesPrice === null) updates.minClothesPrice = defaultSettings.minClothesPrice;
+            if (data.minBedSheetPrice === undefined || data.minBedSheetPrice === null) updates.minBedSheetPrice = defaultSettings.minBedSheetPrice;
+            if (data.overdueHours === undefined || data.overdueHours === null) updates.overdueHours = defaultSettings.overdueHours;
+            if (data.laundryShopName === undefined || data.laundryShopName === null || data.laundryShopName === '') updates.laundryShopName = defaultSettings.laundryShopName;
+            if (data.receiptFootnote === undefined || data.receiptFootnote === null || data.receiptFootnote === '') updates.receiptFootnote = defaultSettings.receiptFootnote; 
 
             if (Object.keys(updates).length > 0) {
                  console.log("⚙️  Patching 'settings/general' with new merged fields...", updates);
@@ -287,9 +288,9 @@ function startSettingsListener() {
                 ...localSettings,
                 laundryShopName: data.laundryShopName || localSettings.laundryShopName,
                 clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : localSettings.clothesPrice,
-                bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : localSettings.bedSheetPrice
+                bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : localSettings.bedSheetPrice,
                 minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : localSettings.minClothesPrice,     
-                minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice
+                minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice,
                 receiptFootnote: data.receiptFootnote !== undefined ? data.receiptFootnote : localSettings.receiptFootnote
             };
             writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
