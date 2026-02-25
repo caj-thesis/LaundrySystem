@@ -108,6 +108,8 @@ let localSettings = readJsonFile(LOCAL_SETTINGS_FILE, {
     laundryShopName: 'CAJ Laundry Locker System',
     clothesPrice: 25,
     bedSheetPrice: 40
+    minClothesPrice: 50,
+    minBedSheetPrice: 50
 });
 writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
@@ -204,7 +206,6 @@ setInterval(updateStateFromFile, 200);
 // ==========================================================
 
 // --- 2. AUTO-INITIALIZE SETTINGS (MERGED) ---
-// Now forces prices into 'settings/general'
 async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
@@ -213,8 +214,10 @@ async function initializeSettings() {
         const defaultSettings = {
             laundryShopName: "CAJ Laundry Locker System",
             overdueHours: 48,
-            clothesPrice: 25,    // Merged price
-            bedSheetPrice: 40    // Merged price
+            clothesPrice: 25,  
+            bedSheetPrice: 40    
+            minClothesPrice: 50,   
+            minBedSheetPrice: 50
         };
 
         if (!generalSnap.exists()) {
@@ -227,6 +230,8 @@ async function initializeSettings() {
             
             if (data.clothesPrice === undefined) updates.clothesPrice = defaultSettings.clothesPrice;
             if (data.bedSheetPrice === undefined) updates.bedSheetPrice = defaultSettings.bedSheetPrice;
+            if (data.minClothesPrice === undefined) updates.minClothesPrice = defaultSettings.minClothesPrice;   
+            if (data.minBedSheetPrice === undefined) updates.minBedSheetPrice = defaultSettings.minBedSheetPrice;    
             if (data.overdueHours === undefined) updates.overdueHours = defaultSettings.overdueHours;
             if (data.laundryShopName === undefined) updates.laundryShopName = defaultSettings.laundryShopName;
 
@@ -236,7 +241,7 @@ async function initializeSettings() {
             }
         }
         
-        console.log("✅ Settings verification complete (General + Pricing merged).");
+        console.log("✅ Settings verification complete.");
     } catch (error) {
         console.error("❌ Error initializing settings:", error);
     }
@@ -282,6 +287,8 @@ function startSettingsListener() {
                 laundryShopName: data.laundryShopName || localSettings.laundryShopName,
                 clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : localSettings.clothesPrice,
                 bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : localSettings.bedSheetPrice
+                minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : localSettings.minClothesPrice,     
+                minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice
             };
             writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 

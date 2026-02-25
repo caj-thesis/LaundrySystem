@@ -4,15 +4,14 @@ import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete
 interface WeighingPageProps {
   lockerId: number;
   currentWeight: number; 
-  // NEW: Accept dynamic price from parent
   pricePerKg: number; 
-  // NEW: Accept door status for validation
+  minimumPrice: number;
   doorStatus: string;
   onComplete: (price: number, weight: number, customerPhone: string) => void;
   onBack: () => void;
 }
 
-export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, onComplete, onBack }: WeighingPageProps) {
+export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice, doorStatus, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
 
   // State to freeze the weight when the user locks the locker
@@ -22,7 +21,11 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
   const displayWeight = frozenWeight !== null ? frozenWeight : currentWeight;
 
   // UPDATED: Calculate price based on the passed prop, not a hardcoded value
-  const totalPrice = displayWeight * pricePerKg;
+  const calculatedPrice = displayWeight * pricePerKg;
+
+  // If weight > 0, apply the maximum of either the minimum limit or the calculated rate. 
+  // If weight is 0, price is 0.
+  const totalPrice = displayWeight > 0 ? Math.max(minimumPrice, calculatedPrice) : 0;
 
   // --- NEW: Weight Limit Logic ---
   const MAX_WEIGHT = 20.0;
@@ -222,6 +225,13 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
                    ₱{totalPrice.toFixed(2)}
                 </div>
+                
+                {/* --- NEW: Minimum Price UI Indicator --- */}
+                {displayWeight > 0 && calculatedPrice < minimumPrice && (
+                   <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9, fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '12px' }}>
+                      (Minimum ₱{minimumPrice} applied)
+                   </div>
+                )}
              </div>
 
           </div>
@@ -350,7 +360,16 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, doorStatus, 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
                   <div>
                      <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>Laundry Load</span>
-                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Rate: ₱{pricePerKg.toFixed(2)} / kg</div>
+                     
+                     {/* --- UPDATED: Rate with Minimum Price Indicator --- */}
+                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Rate: ₱{pricePerKg.toFixed(2)} / kg</span>
+                        {displayWeight > 0 && calculatedPrice < minimumPrice && (
+                           <span style={{ color: '#d97706', fontWeight: 'bold', backgroundColor: '#fef3c7', padding: '2px 6px', borderRadius: '4px', fontSize: '10px' }}>
+                             MIN ₱{minimumPrice}
+                           </span>
+                        )}
+                     </div>
                   </div>
                   <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
               </div>

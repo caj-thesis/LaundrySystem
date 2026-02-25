@@ -29,8 +29,13 @@ export default function App() {
   const [processType, setProcessType] = useState<'dropoff' | 'pickup' | null>(null);
   
   // --- 1. DYNAMIC PRICING & SETTINGS STATE ---
-  const [pricing, setPricing] = useState({ clothesPrice: 25, bedSheetPrice: 40 });
-  const [shopName, setShopName] = useState<string>("CAJ Laundry Locker System"); 
+  const [pricing, setPricing] = useState({ 
+    clothesPrice: 25, 
+    bedSheetPrice: 40, 
+    minClothesPrice: 50, 
+    minBedSheetPrice: 50 
+  });
+  const [shopName, setShopName] = useState<string>("CAJ Laundry Locker System");
 
   const [selectedPricePerKg, setSelectedPricePerKg] = useState<number>(25);
   const [selectedLaundryType, setSelectedLaundryType] = useState<string>('Clothes');
@@ -54,7 +59,9 @@ export default function App() {
         if (data.laundryShopName) setShopName(data.laundryShopName);
         setPricing({
           clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : 25,
-          bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : 40
+          bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : 40,
+          minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : 50,     
+          minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : 50   
         });
       } catch (error) {
         // Keep defaults in offline mode
@@ -257,8 +264,8 @@ export default function App() {
             lockerId={selectedLockerId} 
             currentWeight={lockers.find(l => l.id === selectedLockerId)?.weight || 0}
             pricePerKg={selectedPricePerKg}
+            minimumPrice={selectedLaundryType === 'Clothes' ? pricing.minClothesPrice : pricing.minBedSheetPrice} 
             doorStatus={lockers.find(l => l.id === selectedLockerId)?.doorStatus || 'CLOSED'}
-            // @ts-ignore 
             onComplete={handleDropOffComplete} 
             onBack={handleWeighingBack}
           />
