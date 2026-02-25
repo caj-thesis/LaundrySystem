@@ -13,6 +13,7 @@ interface WeighingPageProps {
 
 export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice, doorStatus, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
+  const [isReturning, setIsReturning] = useState(false);
 
   // State to freeze the weight when the user locks the locker
   const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
@@ -121,6 +122,39 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
     setCustomerPhone('09');
   };
 
+  const handleReturnToLaundryType = async () => {
+    setIsReturning(true);
+    try {
+      await fetch('http://localhost:3000/api/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId }),
+      });
+    } catch (err) {
+      console.error('Failed to lock locker on return:', err);
+    } finally {
+      setIsReturning(false);
+      onBack();
+    }
+  };
+
+  const handleReturnToWeighing = async () => {
+    setIsReturning(true);
+    try {
+      await fetch('http://localhost:3000/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockerId }),
+      });
+    } catch (err) {
+      console.error('Failed to unlock locker on summary return:', err);
+    } finally {
+      setFrozenWeight(null);
+      setStep('unlocked');
+      setIsReturning(false);
+    }
+  };
+
   // --- RENDER: STEP 1 - OPENING ---
   if (step === 'opening') {
     return (
@@ -148,9 +182,9 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
         </div>
 
         {/* Return Button */}
-        <button onClick={onBack} className="btn-return-top">
+        <button onClick={handleReturnToLaundryType} className="btn-return-top" disabled={isReturning}>
           <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
-          Return
+          {isReturning ? 'Returning...' : 'Return'}
         </button>
 
         {/* Live Weight Content */}
@@ -310,6 +344,15 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
           textAlign: 'center',
           flexShrink: 0
       }}>
+        <button
+          onClick={handleReturnToWeighing}
+          className="btn-return-top"
+          disabled={isReturning}
+          style={{ top: '12px' }}
+        >
+          <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+          {isReturning ? 'Returning...' : 'Return'}
+        </button>
         <h2 className="text-xl font-bold text-gray-800">Drop Off Summary</h2>
         <p className="text-sm text-gray-500">Review transaction & enter contact details</p>
       </div>
