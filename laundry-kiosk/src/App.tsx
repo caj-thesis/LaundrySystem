@@ -145,12 +145,12 @@ export default function App() {
           pricePerKg: selectedPricePerKg,
           phoneNumber: phoneNumber || 'N/A',
           type: selectedLaundryType,
-          status: 'paid_pending',
+          status: 'Pending',
           laundryStatus: 'Dropped',
           triggerReminder: false,
           reminderSent: false,
           triggerPrint: true,
-          timestamp: new Date()
+          droppedAt: new Date()
         })
       });
 
@@ -217,12 +217,16 @@ export default function App() {
   };
 
   const handleReset = useCallback(() => {
-    if (processType === 'pickup' && selectedLockerId) {
-      fetch('http://localhost:3000/api/lock', {
+    if (selectedLockerId && (processType === 'pickup' || processType === 'dropoff')) {
+      const lockRequest = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lockerId: selectedLockerId }),
-      }).catch(e => console.error("Auto-lock failed:", e));
+      };
+
+      fetch('http://localhost:3000/api/lock', lockRequest)
+        .catch(() => fetch('http://localhost:3000/api/lock', lockRequest))
+        .catch(e => console.error("Auto-lock failed:", e));
     }
 
     setCurrentScreen('welcome');

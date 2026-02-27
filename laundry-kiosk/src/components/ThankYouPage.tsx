@@ -1,5 +1,5 @@
 import { CheckCircle } from 'lucide-react';
-import { useEffect, useRef } from 'react'; // Added useRef
+import { useEffect } from 'react';
 
 interface ThankYouPageProps {
   processType: 'dropoff' | 'pickup';
@@ -11,8 +11,6 @@ interface ThankYouPageProps {
 }
 
 export function ThankYouPage({ processType, generatedPin, transactionId, price, weight, onReset }: ThankYouPageProps) {
-  const hasPrinted = useRef(false); // Track if printing already happened
-
   useEffect(() => {
 
     const timer = setTimeout(() => {
