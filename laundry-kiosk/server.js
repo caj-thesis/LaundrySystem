@@ -47,6 +47,24 @@ let firebaseReady = false;
 let firebaseBootstrapped = false;
 let authRetryTimer = null;
 
+const TRANSACTION_STATUS = {
+    PENDING: 'Pending',
+    COMPLETED: 'Completed',
+    ARCHIVED: 'Archived'
+};
+
+function normalizeTransactionStatus(status) {
+    if (status === 'paid_pending' || status === 'processing' || status === 'occupied') return TRANSACTION_STATUS.PENDING;
+    if (status === 'completed') return TRANSACTION_STATUS.COMPLETED;
+    if (status === 'overdue_archived' || status === 'cancelled' || status === 'Archived') return TRANSACTION_STATUS.ARCHIVED;
+    return status;
+}
+
+function normalizeLaundryType(type) {
+    if (type === 'BedSheets') return 'Bed Sheets';
+    return type;
+}
+
 function readJsonFile(filePath, fallback) {
     try {
         if (!fs.existsSync(filePath)) return fallback;
@@ -114,14 +132,20 @@ let localSettings = readJsonFile(LOCAL_SETTINGS_FILE, {
 });
 writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
-let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => ({
-    ...tx,
-    sync: {
-        transactionSynced: Boolean(tx?.sync?.transactionSynced || tx?.firebaseDocId),
-        pickupSynced: Boolean(tx?.sync?.pickupSynced || tx?.status === 'completed'),
-        lastError: tx?.sync?.lastError || null
-    }
-}));
+let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => {
+    const normalizedStatus = normalizeTransactionStatus(tx?.status);
+    return {
+        ...tx,
+        type: normalizeLaundryType(tx?.type),
+        status: normalizedStatus,
+        droppedAt: tx?.droppedAt ? new Date(tx.droppedAt) : (tx?.timestamp ? new Date(tx.timestamp) : new Date()),
+        sync: {
+            transactionSynced: Boolean(tx?.sync?.transactionSynced || tx?.firebaseDocId),
+            pickupSynced: Boolean(tx?.sync?.pickupSynced || normalizedStatus === TRANSACTION_STATUS.COMPLETED),
+            lastError: tx?.sync?.lastError || null
+        }
+    };
+});
 writeJsonFile(LOCAL_TRANSACTIONS_FILE, localTransactions);
 
 function persistLocalTransactions() {
@@ -144,7 +168,7 @@ function markLockerAvailableAndLock(lockerId) {
 }
 
 function getActiveTransactionByLocker(lockerId) {
-    return localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.status === 'paid_pending');
+    return localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING);
 }
 
 function getLocalLockers() {
@@ -265,7 +289,7 @@ async function initializeLockers() {
         status: 'available', 
         isConnected: true,
         adminCommand: null, 
-        timestamp: new Date()
+        updatedAt: new Date()
       });
     } else {
       const data = snap.data();
@@ -320,7 +344,7 @@ async function processOverdueReset(lockerId) {
         const q = query(
             transRef, 
             where("lockerId", "==", Number(lockerId)), 
-            where("status", "in", ["paid_pending", "processing", "occupied"])
+            where("status", "in", [TRANSACTION_STATUS.PENDING])
         );
         const querySnapshot = await getDocs(q);
 
@@ -336,7 +360,7 @@ async function processOverdueReset(lockerId) {
                     note: "Triggered via Admin Database Command"
                 }, { merge: true });
                 await updateDoc(docSnapshot.ref, {
-                    status: 'overdue_archived',
+                    status: TRANSACTION_STATUS.ARCHIVED,
                     lockerId: null, 
                     archivedAt: new Date()
                 });
@@ -350,7 +374,7 @@ async function processOverdueReset(lockerId) {
             action: 'lock',
             currentTransactionId: null,
             adminCommand: null, 
-            timestamp: new Date()
+            updatedAt: new Date()
         });
         console.log(`[OVERDUE] Locker ${lockerId} is now AVAILABLE.`);
 
@@ -365,11 +389,11 @@ function startOverdueListener() {
         snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'modified') {
                 const data = change.doc.data();
-                if (data.status === 'completed' && data.originalTransactionId) {
+                if (data.status === TRANSACTION_STATUS.COMPLETED && data.originalTransactionId) {
                     try {
                         const originalTransRef = doc(db, "transactions", data.originalTransactionId);
                         await updateDoc(originalTransRef, {
-                            status: 'completed',
+                            status: TRANSACTION_STATUS.COMPLETED,
                             paymentStatus: 'paid',
                             resolvedAt: new Date(),
                             method: 'manual_overdue_resolution',
@@ -389,8 +413,8 @@ function startOverdueListener() {
 
 function startLaundryStatusListener() {
     console.log("🎧 Listening to 'transactions' for 'Done' status...");
-    const q = query(collection(db, "transactions"), where("status", "==", "paid_pending"));
-    startResilientSnapshotListener(q, "transactions(paid_pending)", (snapshot) => {
+    const q = query(collection(db, "transactions"), where("status", "==", TRANSACTION_STATUS.PENDING));
+    startResilientSnapshotListener(q, "transactions(Pending)", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             const data = change.doc.data();
             if (change.type === 'added' || change.type === 'modified') {
@@ -422,7 +446,7 @@ async function checkOverduePickups() {
     try {
         const q = query(
             collection(db, "transactions"), 
-            where("status", "==", "paid_pending"),
+            where("status", "==", TRANSACTION_STATUS.PENDING),
             where("laundryStatus", "==", "Done")
         );
         const snapshot = await getDocs(q);
@@ -493,7 +517,7 @@ function startPrinterListener() {
                     }
                 } catch (e) {}
 
-                const context = (data.status === 'completed') ? 'pickup' : 'dropoff';
+                const context = (data.status === TRANSACTION_STATUS.COMPLETED) ? 'pickup' : 'dropoff';
                 const printPayload = {
                     transactionId: data.transactionId,
                     pin: data.pin,
@@ -533,20 +557,23 @@ function startRemoteTransactionSyncListener() {
                 if (localIndex !== -1) {
                     const localTx = localTransactions[localIndex];
                     
-                    // If the Admin changed the status (e.g., forced 'completed', 'cancelled', or 'overdue')
-                    if (remoteTx.status !== localTx.status) {
-                        console.log(`[SYNC] 📥 Admin remotely changed TRX ${txId} status to: ${remoteTx.status}`);
+                    const normalizedRemoteStatus = normalizeTransactionStatus(remoteTx.status);
+
+                    // If the Admin changed the status (e.g., forced completion/archive)
+                    if (normalizedRemoteStatus !== localTx.status) {
+                        console.log(`[SYNC] 📥 Admin remotely changed TRX ${txId} status to: ${normalizedRemoteStatus}`);
                         
                         // Update the local database
                         localTransactions[localIndex] = { 
                             ...localTx, 
-                            ...remoteTx, 
+                            ...remoteTx,
+                            status: normalizedRemoteStatus,
                             sync: { ...localTx.sync, transactionSynced: true } 
                         };
                         hasChanges = true;
                         
                         // If it's no longer pending, free up the physical locker on the UI!
-                        if (['completed', 'cancelled', 'overdue_archived'].includes(remoteTx.status)) {
+                        if ([TRANSACTION_STATUS.COMPLETED, TRANSACTION_STATUS.ARCHIVED].includes(normalizedRemoteStatus)) {
                             const lockerKey = `l${localTx.lockerId}`;
                             if (systemState[lockerKey] && systemState[lockerKey].status === 'occupied') {
                                 markLockerAvailableAndLock(localTx.lockerId);
@@ -634,6 +661,10 @@ async function syncTransactionToFirebase(tx) {
     const payload = { ...tx };
     delete payload.sync;
     delete payload.firebaseDocId;
+    payload.status = normalizeTransactionStatus(payload.status);
+    payload.type = normalizeLaundryType(payload.type);
+    if (payload.droppedAt) payload.droppedAt = new Date(payload.droppedAt);
+    delete payload.timestamp;
     const transactionDocId = tx.transactionId || tx.firebaseDocId;
 
     if (!transactionDocId) {
@@ -645,11 +676,11 @@ async function syncTransactionToFirebase(tx) {
         await setDoc(doc(db, 'transactions', transactionDocId), payload, { merge: true });
         
         // 2. NEW: Update the locker document to show it is occupied by this transaction
-        if (payload.status === 'paid_pending' || payload.status === 'processing') {
+        if (payload.status === TRANSACTION_STATUS.PENDING) {
              await setDoc(doc(db, 'lockers', String(tx.lockerId)), {
                  status: 'occupied',
                  currentTransactionId: transactionDocId,
-                 timestamp: new Date()
+                 updatedAt: new Date()
              }, { merge: true });
         }
 
@@ -673,7 +704,7 @@ async function syncPickupToFirebase(tx) {
         // 1. Mark transaction as completed
         if (tx.firebaseDocId) {
             await updateDoc(doc(db, 'transactions', tx.firebaseDocId), {
-                status: 'completed',
+                status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
                 triggerPrint: true
@@ -682,12 +713,12 @@ async function syncPickupToFirebase(tx) {
             const q = query(
                 collection(db, 'transactions'),
                 where('lockerId', '==', Number(tx.lockerId)),
-                where('status', '==', 'paid_pending')
+                where('status', '==', TRANSACTION_STATUS.PENDING)
             );
 
             const snapshot = await getDocs(q);
             const updates = snapshot.docs.map((remoteTx) => updateDoc(doc(db, 'transactions', remoteTx.id), {
-                status: 'completed',
+                status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
                 triggerPrint: true
@@ -695,12 +726,12 @@ async function syncPickupToFirebase(tx) {
             await Promise.all(updates);
         }
 
-        // 2. NEW: Clear the locker document so it shows as available in the Admin Panel
+        // 2. Keep locker open for customer pickup; lock is triggered after Thank You timeout.
         await updateDoc(doc(db, 'lockers', String(tx.lockerId)), {
             status: 'available',
-            action: 'lock',
+            action: 'unlock',
             currentTransactionId: null,
-            timestamp: new Date()
+            updatedAt: new Date()
         });
 
         tx.sync = { ...tx.sync, pickupSynced: true, lastError: null };
@@ -716,7 +747,7 @@ async function reconcileLocalTransactions() {
     for (const tx of localTransactions) {
         try {
             await syncTransactionToFirebase(tx);
-            if (tx.status === 'completed') {
+            if (tx.status === TRANSACTION_STATUS.COMPLETED) {
                 await syncPickupToFirebase(tx);
             }
         } catch (error) {
@@ -778,9 +809,12 @@ app.get('/api/lockers', (req, res) => res.json(getLocalLockers()));
 app.get('/api/settings', (req, res) => res.json(localSettings));
 
 app.post('/api/dropoff', (req, res) => {
-    const payload = req.body;
-    localTransactions.push(payload);
-    writeJsonFile(LOCAL_TRANSACTIONS_FILE, localTransactions);
+    const payload = {
+        ...req.body,
+        status: TRANSACTION_STATUS.PENDING,
+        type: normalizeLaundryType(req.body.type),
+        droppedAt: req.body.droppedAt ? new Date(req.body.droppedAt) : new Date()
+    };
 
     const key = `l${payload.lockerId}`;
     if (systemState[key]) {
@@ -791,7 +825,7 @@ app.post('/api/dropoff', (req, res) => {
         ...payload,
         sync: { transactionSynced: false, pickupSynced: false, lastError: null }
     };
-    localTransactions[localTransactions.length - 1] = savedTx;
+    localTransactions.push(savedTx);
     persistLocalTransactions();
 
     syncTransactionToFirebase(savedTx).catch(() => {
@@ -804,11 +838,11 @@ app.post('/api/dropoff', (req, res) => {
 app.post('/api/pickup', (req, res) => {
     const { lockerId, paymentId } = req.body;
     localTransactions = localTransactions.map((tx) => {
-        if (tx.lockerId === Number(lockerId) && tx.status === 'paid_pending') {
+        if (tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING) {
             return {
                 ...tx,
-                status: 'completed',
-                pickedUpAt: new Date().toISOString(),
+                status: TRANSACTION_STATUS.COMPLETED,
+                pickedUpAt: new Date(),
                 paymentId,
                 sync: { ...tx.sync, pickupSynced: false }
             };
@@ -817,11 +851,10 @@ app.post('/api/pickup', (req, res) => {
     });
     persistLocalTransactions();
 
-    markLockerAvailableAndLock(lockerId);
 
     const completedTransactions = localTransactions.filter((tx) =>
         tx.lockerId === Number(lockerId) &&
-        tx.status === 'completed' &&
+        tx.status === TRANSACTION_STATUS.COMPLETED &&
         !tx.sync?.pickupSynced
     );
 
@@ -839,7 +872,7 @@ app.post('/api/unlock', (req, res) => {
     enqueueLockerAction(lockerId, 'unlock');
 
     if (firebaseReady) {
-        setDoc(doc(db, 'lockers', String(lockerId)), { action: 'unlock', timestamp: new Date() }, { merge: true }).catch((error) => {
+        setDoc(doc(db, 'lockers', String(lockerId)), { action: 'unlock', updatedAt: new Date() }, { merge: true }).catch((error) => {
             console.error('⚠️ Remote unlock command not sent to Firebase:', error);
         });
     }
@@ -852,7 +885,7 @@ app.post('/api/lock', (req, res) => {
     enqueueLockerAction(lockerId, 'lock');
 
     if (firebaseReady) {
-        setDoc(doc(db, 'lockers', String(lockerId)), { action: 'lock', timestamp: new Date() }, { merge: true }).catch((error) => {
+        setDoc(doc(db, 'lockers', String(lockerId)), { action: 'lock', updatedAt: new Date() }, { merge: true }).catch((error) => {
             console.error('⚠️ Remote lock command not sent to Firebase:', error);
         });
     }
