@@ -9,13 +9,21 @@ import {
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyARrGx7wbz8ZPPIxmG8hoMcLCwtjdzjr8w",
-  authDomain: "caj-laundry-management-49191.firebaseapp.com",
-  projectId: "caj-laundry-management-49191",
-  storageBucket: "caj-laundry-management-49191.firebasestorage.app",
-  messagingSenderId: "82008219104",
-  appId: "1:82008219104:web:96ae4d2453248270899f85",
-  measurementId: "G-HD7R1PKYLK"
+
+  apiKey: "AIzaSyCbRscvsw2FwgzdShLytikbb7Sw51ioLs4",
+
+  authDomain: "laundrymanagementsystem-609a2.firebaseapp.com",
+
+  projectId: "laundrymanagementsystem-609a2",
+
+  storageBucket: "laundrymanagementsystem-609a2.firebasestorage.app",
+
+  messagingSenderId: "614368527448",
+
+  appId: "1:614368527448:web:1c59583754b6a47c3a762d",
+
+  measurementId: "G-GYJKLMT5Q7"
+
 };
 
 const app = initializeApp(firebaseConfig);

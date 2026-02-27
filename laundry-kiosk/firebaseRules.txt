@@ -9,7 +9,7 @@ service cloud.firestore {
     
     // Checks if the user is YOUR specific Admin Account
     function isAdmin() {
-       return request.auth != null && request.auth.uid == "KfyXVZ9IwMcsuE8oPVeiXqFuSDB3";
+       return request.auth != null && request.auth.uid == "Lkl33c9aFEVdwskpSu3bl3PmOw63";
     }
 
     // Checks if the user is the System (Kiosk) logged in Anonymously
