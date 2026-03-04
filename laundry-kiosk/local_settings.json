@@ -1,5 +1,8 @@
 {
   "laundryShopName": "Laundry Management System",
   "clothesPrice": 25,
-  "bedSheetPrice": 50
+  "bedSheetPrice": 50,
+  "minClothesPrice": 50,
+  "minBedSheetPrice": 125,
+  "receiptFootnote": "Thank you!"
 }

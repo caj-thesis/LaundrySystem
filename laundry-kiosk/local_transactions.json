@@ -1,134 +1,46 @@
 [
   {
-    "transactionId": "TRX-1771929377",
+    "transactionId": "TRX-1772614089",
     "lockerId": 1,
-    "pin": "7357",
-    "price": 62.5,
-    "weight": 2.5,
+    "pin": "9738",
+    "price": 50,
+    "weight": 1.2,
     "pricePerKg": 25,
     "phoneNumber": "09978533024",
     "type": "Clothes",
-    "status": "completed",
-    "laundryStatus": "Done",
-    "triggerReminder": true,
-    "reminderSent": true,
-    "triggerPrint": false,
-    "timestamp": "2026-02-24T10:36:17.469Z",
-    "sync": {
-      "transactionSynced": true,
-      "pickupSynced": true,
-      "lastError": null
-    },
-    "firebaseDocId": "TRX-1771929377",
-    "doneAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1771929410,
-      "nanoseconds": 543000000
-    },
-    "note": "Auto-reminder sent after overdue.",
-    "reminderSentAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1771930032,
-      "nanoseconds": 845000000
-    },
-    "pickedUpAt": "2026-02-24T10:48:01.017Z",
-    "paymentId": "PAY-1771930080"
-  },
-  {
-    "transactionId": "TRX-1771930127",
-    "lockerId": 1,
-    "pin": "9347",
-    "price": 27.500000000000004,
-    "weight": 1.1,
-    "pricePerKg": 25,
-    "phoneNumber": "09978533024",
-    "type": "Clothes",
-    "status": "completed",
+    "status": "Pending",
     "laundryStatus": "Done",
     "triggerReminder": false,
     "reminderSent": false,
     "triggerPrint": false,
-    "timestamp": "2026-02-24T10:48:47.625Z",
-    "sync": {
-      "transactionSynced": true,
-      "pickupSynced": true,
-      "lastError": null
-    },
-    "firebaseDocId": "TRX-1771930127",
-    "pickedUpAt": "2026-02-24T10:54:12.863Z",
-    "paymentId": "PAY-1771930452"
-  },
-  {
-    "transactionId": "TRX-1771930539",
-    "lockerId": null,
-    "pin": "1588",
-    "price": 17.5,
-    "weight": 0.7,
-    "pricePerKg": 25,
-    "phoneNumber": "09978533024",
-    "type": "Clothes",
-    "status": "overdue_archived",
-    "laundryStatus": "Dropped",
-    "triggerReminder": false,
-    "reminderSent": false,
-    "triggerPrint": false,
-    "timestamp": "2026-02-24T10:55:39.637Z",
+    "droppedAt": "2026-03-04T08:53:02.565Z",
     "sync": {
       "transactionSynced": true,
       "pickupSynced": false,
       "lastError": null
     },
-    "firebaseDocId": "TRX-1771930539",
-    "archivedAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1771930562,
-      "nanoseconds": 217000000
-    }
+    "firebaseDocId": "TRX-1772614089"
   },
   {
-    "transactionId": "TRX-1771932173",
-    "lockerId": 1,
-    "pin": "8671",
-    "price": 20,
-    "weight": 0.8,
+    "transactionId": "TRX-1772614204",
+    "lockerId": 2,
+    "pin": "7881",
+    "price": 50,
+    "weight": 0.9,
     "pricePerKg": 25,
-    "phoneNumber": "09062815416",
+    "phoneNumber": "09707618117",
     "type": "Clothes",
-    "status": "completed",
-    "laundryStatus": "Done",
-    "triggerReminder": false,
-    "reminderSent": false,
-    "triggerPrint": false,
-    "timestamp": "2026-02-24T11:22:53.201Z",
-    "sync": {
-      "transactionSynced": true,
-      "pickupSynced": true,
-      "lastError": null
-    },
-    "firebaseDocId": "TRX-1771932173",
-    "pickedUpAt": "2026-02-24T11:25:42.997Z",
-    "paymentId": "PAY-1771932342"
-  },
-  {
-    "transactionId": "TRX-1771932380",
-    "lockerId": 1,
-    "pin": "1870",
-    "price": 20,
-    "weight": 0.8,
-    "pricePerKg": 25,
-    "phoneNumber": "09",
-    "type": "Clothes",
-    "status": "paid_pending",
+    "status": "Pending",
     "laundryStatus": "Dropped",
     "triggerReminder": false,
     "reminderSent": false,
     "triggerPrint": true,
-    "timestamp": "2026-02-24T11:26:20.532Z",
+    "droppedAt": "2026-03-04T08:50:04.603Z",
     "sync": {
       "transactionSynced": true,
       "pickupSynced": false,
       "lastError": null
     },
-    "firebaseDocId": "TRX-1771932380"
+    "firebaseDocId": "TRX-1772614204"
   }
 ]
