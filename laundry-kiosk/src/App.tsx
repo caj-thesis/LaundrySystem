@@ -127,14 +127,8 @@ export default function App() {
     }
 
     try {
-      // 3. Hardware Lock (Non-blocking)
-      fetch('http://localhost:3000/api/lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lockerId: selectedLockerId }),
-      }).catch(e => console.error("Hardware Error:", e));
-
-      // 4. Save local transaction first, then server syncs to Firebase when available
+      // 3. Save local transaction first, then server syncs to Firebase when available
+      // Backend already applies local lock action, so no separate /api/lock request is needed here.
       await fetch('http://localhost:3000/api/dropoff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -190,13 +184,8 @@ export default function App() {
 
     if (selectedLockerId) {
       try {
-        fetch('http://localhost:3000/api/unlock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lockerId: selectedLockerId })
-        }).catch(err => console.error("Unlock failed:", err));
-
         // --- 5. UPDATE TRANSACTION (local-first) ---
+        // Backend already applies local unlock action, so no separate /api/unlock request is needed here.
         await fetch('http://localhost:3000/api/pickup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

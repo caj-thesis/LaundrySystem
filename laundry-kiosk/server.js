@@ -158,6 +158,15 @@ function enqueueLockerAction(lockerId, action) {
     writeJsonFile(LOCKER_ACTIONS_FILE, commands);
 }
 
+function enqueueLockerLedForStatus(lockerId, status) {
+    const normalizedStatus = String(status || '').toLowerCase();
+    if (normalizedStatus === 'available') {
+        enqueueLockerAction(lockerId, 'green');
+    } else if (normalizedStatus === 'occupied') {
+        enqueueLockerAction(lockerId, 'red');
+    }
+}
+
 function markLockerAvailableAndLock(lockerId) {
     const key = `l${lockerId}`;
     if (systemState[key]) {
@@ -165,6 +174,7 @@ function markLockerAvailableAndLock(lockerId) {
         systemState[key].action = 'lock';
     }
     enqueueLockerAction(lockerId, 'lock');
+    enqueueLockerLedForStatus(lockerId, 'available');
 }
 
 function applyLocalLockerAction(lockerId, action, options = {}) {
@@ -181,6 +191,11 @@ function applyLocalLockerAction(lockerId, action, options = {}) {
 
     if (normalizedAction) {
         enqueueLockerAction(lockerId, normalizedAction);
+    }
+
+    const effectiveStatus = options.status || systemState[key]?.status;
+    if (effectiveStatus) {
+        enqueueLockerLedForStatus(lockerId, effectiveStatus);
     }
 }
 
@@ -639,7 +654,7 @@ function executePrintCommand(data) {
 
     if (!PRINTER_PATH) {
         console.error("❌ No USB Printer detected in /dev/usb/");
-        return;
+        return false;
     }
 
     // Extract receiptFootnote here
@@ -664,14 +679,36 @@ function executePrintCommand(data) {
 
 `;
 
-    // 🚀 Use Node.js native file system to write directly to the printer
-    fs.writeFile(PRINTER_PATH, receiptText, (error) => {
-        if (error) {
-            console.error("Printer Error:", error);
-        } else {
-            console.log(`📝 Printed directly to ${PRINTER_PATH}`);
-        }
-    });
+    // Write synchronously so we can return an accurate success flag.
+    try {
+        fs.writeFileSync(PRINTER_PATH, receiptText, 'utf8');
+        console.log(`📝 Printed directly to ${PRINTER_PATH}`);
+        return true;
+    } catch (error) {
+        console.error("Printer Error:", error);
+        return false;
+    }
+}
+
+function printReceiptLocally(tx, processType) {
+    try {
+        const shopName = (localSettings?.laundryShopName || 'CAJ LAUNDRY LOCKER CO.').toUpperCase();
+        const receiptFootnote = localSettings?.receiptFootnote || 'Thank you!';
+
+        return executePrintCommand({
+            transactionId: tx.transactionId,
+            pin: tx.pin,
+            processType,
+            weight: tx.weight,
+            price: tx.price,
+            type: tx.type,
+            shopName,
+            receiptFootnote
+        });
+    } catch (error) {
+        console.error(`⚠️ Local ${processType} receipt print failed:`, error);
+        return false;
+    }
 }
 
 // ==========================================================
@@ -690,6 +727,9 @@ async function syncTransactionToFirebase(tx) {
     payload.status = normalizeTransactionStatus(payload.status);
     payload.type = normalizeLaundryType(payload.type);
     if (payload.droppedAt) payload.droppedAt = new Date(payload.droppedAt);
+    if (typeof payload.dropoffReceiptPrinted === 'boolean') {
+        payload.triggerPrint = !payload.dropoffReceiptPrinted;
+    }
     delete payload.timestamp;
     const transactionDocId = tx.transactionId || tx.firebaseDocId;
 
@@ -733,7 +773,7 @@ async function syncPickupToFirebase(tx) {
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
-                triggerPrint: true
+                triggerPrint: !tx.pickupReceiptPrinted
             });
         } else {
             const q = query(
@@ -747,7 +787,7 @@ async function syncPickupToFirebase(tx) {
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
-                triggerPrint: true
+                triggerPrint: !tx.pickupReceiptPrinted
             }));
             await Promise.all(updates);
         }
@@ -847,9 +887,12 @@ app.post('/api/dropoff', (req, res) => {
 
     const savedTx = {
         ...payload,
+        dropoffReceiptPrinted: false,
         sync: { transactionSynced: false, pickupSynced: false, lastError: null }
     };
     localTransactions.push(savedTx);
+
+    savedTx.dropoffReceiptPrinted = printReceiptLocally(savedTx, 'dropoff');
     persistLocalTransactions();
 
     syncTransactionToFirebase(savedTx).catch(() => {
@@ -861,17 +904,23 @@ app.post('/api/dropoff', (req, res) => {
 
 app.post('/api/pickup', (req, res) => {
     const { lockerId, paymentId } = req.body;
+
     localTransactions = localTransactions.map((tx) => {
-        if (tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING) {
-            return {
-                ...tx,
-                status: TRANSACTION_STATUS.COMPLETED,
-                pickedUpAt: new Date(),
-                paymentId,
-                sync: { ...tx.sync, pickupSynced: false }
-            };
+        if (tx.lockerId !== Number(lockerId) || tx.status !== TRANSACTION_STATUS.PENDING) {
+            return tx;
         }
-        return tx;
+
+        const updatedTx = {
+            ...tx,
+            status: TRANSACTION_STATUS.COMPLETED,
+            pickedUpAt: new Date(),
+            paymentId,
+            pickupReceiptPrinted: false,
+            sync: { ...tx.sync, pickupSynced: false }
+        };
+
+        updatedTx.pickupReceiptPrinted = printReceiptLocally(updatedTx, 'pickup');
+        return updatedTx;
     });
     persistLocalTransactions();
 
