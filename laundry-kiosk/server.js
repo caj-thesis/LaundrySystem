@@ -53,16 +53,50 @@ const TRANSACTION_STATUS = {
     ARCHIVED: 'Archived'
 };
 
+const LAUNDRY_STATUS = {
+    DROPPED: 'Dropped',
+    WASHING: 'Washing',
+    DONE: 'Done'
+};
+
 function normalizeTransactionStatus(status) {
-    if (status === 'paid_pending' || status === 'processing' || status === 'occupied') return TRANSACTION_STATUS.PENDING;
-    if (status === 'completed') return TRANSACTION_STATUS.COMPLETED;
-    if (status === 'overdue_archived' || status === 'cancelled' || status === 'Archived') return TRANSACTION_STATUS.ARCHIVED;
+    const normalized = String(status || '').trim().toLowerCase();
+    if (!normalized) return TRANSACTION_STATUS.PENDING;
+
+    if (['pending', 'paid_pending', 'processing', 'occupied'].includes(normalized)) return TRANSACTION_STATUS.PENDING;
+    if (['completed', 'complete', 'paid'].includes(normalized)) return TRANSACTION_STATUS.COMPLETED;
+    if (['archived', 'overdue_archived', 'cancelled', 'canceled'].includes(normalized)) return TRANSACTION_STATUS.ARCHIVED;
+
     return status;
 }
 
 function normalizeLaundryType(type) {
     if (type === 'BedSheets') return 'Bed Sheets';
     return type;
+}
+
+function normalizeLaundryStatus(status) {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'dropped') return LAUNDRY_STATUS.DROPPED;
+    if (normalized === 'washing') return LAUNDRY_STATUS.WASHING;
+    if (normalized === 'done' || normalized === 'completed') return LAUNDRY_STATUS.DONE;
+    return LAUNDRY_STATUS.DROPPED;
+}
+
+function normalizeLockerNumber(input) {
+    const raw = String(input ?? '').trim().toLowerCase();
+    const digits = raw.replace(/[^0-9]/g, '');
+    const num = Number(digits || raw);
+    if (!Number.isInteger(num) || num <= 0) return null;
+    return num;
+}
+
+function resolveLockerIdentity(docId, data = {}) {
+    const fromData = normalizeLockerNumber(data?.lockerId);
+    const fromDocId = normalizeLockerNumber(docId);
+    const lockerId = fromData || fromDocId;
+    if (!lockerId) return null;
+    return { lockerId, key: `l${lockerId}` };
 }
 
 function readJsonFile(filePath, fallback) {
@@ -138,6 +172,7 @@ let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => {
         ...tx,
         type: normalizeLaundryType(tx?.type),
         status: normalizedStatus,
+        laundryStatus: normalizeLaundryStatus(tx?.laundryStatus),
         droppedAt: tx?.droppedAt ? new Date(tx.droppedAt) : (tx?.timestamp ? new Date(tx.timestamp) : new Date()),
         sync: {
             transactionSynced: Boolean(tx?.sync?.transactionSynced || tx?.firebaseDocId),
@@ -201,7 +236,14 @@ function applyLocalLockerAction(lockerId, action, options = {}) {
 
 
 function getActiveTransactionByLocker(lockerId) {
-    return localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING);
+    return localTransactions.find((tx) => {
+        if (tx.lockerId !== Number(lockerId)) return false;
+        const normalizedStatus = normalizeTransactionStatus(tx.status);
+        if (normalizedStatus !== tx.status) {
+            tx.status = normalizedStatus;
+        }
+        return normalizedStatus === TRANSACTION_STATUS.PENDING;
+    });
 }
 
 function getLocalLockers() {
@@ -209,10 +251,16 @@ function getLocalLockers() {
         const key = `l${id}`;
         const hardware = systemState[key] || {};
         const active = getActiveTransactionByLocker(id);
+        const lockerStatus = (hardware.status === 'occupied' || hardware.status === 'available')
+            ? hardware.status
+            : (active ? 'occupied' : 'available');
+
         return {
             id,
             capacity: '20 kg',
-            status: active ? 'occupied' : 'available',
+            // Source of truth for page routing is locker doc/systemState status.
+            status: lockerStatus,
+            // Keep transaction details if present for pickup verification/payment UI.
             weight: active ? active.weight : (hardware.weight || 0),
             price: active?.price,
             pin: active?.pin,
@@ -458,10 +506,11 @@ function startLaundryStatusListener() {
     startResilientSnapshotListener(q, "transactions(Pending)", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             const data = change.doc.data();
-            if (change.type === 'added' || change.type === 'modified') {
-                if (data.laundryStatus === 'Done' && !data.doneAt) {
+                if (change.type === 'added' || change.type === 'modified') {
+                if (normalizeLaundryStatus(data.laundryStatus) === LAUNDRY_STATUS.DONE && !data.doneAt) {
                     try {
                         await updateDoc(change.doc.ref, {
+                            laundryStatus: LAUNDRY_STATUS.DONE,
                             doneAt: new Date(), 
                             reminderSent: false,    
                             triggerReminder: false
@@ -499,11 +548,23 @@ async function checkOverduePickups() {
                 if (!data.reminderSent && diffMs > currentLimitMs) {
                     console.log(`      ⚡ OVERDUE! Sending reminder...`);
                     await updateDoc(docSnap.ref, {
+                        status: TRANSACTION_STATUS.ARCHIVED,
                         triggerReminder: true,  
                         reminderSent: true,     
                         reminderSentAt: new Date(),
-                        note: `Auto-reminder sent after overdue.`
+                        archivedAt: new Date(),
+                        note: `Auto-reminder sent and archived after overdue.`
                     });
+
+                    if (data.lockerId) {
+                        markLockerAvailableAndLock(data.lockerId);
+                        await setDoc(doc(db, 'lockers', String(data.lockerId)), {
+                            status: 'available',
+                            action: 'lock',
+                            currentTransactionId: null,
+                            updatedAt: new Date()
+                        }, { merge: true });
+                    }
                 }
             }
         });
@@ -520,16 +581,18 @@ function startDatabaseListener() {
     startResilientSnapshotListener(collection(db, "lockers"), "lockers", (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const data = change.doc.data();
-            const id = change.doc.id; 
-            const key = `l${id}`;
+            const identity = resolveLockerIdentity(change.doc.id, data);
+            if (!identity) return;
+
             if (data.adminCommand === 'RESET_OVERDUE') {
-                processOverdueReset(id);
-                return; 
+                processOverdueReset(identity.lockerId);
+                return;
             }
-            if (systemState[key]) {
-                systemState[key].status = data.status || 'available'; 
-                systemState[key].action = data.action || 'lock';
-                systemState[key].isConnected = (data.isConnected !== undefined) ? data.isConnected : true;
+
+            if (systemState[identity.key]) {
+                systemState[identity.key].status = data.status || 'available';
+                systemState[identity.key].action = data.action || 'lock';
+                systemState[identity.key].isConnected = (data.isConnected !== undefined) ? data.isConnected : true;
             }
         });
     });
@@ -609,17 +672,21 @@ function startRemoteTransactionSyncListener() {
                             ...localTx, 
                             ...remoteTx,
                             status: normalizedRemoteStatus,
+                            laundryStatus: normalizeLaundryStatus(remoteTx.laundryStatus ?? localTx.laundryStatus),
                             sync: { ...localTx.sync, transactionSynced: true } 
                         };
                         hasChanges = true;
                         
                         // If it's no longer pending, free up the physical locker on the UI!
                         if ([TRANSACTION_STATUS.COMPLETED, TRANSACTION_STATUS.ARCHIVED].includes(normalizedRemoteStatus)) {
-                            const lockerKey = `l${localTx.lockerId}`;
-                            if (systemState[lockerKey] && systemState[lockerKey].status === 'occupied') {
-                                markLockerAvailableAndLock(localTx.lockerId);
-                                console.log(`[SYNC] 🔓 Locker ${localTx.lockerId} forcefully marked as available.`);
-                            }
+                            markLockerAvailableAndLock(localTx.lockerId);
+                            setDoc(doc(db, 'lockers', String(localTx.lockerId)), {
+                                status: 'available',
+                                action: 'lock',
+                                currentTransactionId: null,
+                                updatedAt: new Date()
+                            }, { merge: true }).catch(() => {});
+                            console.log(`[SYNC] 🔓 Locker ${localTx.lockerId} forcefully marked as available.`);
                         }
                     } 
                     // Or if the Admin just updated the price, weight, or laundry status
@@ -632,6 +699,7 @@ function startRemoteTransactionSyncListener() {
                          localTransactions[localIndex] = { 
                              ...localTx, 
                              ...remoteTx, 
+                             laundryStatus: normalizeLaundryStatus(remoteTx.laundryStatus ?? localTx.laundryStatus),
                              sync: { ...localTx.sync, transactionSynced: true } 
                          };
                          hasChanges = true;
@@ -726,6 +794,7 @@ async function syncTransactionToFirebase(tx) {
     delete payload.firebaseDocId;
     payload.status = normalizeTransactionStatus(payload.status);
     payload.type = normalizeLaundryType(payload.type);
+    payload.laundryStatus = normalizeLaundryStatus(payload.laundryStatus);
     if (payload.droppedAt) payload.droppedAt = new Date(payload.droppedAt);
     if (typeof payload.dropoffReceiptPrinted === 'boolean') {
         payload.triggerPrint = !payload.dropoffReceiptPrinted;
@@ -771,6 +840,7 @@ async function syncPickupToFirebase(tx) {
         if (tx.firebaseDocId) {
             await updateDoc(doc(db, 'transactions', tx.firebaseDocId), {
                 status: TRANSACTION_STATUS.COMPLETED,
+                laundryStatus: LAUNDRY_STATUS.DONE,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
                 triggerPrint: !tx.pickupReceiptPrinted
@@ -785,6 +855,7 @@ async function syncPickupToFirebase(tx) {
             const snapshot = await getDocs(q);
             const updates = snapshot.docs.map((remoteTx) => updateDoc(doc(db, 'transactions', remoteTx.id), {
                 status: TRANSACTION_STATUS.COMPLETED,
+                laundryStatus: LAUNDRY_STATUS.DONE,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
                 triggerPrint: !tx.pickupReceiptPrinted
@@ -883,6 +954,7 @@ app.post('/api/dropoff', (req, res) => {
     const payload = {
         ...req.body,
         status: TRANSACTION_STATUS.PENDING,
+        laundryStatus: LAUNDRY_STATUS.DROPPED,
         type: normalizeLaundryType(req.body.type),
         droppedAt: req.body.droppedAt ? new Date(req.body.droppedAt) : new Date()
     };
@@ -918,6 +990,7 @@ app.post('/api/pickup', (req, res) => {
         const updatedTx = {
             ...tx,
             status: TRANSACTION_STATUS.COMPLETED,
+            laundryStatus: LAUNDRY_STATUS.DONE,
             pickedUpAt: new Date(),
             paymentId,
             pickupReceiptPrinted: false,
