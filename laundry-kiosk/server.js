@@ -235,10 +235,16 @@ function getLocalLockers() {
         const key = `l${id}`;
         const hardware = systemState[key] || {};
         const active = getActiveTransactionByLocker(id);
+        const lockerStatus = (hardware.status === 'occupied' || hardware.status === 'available')
+            ? hardware.status
+            : (active ? 'occupied' : 'available');
+
         return {
             id,
             capacity: '20 kg',
-            status: active ? 'occupied' : 'available',
+            // Source of truth for page routing is locker doc/systemState status.
+            status: lockerStatus,
+            // Keep transaction details if present for pickup verification/payment UI.
             weight: active ? active.weight : (hardware.weight || 0),
             price: active?.price,
             pin: active?.pin,
