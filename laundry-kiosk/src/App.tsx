@@ -41,6 +41,8 @@ export default function App() {
   const [selectedLaundryType, setSelectedLaundryType] = useState<string>('Clothes');
 
   const { lockers } = useLockerSystem();
+  const connectedLockers = lockers.filter((locker) => locker.isConnected !== false);
+  const activeLockers = connectedLockers.length > 0 ? connectedLockers : lockers;
 
   const [lastGeneratedPin, setLastGeneratedPin] = useState<string | null>(null);
   const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
@@ -249,7 +251,7 @@ export default function App() {
         
         {currentScreen === 'available-lockers' && (
           <AvailableLockersPage 
-            lockers={lockers.filter(l => l.status === 'available' && l.isConnected !== false)} 
+            lockers={activeLockers.filter((locker) => locker.status === 'available')} 
             onSelectLocker={handleLockerSelect} 
             onBack={handleAvailableLockersBack} 
           />
@@ -277,7 +279,7 @@ export default function App() {
         
         {currentScreen === 'pickup-lockers' && (
           <PickupLockersPage 
-            lockers={lockers.filter(l => l.status === 'occupied' && l.isConnected !== false)} 
+            lockers={activeLockers.filter((locker) => locker.status === 'occupied')} 
             onSelectLocker={handlePickupLockerSelect} 
             onBack={handlePickupLockersBack} 
           />

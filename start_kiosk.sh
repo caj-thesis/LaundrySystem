@@ -96,23 +96,33 @@ export DISPLAY=:0
 xset s off && xset -dpms && xset s noblank
 unclutter -idle 0.5 -root &
 
+# Prevent desktop lock-screen loops if Chromium is closed unexpectedly (e.g. Alt+F4).
+gsettings set org.gnome.desktop.screensaver lock-enabled false 2>/dev/null || true
+gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
+gsettings set org.gnome.desktop.lockdown disable-lock-screen true 2>/dev/null || true
+
 echo "Waiting 20 seconds for full initialization..."
 sleep 20
 
-echo "Launching Chromium..."
-chromium --no-sandbox \
-         --kiosk \
-         --disable-gpu \
-         --disable-software-rasterizer \
-         --noerrdialogs \
-         --disable-session-crashed-bubble \
-         --disable-infobars \
-         --disable-notifications \
-         --password-store=basic \
-         --disable-background-networking \
-         --disable-sync \
-         --disable-features=TranslateUI,OptimizationHints,MediaRouter \
-         http://localhost:5173 &
+echo "Launching Chromium in kiosk watchdog mode..."
+while true; do
+  chromium --no-sandbox \
+           --kiosk \
+           --disable-gpu \
+           --disable-software-rasterizer \
+           --noerrdialogs \
+           --disable-session-crashed-bubble \
+           --disable-infobars \
+           --disable-notifications \
+           --password-store=basic \
+           --disable-background-networking \
+           --disable-sync \
+           --disable-features=TranslateUI,OptimizationHints,MediaRouter \
+           http://localhost:5173
+
+  echo "⚠️ Chromium exited. Restarting kiosk browser in 2 seconds..."
+  sleep 2
+done &
 
 echo "--- Kiosk fully initialized. ---"
 wait $FRONTEND_PID
