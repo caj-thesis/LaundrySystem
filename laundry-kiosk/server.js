@@ -60,9 +60,13 @@ const LAUNDRY_STATUS = {
 };
 
 function normalizeTransactionStatus(status) {
-    if (status === 'paid_pending' || status === 'processing' || status === 'occupied') return TRANSACTION_STATUS.PENDING;
-    if (status === 'completed') return TRANSACTION_STATUS.COMPLETED;
-    if (status === 'overdue_archived' || status === 'cancelled' || status === 'Archived') return TRANSACTION_STATUS.ARCHIVED;
+    const normalized = String(status || '').trim().toLowerCase();
+    if (!normalized) return TRANSACTION_STATUS.PENDING;
+
+    if (['pending', 'paid_pending', 'processing', 'occupied'].includes(normalized)) return TRANSACTION_STATUS.PENDING;
+    if (['completed', 'complete', 'paid'].includes(normalized)) return TRANSACTION_STATUS.COMPLETED;
+    if (['archived', 'overdue_archived', 'cancelled', 'canceled'].includes(normalized)) return TRANSACTION_STATUS.ARCHIVED;
+
     return status;
 }
 
@@ -216,7 +220,14 @@ function applyLocalLockerAction(lockerId, action, options = {}) {
 
 
 function getActiveTransactionByLocker(lockerId) {
-    return localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING);
+    return localTransactions.find((tx) => {
+        if (tx.lockerId !== Number(lockerId)) return false;
+        const normalizedStatus = normalizeTransactionStatus(tx.status);
+        if (normalizedStatus !== tx.status) {
+            tx.status = normalizedStatus;
+        }
+        return normalizedStatus === TRANSACTION_STATUS.PENDING;
+    });
 }
 
 function getLocalLockers() {
@@ -644,11 +655,14 @@ function startRemoteTransactionSyncListener() {
                         
                         // If it's no longer pending, free up the physical locker on the UI!
                         if ([TRANSACTION_STATUS.COMPLETED, TRANSACTION_STATUS.ARCHIVED].includes(normalizedRemoteStatus)) {
-                            const lockerKey = `l${localTx.lockerId}`;
-                            if (systemState[lockerKey] && systemState[lockerKey].status === 'occupied') {
-                                markLockerAvailableAndLock(localTx.lockerId);
-                                console.log(`[SYNC] 🔓 Locker ${localTx.lockerId} forcefully marked as available.`);
-                            }
+                            markLockerAvailableAndLock(localTx.lockerId);
+                            setDoc(doc(db, 'lockers', String(localTx.lockerId)), {
+                                status: 'available',
+                                action: 'lock',
+                                currentTransactionId: null,
+                                updatedAt: new Date()
+                            }, { merge: true }).catch(() => {});
+                            console.log(`[SYNC] 🔓 Locker ${localTx.lockerId} forcefully marked as available.`);
                         }
                     } 
                     // Or if the Admin just updated the price, weight, or laundry status
@@ -802,6 +816,7 @@ async function syncPickupToFirebase(tx) {
         if (tx.firebaseDocId) {
             await updateDoc(doc(db, 'transactions', tx.firebaseDocId), {
                 status: TRANSACTION_STATUS.COMPLETED,
+                laundryStatus: LAUNDRY_STATUS.DONE,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
                 triggerPrint: !tx.pickupReceiptPrinted
@@ -816,6 +831,7 @@ async function syncPickupToFirebase(tx) {
             const snapshot = await getDocs(q);
             const updates = snapshot.docs.map((remoteTx) => updateDoc(doc(db, 'transactions', remoteTx.id), {
                 status: TRANSACTION_STATUS.COMPLETED,
+                laundryStatus: LAUNDRY_STATUS.DONE,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
                 triggerPrint: !tx.pickupReceiptPrinted
@@ -950,6 +966,7 @@ app.post('/api/pickup', (req, res) => {
         const updatedTx = {
             ...tx,
             status: TRANSACTION_STATUS.COMPLETED,
+            laundryStatus: LAUNDRY_STATUS.DONE,
             pickedUpAt: new Date(),
             paymentId,
             pickupReceiptPrinted: false,
