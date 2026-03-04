@@ -65,6 +65,12 @@ function normalizeLaundryType(type) {
     return type;
 }
 
+function sanitizeWeight(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, parsed);
+}
+
 function readJsonFile(filePath, fallback) {
     try {
         if (!fs.existsSync(filePath)) return fallback;
@@ -180,7 +186,7 @@ function getLocalLockers() {
             id,
             capacity: '20 kg',
             status: active ? 'occupied' : 'available',
-            weight: active ? active.weight : (hardware.weight || 0),
+            weight: sanitizeWeight(active ? active.weight : hardware.weight),
             price: active?.price,
             pin: active?.pin,
             laundryStatus: active?.laundryStatus,
@@ -202,17 +208,17 @@ function updateStateFromFile() {
             parts.forEach(part => {
                 if (part.startsWith('L1:')) {
                     const d = part.split(':');
-                    systemState.l1.weight = parseFloat(d[1]) || 0;
+                    systemState.l1.weight = sanitizeWeight(d[1]);
                     systemState.l1.door = d[2];
                 }
                 if (part.startsWith('L2:')) {
                     const d = part.split(':');
-                    systemState.l2.weight = parseFloat(d[1]) || 0;
+                    systemState.l2.weight = sanitizeWeight(d[1]);
                     systemState.l2.door = d[2];
                 }
                 if (part.startsWith('L3:')) {
                     const d = part.split(':');
-                    systemState.l3.weight = parseFloat(d[1]) || 0;
+                    systemState.l3.weight = sanitizeWeight(d[1]);
                     systemState.l3.door = d[2];
                 }
                 if (part.startsWith('CREDIT:')) {
