@@ -53,6 +53,12 @@ const TRANSACTION_STATUS = {
     ARCHIVED: 'Archived'
 };
 
+const LAUNDRY_STATUS = {
+    DROPPED: 'Dropped',
+    WASHING: 'Washing',
+    DONE: 'Done'
+};
+
 function normalizeTransactionStatus(status) {
     if (status === 'paid_pending' || status === 'processing' || status === 'occupied') return TRANSACTION_STATUS.PENDING;
     if (status === 'completed') return TRANSACTION_STATUS.COMPLETED;
@@ -63,6 +69,14 @@ function normalizeTransactionStatus(status) {
 function normalizeLaundryType(type) {
     if (type === 'BedSheets') return 'Bed Sheets';
     return type;
+}
+
+function normalizeLaundryStatus(status) {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'dropped') return LAUNDRY_STATUS.DROPPED;
+    if (normalized === 'washing') return LAUNDRY_STATUS.WASHING;
+    if (normalized === 'done' || normalized === 'completed') return LAUNDRY_STATUS.DONE;
+    return LAUNDRY_STATUS.DROPPED;
 }
 
 function readJsonFile(filePath, fallback) {
@@ -138,6 +152,7 @@ let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => {
         ...tx,
         type: normalizeLaundryType(tx?.type),
         status: normalizedStatus,
+        laundryStatus: normalizeLaundryStatus(tx?.laundryStatus),
         droppedAt: tx?.droppedAt ? new Date(tx.droppedAt) : (tx?.timestamp ? new Date(tx.timestamp) : new Date()),
         sync: {
             transactionSynced: Boolean(tx?.sync?.transactionSynced || tx?.firebaseDocId),
@@ -458,10 +473,11 @@ function startLaundryStatusListener() {
     startResilientSnapshotListener(q, "transactions(Pending)", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             const data = change.doc.data();
-            if (change.type === 'added' || change.type === 'modified') {
-                if (data.laundryStatus === 'Done' && !data.doneAt) {
+                if (change.type === 'added' || change.type === 'modified') {
+                if (normalizeLaundryStatus(data.laundryStatus) === LAUNDRY_STATUS.DONE && !data.doneAt) {
                     try {
                         await updateDoc(change.doc.ref, {
+                            laundryStatus: LAUNDRY_STATUS.DONE,
                             doneAt: new Date(), 
                             reminderSent: false,    
                             triggerReminder: false
@@ -499,11 +515,23 @@ async function checkOverduePickups() {
                 if (!data.reminderSent && diffMs > currentLimitMs) {
                     console.log(`      ⚡ OVERDUE! Sending reminder...`);
                     await updateDoc(docSnap.ref, {
+                        status: TRANSACTION_STATUS.ARCHIVED,
                         triggerReminder: true,  
                         reminderSent: true,     
                         reminderSentAt: new Date(),
-                        note: `Auto-reminder sent after overdue.`
+                        archivedAt: new Date(),
+                        note: `Auto-reminder sent and archived after overdue.`
                     });
+
+                    if (data.lockerId) {
+                        markLockerAvailableAndLock(data.lockerId);
+                        await setDoc(doc(db, 'lockers', String(data.lockerId)), {
+                            status: 'available',
+                            action: 'lock',
+                            currentTransactionId: null,
+                            updatedAt: new Date()
+                        }, { merge: true });
+                    }
                 }
             }
         });
@@ -609,6 +637,7 @@ function startRemoteTransactionSyncListener() {
                             ...localTx, 
                             ...remoteTx,
                             status: normalizedRemoteStatus,
+                            laundryStatus: normalizeLaundryStatus(remoteTx.laundryStatus ?? localTx.laundryStatus),
                             sync: { ...localTx.sync, transactionSynced: true } 
                         };
                         hasChanges = true;
@@ -632,6 +661,7 @@ function startRemoteTransactionSyncListener() {
                          localTransactions[localIndex] = { 
                              ...localTx, 
                              ...remoteTx, 
+                             laundryStatus: normalizeLaundryStatus(remoteTx.laundryStatus ?? localTx.laundryStatus),
                              sync: { ...localTx.sync, transactionSynced: true } 
                          };
                          hasChanges = true;
@@ -726,6 +756,7 @@ async function syncTransactionToFirebase(tx) {
     delete payload.firebaseDocId;
     payload.status = normalizeTransactionStatus(payload.status);
     payload.type = normalizeLaundryType(payload.type);
+    payload.laundryStatus = normalizeLaundryStatus(payload.laundryStatus);
     if (payload.droppedAt) payload.droppedAt = new Date(payload.droppedAt);
     if (typeof payload.dropoffReceiptPrinted === 'boolean') {
         payload.triggerPrint = !payload.dropoffReceiptPrinted;
@@ -883,6 +914,7 @@ app.post('/api/dropoff', (req, res) => {
     const payload = {
         ...req.body,
         status: TRANSACTION_STATUS.PENDING,
+        laundryStatus: LAUNDRY_STATUS.DROPPED,
         type: normalizeLaundryType(req.body.type),
         droppedAt: req.body.droppedAt ? new Date(req.body.droppedAt) : new Date()
     };
