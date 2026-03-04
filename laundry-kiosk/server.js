@@ -28,6 +28,7 @@ const STATE_FILE = 'sys_state.json';
 const LOCAL_TRANSACTIONS_FILE = 'local_transactions.json';
 const LOCAL_SETTINGS_FILE = 'local_settings.json';
 const LOCKER_ACTIONS_FILE = 'locker_actions.json';
+const SMS_QUEUE_FILE = 'sms_queue.json'; // 🚀 NEW: SMS Queue File
 
 // --- DYNAMIC SETTINGS STATE ---
 let SYSTEM_SETTINGS = {
@@ -81,6 +82,15 @@ function writeJsonFile(filePath, data) {
     } catch (error) {
         console.error(`[LOCAL] Failed to write ${filePath}:`, error);
     }
+}
+
+// 🚀 NEW: Local SMS Queuing Function
+function enqueueSMS(phone, message) {
+    if (!phone) return;
+    const queue = readJsonFile(SMS_QUEUE_FILE, []);
+    queue.push({ phone, message, ts: Date.now() });
+    writeJsonFile(SMS_QUEUE_FILE, queue);
+    console.log(`[SMS QUEUE] Queued message for ${phone}`);
 }
 
 function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs = 5000) {
@@ -230,7 +240,6 @@ setInterval(updateStateFromFile, 200);
 // INITIALIZATION & SETTINGS
 // ==========================================================
 
-// --- 2. AUTO-INITIALIZE SETTINGS (MERGED) ---
 async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
@@ -273,7 +282,6 @@ async function initializeSettings() {
     }
 }
 
-// --- 3. INITIALIZE LOCKERS ---
 async function initializeLockers() {
   const lockers = ['1', '2', '3'];
   
@@ -300,7 +308,6 @@ async function initializeLockers() {
   }
 }
 
-// --- 4. SETTINGS LISTENER ---
 function startSettingsListener() {
     console.log("🎧 Listening to 'settings/general'...");
 
@@ -426,7 +433,6 @@ function startLaundryStatusListener() {
                             triggerReminder: false
                         });
                         
-                        // 👇 ADD THIS: Update the locker to trigger the Python LED listener
                         if (data.lockerId) {
                             await updateDoc(doc(db, "lockers", String(data.lockerId)), {
                                 laundryFinishedAt: new Date()
@@ -457,6 +463,14 @@ async function checkOverduePickups() {
                 const diffMs = now.getTime() - doneTime.getTime();
                 if (!data.reminderSent && diffMs > currentLimitMs) {
                     console.log(`      ⚡ OVERDUE! Sending reminder...`);
+                    
+                    // 🚀 NEW: Queue overdue SMS locally
+                    const smsMsg = `${localSettings.laundryShopName || 'CAJ LAUNDRY LOCKER CO.'}
+                    OVERDUE REMINDER: Your laundry is ready for pickup.
+                    Ref: ${data.transactionId || docSnap.id}
+                    Please claim it as soon as possible.`;
+                    enqueueSMS(data.phoneNumber, smsMsg);
+
                     await updateDoc(docSnap.ref, {
                         triggerReminder: true,  
                         reminderSent: true,     
@@ -495,41 +509,36 @@ function startDatabaseListener() {
 }
 
 function startPrinterListener() {
+    console.log("🎧 Listening to 'transactions' for remote Admin print commands...");
     const q = query(collection(db, "transactions"), where("triggerPrint", "==", true));
+    
     startResilientSnapshotListener(q, "transactions(triggerPrint)", (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
             if (change.type === 'added' || change.type === 'modified') {
                 const data = change.doc.data();
                 const id = change.doc.id;
                 
-                let shopName = "CAJ LAUNDRY LOCKER CO.";
-                let receiptFootnote = "Thank you!"; 
-                
-                try {
-                    const generalSnap = await getDoc(doc(db, "settings", "general"));
-                    if (generalSnap.exists()) {
-                        if (generalSnap.data().laundryShopName) {
-                            shopName = generalSnap.data().laundryShopName.toUpperCase();
-                        }
-                        if (generalSnap.data().receiptFootnote) {
-                            receiptFootnote = generalSnap.data().receiptFootnote;
-                        }
-                    }
-                } catch (e) {}
+                let shopName = localSettings.laundryShopName || "CAJ LAUNDRY LOCKER CO.";
+                let receiptFootnote = localSettings.receiptFootnote || "Thank you!"; 
 
                 const context = (data.status === TRANSACTION_STATUS.COMPLETED) ? 'pickup' : 'dropoff';
-                const printPayload = {
-                    transactionId: data.transactionId,
-                    pin: data.pin,
+                
+                // Print locally
+                executePrintCommand({
+                    transactionId: data.transactionId || id,
+                    pin: data.pin || 'N/A',
                     processType: context,
-                    weight: data.weight,
-                    price: data.price,
-                    type: data.type,
+                    weight: data.weight || 0,
+                    price: data.price || 0,
+                    type: data.type || 'N/A',
                     shopName: shopName,
                     receiptFootnote: receiptFootnote 
-                };
-                executePrintCommand(printPayload);
-                try { await updateDoc(doc(db, "transactions", id), { triggerPrint: false }); } catch (e) {}
+                });
+
+                // Immediately turn the flag off in Firebase so it doesn't print again
+                try { 
+                    await updateDoc(doc(db, "transactions", id), { triggerPrint: false }); 
+                } catch (e) {}
             }
         });
     });
@@ -543,27 +552,21 @@ function startRemoteTransactionSyncListener() {
         let hasChanges = false;
         
         snapshot.docChanges().forEach((change) => {
-            // We only care if an existing transaction was modified or deleted remotely
             if (change.type === 'modified' || change.type === 'removed') {
                 const remoteTx = change.doc.data();
                 const docId = change.doc.id;
                 const txId = remoteTx.transactionId || docId;
                 
-                // See if this transaction is actively tracked by the local kiosk
                 const localIndex = localTransactions.findIndex(tx => 
                     tx.transactionId === txId || tx.firebaseDocId === docId
                 );
 
                 if (localIndex !== -1) {
                     const localTx = localTransactions[localIndex];
-                    
                     const normalizedRemoteStatus = normalizeTransactionStatus(remoteTx.status);
 
-                    // If the Admin changed the status (e.g., forced completion/archive)
                     if (normalizedRemoteStatus !== localTx.status) {
                         console.log(`[SYNC] 📥 Admin remotely changed TRX ${txId} status to: ${normalizedRemoteStatus}`);
-                        
-                        // Update the local database
                         localTransactions[localIndex] = { 
                             ...localTx, 
                             ...remoteTx,
@@ -572,7 +575,6 @@ function startRemoteTransactionSyncListener() {
                         };
                         hasChanges = true;
                         
-                        // If it's no longer pending, free up the physical locker on the UI!
                         if ([TRANSACTION_STATUS.COMPLETED, TRANSACTION_STATUS.ARCHIVED].includes(normalizedRemoteStatus)) {
                             const lockerKey = `l${localTx.lockerId}`;
                             if (systemState[lockerKey] && systemState[lockerKey].status === 'occupied') {
@@ -581,13 +583,26 @@ function startRemoteTransactionSyncListener() {
                             }
                         }
                     } 
-                    // Or if the Admin just updated the price, weight, or laundry status
                     else if (
                         remoteTx.price !== localTx.price || 
                         remoteTx.weight !== localTx.weight ||
                         remoteTx.laundryStatus !== localTx.laundryStatus
                     ) {
                          console.log(`[SYNC] 📥 Admin remotely updated details for TRX ${txId}`);
+                         
+                         // 🚀 NEW: Trigger Ready SMS and LED if Admin marked 'Done'
+                         if (remoteTx.laundryStatus === 'Done' && localTx.laundryStatus !== 'Done') {
+                             const smsMsg = `${localSettings.laundryShopName || 'CAJ LAUNDRY LOCKER CO.'}
+                            Date: ${new Date().toLocaleString()}
+                            Trans #: ${txId}
+                            Service: READY FOR PICKUP
+                            ----------------
+                            Status: WASHING COMPLETE
+                            Please proceed to payment.`;
+                             enqueueSMS(remoteTx.phoneNumber, smsMsg);
+                             enqueueLockerAction(localTx.lockerId, 'LED_YELLOW'); // Update LED locally
+                         }
+
                          localTransactions[localIndex] = { 
                              ...localTx, 
                              ...remoteTx, 
@@ -599,15 +614,11 @@ function startRemoteTransactionSyncListener() {
             }
         });
 
-        // Save changes to the JSON file so they persist if the kiosk reboots
-        if (hasChanges) {
-            persistLocalTransactions();
-        }
+        if (hasChanges) persistLocalTransactions();
     });
 }
 
 function executePrintCommand(data) {
-    // Dynamically find the printer port
     const printerPorts = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
     const PRINTER_PATH = printerPorts.find(p => fs.existsSync(p));
 
@@ -616,10 +627,8 @@ function executePrintCommand(data) {
         return;
     }
 
-    // Extract receiptFootnote here
     const { transactionId, pin, processType, weight, price, shopName, receiptFootnote } = data;
     
-    // We use actual empty lines at the bottom to feed the paper
     const receiptText = `
    ${shopName}
    --------------------------
@@ -638,7 +647,6 @@ function executePrintCommand(data) {
 
 `;
 
-    // 🚀 Use Node.js native file system to write directly to the printer
     fs.writeFile(PRINTER_PATH, receiptText, (error) => {
         if (error) {
             console.error("Printer Error:", error);
@@ -654,9 +662,7 @@ function executePrintCommand(data) {
 
 async function syncTransactionToFirebase(tx) {
     if (tx.sync?.transactionSynced) return;
-    if (!firebaseReady) {
-        throw new Error('Firebase unavailable. Transaction queued for retry.');
-    }
+    if (!firebaseReady) throw new Error('Firebase unavailable. Transaction queued for retry.');
 
     const payload = { ...tx };
     delete payload.sync;
@@ -667,15 +673,10 @@ async function syncTransactionToFirebase(tx) {
     delete payload.timestamp;
     const transactionDocId = tx.transactionId || tx.firebaseDocId;
 
-    if (!transactionDocId) {
-        throw new Error('Missing transactionId for Firebase setDoc transaction sync.');
-    }
+    if (!transactionDocId) throw new Error('Missing transactionId for Firebase setDoc transaction sync.');
 
     try {
-        // 1. Save the transaction itself
         await setDoc(doc(db, 'transactions', transactionDocId), payload, { merge: true });
-        
-        // 2. NEW: Update the locker document to show it is occupied by this transaction
         if (payload.status === TRANSACTION_STATUS.PENDING) {
              await setDoc(doc(db, 'lockers', String(tx.lockerId)), {
                  status: 'occupied',
@@ -683,7 +684,6 @@ async function syncTransactionToFirebase(tx) {
                  updatedAt: new Date()
              }, { merge: true });
         }
-
         tx.firebaseDocId = transactionDocId;
         tx.sync = { ...tx.sync, transactionSynced: true, lastError: null };
         persistLocalTransactions();
@@ -696,18 +696,15 @@ async function syncTransactionToFirebase(tx) {
 
 async function syncPickupToFirebase(tx) {
     if (tx.sync?.pickupSynced) return;
-    if (!firebaseReady) {
-        throw new Error('Firebase unavailable. Pickup sync queued for retry.');
-    }
+    if (!firebaseReady) throw new Error('Firebase unavailable. Pickup sync queued for retry.');
 
     try {
-        // 1. Mark transaction as completed
         if (tx.firebaseDocId) {
             await updateDoc(doc(db, 'transactions', tx.firebaseDocId), {
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
-                paymentId: tx.paymentId,
-                triggerPrint: true
+                paymentId: tx.paymentId
+                // triggerPrint: true // ❌ REMOVED so it doesn't double-print on reconnect
             });
         } else {
             const q = query(
@@ -715,18 +712,16 @@ async function syncPickupToFirebase(tx) {
                 where('lockerId', '==', Number(tx.lockerId)),
                 where('status', '==', TRANSACTION_STATUS.PENDING)
             );
-
             const snapshot = await getDocs(q);
             const updates = snapshot.docs.map((remoteTx) => updateDoc(doc(db, 'transactions', remoteTx.id), {
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
-                paymentId: tx.paymentId,
-                triggerPrint: true
+                paymentId: tx.paymentId
+                // triggerPrint: true // ❌ REMOVED
             }));
             await Promise.all(updates);
         }
 
-        // 2. Keep locker open for customer pickup; lock is triggered after Thank You timeout.
         await updateDoc(doc(db, 'lockers', String(tx.lockerId)), {
             status: 'available',
             action: 'unlock',
@@ -747,18 +742,13 @@ async function reconcileLocalTransactions() {
     for (const tx of localTransactions) {
         try {
             await syncTransactionToFirebase(tx);
-            if (tx.status === TRANSACTION_STATUS.COMPLETED) {
-                await syncPickupToFirebase(tx);
-            }
-        } catch (error) {
-            // Keep local-first behavior; retry on next interval
-        }
+            if (tx.status === TRANSACTION_STATUS.COMPLETED) await syncPickupToFirebase(tx);
+        } catch (error) { }
     }
 }
 
 async function bootstrapFirebaseServices() {
     if (firebaseBootstrapped) return;
-
     firebaseBootstrapped = true;
     await initializeSettings();
     await initializeLockers();
@@ -775,19 +765,13 @@ async function connectFirebaseAuth() {
     try {
         await signInAnonymously(auth);
         firebaseReady = true;
-
-        if (authRetryTimer) {
-            clearTimeout(authRetryTimer);
-            authRetryTimer = null;
-        }
-
+        if (authRetryTimer) { clearTimeout(authRetryTimer); authRetryTimer = null; }
         console.log('✅ [FIREBASE] Authenticated');
         await bootstrapFirebaseServices();
         await reconcileLocalTransactions();
     } catch (error) {
         firebaseReady = false;
         console.error('⚠️ [FIREBASE] Running in offline-first mode:', error?.message || error);
-
         if (!authRetryTimer) {
             authRetryTimer = setTimeout(() => {
                 authRetryTimer = null;
@@ -808,6 +792,23 @@ app.get('/api/status', (req, res) => res.json(systemState));
 app.get('/api/lockers', (req, res) => res.json(getLocalLockers()));
 app.get('/api/settings', (req, res) => res.json(localSettings));
 
+// 🚀 NEW: Standalone Print Endpoint (Called by React UI when payment completes)
+app.post('/api/print-receipt', (req, res) => {
+    const { lockerUnit, weight, totalDue, date } = req.body;
+    
+    executePrintCommand({
+        transactionId: `TX-${Date.now()}`, 
+        pin: 'PAID', 
+        processType: 'pickup',
+        weight: weight,
+        price: totalDue,
+        shopName: localSettings.laundryShopName || "CAJ LAUNDRY LOCKER CO.",
+        receiptFootnote: localSettings.receiptFootnote || "Thank you!"
+    });
+
+    res.json({ success: true });
+});
+
 app.post('/api/dropoff', (req, res) => {
     const payload = {
         ...req.body,
@@ -821,10 +822,37 @@ app.post('/api/dropoff', (req, res) => {
         systemState[key].status = 'occupied';
     }
 
-    const savedTx = {
-        ...payload,
-        sync: { transactionSynced: false, pickupSynced: false, lastError: null }
-    };
+    // 🚀 NEW: IMMEDIATELY LOCK AND TURN LED RED LOCALLY
+    enqueueLockerAction(payload.lockerId, 'lock');
+    enqueueLockerAction(payload.lockerId, 'LED_RED');
+
+    // 🚀 NEW: IMMEDIATELY PRINT DROPOFF RECEIPT LOCALLY
+    executePrintCommand({
+        transactionId: payload.transactionId || `TX-${Date.now()}`,
+        pin: payload.pin || 'N/A',
+        processType: 'dropoff',
+        weight: payload.weight,
+        price: payload.price,
+        type: payload.type,
+        shopName: localSettings.laundryShopName || "CAJ LAUNDRY LOCKER CO.",
+        receiptFootnote: localSettings.receiptFootnote || "Thank you!"
+    });
+
+    // 🚀 NEW: IMMEDIATELY QUEUE LOCAL SMS
+    if (payload.phoneNumber) {
+        const smsMsg = `${localSettings.laundryShopName || 'CAJ LAUNDRY LOCKER CO.'}
+        Date: ${new Date().toLocaleString()}
+        Trans #: ${payload.transactionId}
+        Service: DROPOFF
+        Weight: ${Number(payload.weight).toFixed(2)} kg
+        Price: PHP ${Number(payload.price).toFixed(2)}
+        ----------------
+        PIN: ${payload.pin}
+        Keep this PIN safe!`;
+        enqueueSMS(payload.phoneNumber, smsMsg);
+    }
+
+    const savedTx = { ...payload, sync: { transactionSynced: false, pickupSynced: false, lastError: null } };
     localTransactions.push(savedTx);
     persistLocalTransactions();
 
@@ -837,6 +865,11 @@ app.post('/api/dropoff', (req, res) => {
 
 app.post('/api/pickup', (req, res) => {
     const { lockerId, paymentId } = req.body;
+
+    // 🚀 NEW: IMMEDIATELY UNLOCK AND TURN LED GREEN LOCALLY
+    enqueueLockerAction(lockerId, 'unlock');
+    enqueueLockerAction(lockerId, 'LED_GREEN');
+
     localTransactions = localTransactions.map((tx) => {
         if (tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING) {
             return {
@@ -850,7 +883,6 @@ app.post('/api/pickup', (req, res) => {
         return tx;
     });
     persistLocalTransactions();
-
 
     const completedTransactions = localTransactions.filter((tx) =>
         tx.lockerId === Number(lockerId) &&

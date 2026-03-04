@@ -17,6 +17,7 @@ BAUD_RATE = 115200
 LOG_FILE = "gsm_logs.log"
 STATE_FILE = "sys_state.json" 
 LOCKER_ACTIONS_FILE = "locker_actions.json"
+SMS_QUEUE_FILE = "sms_queue.json"  # 🚀 NEW: SMS Queue File
 UPDATE_INTERVAL = 0.2 
 RECONNECT_INTERVAL = 3.0        
 
@@ -58,27 +59,21 @@ else:
 
 # --- DYNAMIC PORT DISCOVERY ---
 def find_ports():
-    """
-    Scans all available USB serial ports to identify which is the GSM module
-    and which is the Arduino based on their responses.
-    """
     print("🔎 Scanning ports for devices...")
     ports = serial.tools.list_ports.comports()
     found_arduino = None
     found_gsm = None
 
     for port in ports:
-        # Skip internal Raspberry Pi Bluetooth/Serial ports
         if "ttyAMA" in port.device: 
             continue
         
         print(f"   👉 Testing {port.device}...")
         try:
-            # Open port temporarily for testing
             with serial.Serial(port.device, BAUD_RATE, timeout=1.5) as s:
-                time.sleep(2) # Wait for device reset (Arduino auto-resets on connect)
+                time.sleep(2) 
                 
-                # 1. TEST FOR GSM (Send AT command)
+                # 1. TEST FOR GSM 
                 s.write(b'AT\r\n')
                 time.sleep(0.5)
                 response = s.read_all().decode('utf-8', errors='ignore')
@@ -86,10 +81,9 @@ def find_ports():
                 if "OK" in response:
                     print(f"      📱 IDENTIFIED: GSM Module on {port.device}")
                     found_gsm = port.device
-                    continue # Move to next port
+                    continue 
 
-                # 2. TEST FOR ARDUINO (Listen for data stream)
-                # Arduino continuously sends "DATA|..."
+                # 2. TEST FOR ARDUINO 
                 start_time = time.time()
                 while time.time() - start_time < 3.0:
                     line = s.readline().decode('utf-8', errors='ignore').strip()
@@ -106,11 +100,8 @@ def find_ports():
 # --- HARDWARE CONNECTION ---
 def connect_hardware():
     print("--- Connecting to Hardware ---")
-    
-    # 1. Find the correct ports dynamically
     ard_path, gsm_path = find_ports()
     
-    # 2. Connect to Arduino
     ard = None
     if ard_path:
         try:
@@ -123,7 +114,6 @@ def connect_hardware():
     else:
         print("❌ ARDUINO NOT DETECTED during scan.")
 
-    # 3. Connect to GSM
     modem = None
     if gsm_path:
         try:
@@ -140,10 +130,6 @@ def connect_hardware():
     return ard, modem
 
 def reconnect_arduino_if_needed(current_arduino, last_attempt_ts):
-    """
-    Recover from transient serial disconnects (common when the USB device resets).
-    Keeps the kiosk operational offline by restoring local DATA stream updates.
-    """
     if current_arduino and current_arduino.is_open:
         return current_arduino, last_attempt_ts
 
@@ -160,7 +146,6 @@ def reconnect_arduino_if_needed(current_arduino, last_attempt_ts):
     return current_arduino, now
 
 
-# Initialize connections
 arduino, gsm = connect_hardware()
 
 # --- STATE TRACKING ---
@@ -184,8 +169,6 @@ def send_led_command(locker_id, color_code):
 
 def process_locker_leds(locker_id, locker_data):
     raw_status = locker_data.get('collectionStatus', locker_data.get('status', ''))
-    
-    # If locker is disconnected, force RED LED
     is_connected = locker_data.get('isConnected', True)
     if not is_connected:
         send_led_command(locker_id, LED_RED) 
@@ -215,117 +198,14 @@ def process_locker_leds(locker_id, locker_data):
         send_led_command(locker_id, LED_RED)
 
 # --- LISTENERS ---
-
-# 1. Settings Listener (Dynamic Shop Name)
 def on_settings_snapshot(col_snapshot, changes, read_time):
     global SHOP_NAME
     for change in changes:
         if change.type.name in ['ADDED', 'MODIFIED']:
             data = change.document.to_dict()
             name = data.get('laundryShopName', "CAJ LAUNDRY LOCKER CO.")
-            SHOP_NAME = name.upper() # Ensure it is uppercase for the receipt style
+            SHOP_NAME = name.upper() 
             print(f"⚙️ Shop Name Updated: {SHOP_NAME}")
-
-# 2. Transaction Listener (SMS Logic)
-def on_transaction_snapshot(col_snapshot, changes, read_time):
-    for change in changes:
-        if change.type.name in ['ADDED', 'MODIFIED']:
-            data = change.document.to_dict()
-            laundry_status = str(data.get('laundryStatus', '')).strip().lower()
-            phone = data.get('phoneNumber')
-            trans_id = data.get('transactionId', 'N/A')
-            pin = data.get('pin', 'N/A')
-            
-            # 👇 ADD THIS: Get the locker ID from the transaction
-            locker_id = data.get('lockerId')
-            
-            # Retrieve flags
-            trigger_reminder = data.get('triggerReminder', False)
-            reminder_sent_flag = data.get('reminderSent', False) 
-            code_sms_sent = data.get('codeSmsSent', False)       
-            done_sms_sent = data.get('doneSmsSent', False)       
-
-            # Get Receipt Details
-            weight = float(data.get('weight', 0))
-            price = float(data.get('price', 0))
-            current_time = datetime.datetime.now().strftime("%m/%d/%Y %H:%M")
-
-            if not phone or not gsm: continue
-            
-            msg = ""
-            updates = {} 
-
-            is_dropoff_completed = laundry_status in ['dropped', 'pending']
-            is_laundry_done = laundry_status == 'done'
-
-            # A. Manual Reminder
-            if trigger_reminder:
-                msg = (
-                    f"{SHOP_NAME}\n"
-                    f"OVERDUE REMINDER: Your laundry is ready for pickup.\n"
-                    f"Ref: {trans_id}\n"
-                    f"Please claim it as soon as possible."
-                )
-                log_gsm(f"Triggering overdue reminder for {phone}")
-                updates['triggerReminder'] = False
-                updates['reminderSent'] = True
-
-            # B. Dropoff Receipt (Standard)
-            elif is_dropoff_completed:
-                if not code_sms_sent:
-                    msg = (
-                        f"{SHOP_NAME}\n"
-                        f"Date: {current_time}\n"
-                        f"Trans #: {trans_id}\n"
-                        f"Service: DROPOFF\n"
-                        f"Weight: {weight:.2f} kg\n"
-                        f"Price: PHP {price:.2f}\n"
-                        f"----------------\n"
-                        f"PIN: {pin}\n"
-                        f"Keep this PIN safe!"
-                    )
-                    updates['codeSmsSent'] = True
-
-            # C. Pickup/Ready Notification
-            elif is_laundry_done:
-                
-                # 👇 ADD THIS: Force the LED to turn yellow immediately
-                if locker_id:
-                    send_led_command(str(locker_id), LED_YELLOW)
-
-                if not done_sms_sent and not reminder_sent_flag:
-                    msg = (
-                        f"{SHOP_NAME}\n"
-                        f"Date: {current_time}\n"
-                        f"Trans #: {trans_id}\n"
-                        f"Service: READY FOR PICKUP\n"
-                        f"----------------\n"
-                        f"Status: WASHING COMPLETE\n"
-                        f"Please proceed to payment."
-                    )
-                    updates['doneSmsSent'] = True
-
-            # D. Send SMS & Update DB
-            if msg:
-                log_gsm(f"Sending SMS to {phone}")
-                try:
-                    gsm.write(b'AT+CMGF=1\r\n')
-                    time.sleep(0.5)
-                    gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
-                    time.sleep(0.5)
-                    gsm.write(msg.encode())
-                    gsm.write(bytes([26])) 
-                    time.sleep(3)
-                    
-                    if updates:
-                        try:
-                            change.document.reference.update(updates)
-                            print(f"📝 Updated flags: {list(updates.keys())}")
-                        except Exception as e:
-                            log_gsm(f"Error updating DB flags: {e}")
-
-                except Exception as e:
-                    log_gsm(f"SMS Error: {e}")
 
 def on_locker_snapshot(col_snapshot, changes, read_time):
     for change in changes:
@@ -352,16 +232,11 @@ def on_locker_snapshot(col_snapshot, changes, read_time):
 if db:
     print("🎧 Listening for Firebase updates...")
     try:
-        # Start Listeners
-        db.collection('transactions').where('laundryStatus', 'in', ['Dropped', 'Pending', 'Done']).on_snapshot(on_transaction_snapshot)
         db.collection('lockers').on_snapshot(on_locker_snapshot)
-        
-        # New Settings Listener
         db.collection('settings').document('general').on_snapshot(on_settings_snapshot)
-        
+        # ❌ REMOVED the transaction snapshot listener entirely so Firebase doesn't trigger duplicate SMS
     except Exception as e:
         print(f"Listener Error: {e}")
-
 
 
 def consume_local_actions():
@@ -384,7 +259,14 @@ def consume_local_actions():
     for cmd in commands:
         locker_id = str(cmd.get('lockerId', ''))
         action = str(cmd.get('action', '')).upper()
-        prefix = 'u' if action == 'UNLOCK' else 'l' if action == 'LOCK' else None
+        
+        # 🚀 NEW: Parses LED actions locally
+        prefix = None
+        if action == 'UNLOCK': prefix = 'u'
+        elif action == 'LOCK': prefix = 'l'
+        elif action == 'LED_RED': prefix = 'r'
+        elif action == 'LED_GREEN': prefix = 'g'
+        elif action == 'LED_YELLOW': prefix = 'y'
 
         if prefix and locker_id in ['1', '2', '3']:
             try:
@@ -402,6 +284,53 @@ def consume_local_actions():
     except Exception:
         pass
 
+
+# 🚀 NEW: SMS Consumer Function
+def consume_local_sms():
+    if not gsm or not gsm.is_open:
+        return
+
+    if not os.path.exists(SMS_QUEUE_FILE):
+        return
+
+    try:
+        with open(SMS_QUEUE_FILE, 'r') as f:
+            sms_list = json.load(f)
+    except Exception:
+        return
+
+    if not isinstance(sms_list, list) or len(sms_list) == 0:
+        return
+
+    remaining = []
+    for sms in sms_list:
+        phone = sms.get('phone')
+        msg = sms.get('message')
+
+        if phone and msg:
+            log_gsm(f"📲 Sending Local SMS to {phone}")
+            try:
+                gsm.write(b'AT+CMGF=1\r\n')
+                time.sleep(0.5)
+                gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
+                time.sleep(0.5)
+                gsm.write(msg.encode())
+                gsm.write(bytes([26])) 
+                time.sleep(3)
+                print(f"✅ SMS successfully sent to {phone}")
+            except Exception as e:
+                print(f"❌ SMS failed to send: {e}")
+                remaining.append(sms) 
+        else:
+            pass
+
+    try:
+        with open(SMS_QUEUE_FILE, 'w') as f:
+            json.dump(remaining, f)
+    except Exception:
+        pass
+
+
 # --- MAIN LOOP ---
 print("🚀 Hybrid Bridge Running...")
 last_file_update = 0
@@ -410,7 +339,9 @@ last_reconnect_attempt = 0
 
 while True:
     arduino, last_reconnect_attempt = reconnect_arduino_if_needed(arduino, last_reconnect_attempt)
-    consume_local_actions()
+    
+    consume_local_actions() # Hardware commands
+    consume_local_sms()     # 🚀 NEW: Check SMS Queue
 
     if arduino and arduino.in_waiting:
         try:
@@ -438,9 +369,6 @@ while True:
                             door_status = l_data[2]      
                             conn_flag = l_data[3].strip() if len(l_data) > 3 else None
                             
-                            # Support both payload formats:
-                            # 1) DATA|L1:1.2:OPEN:1 (with connectivity flag)
-                            # 2) DATA|L1:1.2:OPEN   (legacy/no flag -> assume connected)
                             is_hw_connected = (conn_flag == "1") if conn_flag is not None else True
                             
                             if local_connection_states.get(l_id) != is_hw_connected:
