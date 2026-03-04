@@ -86,11 +86,19 @@ function writeJsonFile(filePath, data) {
 
 // 🚀 NEW: Local SMS Queuing Function
 function enqueueSMS(phone, message) {
-    if (!phone) return;
+    if (!phone || !message) return;
+
+    const normalizedPhone = String(phone).trim();
+    const isValidPhone = /^\+?\d{10,15}$/.test(normalizedPhone);
+    if (!isValidPhone) {
+        console.warn(`[SMS QUEUE] Skipped invalid phone number: ${normalizedPhone}`);
+        return;
+    }
+
     const queue = readJsonFile(SMS_QUEUE_FILE, []);
-    queue.push({ phone, message, ts: Date.now() });
+    queue.push({ phone: normalizedPhone, message, ts: Date.now() });
     writeJsonFile(SMS_QUEUE_FILE, queue);
-    console.log(`[SMS QUEUE] Queued message for ${phone}`);
+    console.log(`[SMS QUEUE] Queued message for ${normalizedPhone}`);
 }
 
 function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs = 5000) {
@@ -162,19 +170,32 @@ function persistLocalTransactions() {
     writeJsonFile(LOCAL_TRANSACTIONS_FILE, localTransactions);
 }
 
+function normalizeLockerId(lockerId) {
+    const normalized = String(lockerId ?? '').trim();
+    return ['1', '2', '3'].includes(normalized) ? normalized : null;
+}
+
 function enqueueLockerAction(lockerId, action) {
+    const normalizedLockerId = normalizeLockerId(lockerId);
+    const normalizedAction = String(action ?? '').trim().toUpperCase();
+    if (!normalizedLockerId || !normalizedAction) return;
+
     const commands = readJsonFile(LOCKER_ACTIONS_FILE, []);
-    commands.push({ lockerId: String(lockerId), action: action.toUpperCase(), ts: Date.now() });
+    commands.push({ lockerId: normalizedLockerId, action: normalizedAction, ts: Date.now() });
     writeJsonFile(LOCKER_ACTIONS_FILE, commands);
 }
 
 function markLockerAvailableAndLock(lockerId) {
-    const key = `l${lockerId}`;
+    const normalizedLockerId = normalizeLockerId(lockerId);
+    if (!normalizedLockerId) return;
+
+    const key = `l${normalizedLockerId}`;
     if (systemState[key]) {
         systemState[key].status = 'available';
         systemState[key].action = 'lock';
     }
-    enqueueLockerAction(lockerId, 'lock');
+    enqueueLockerAction(normalizedLockerId, 'lock');
+    enqueueLockerAction(normalizedLockerId, 'LED_GREEN');
 }
 
 function getActiveTransactionByLocker(lockerId) {
@@ -870,6 +891,11 @@ app.post('/api/pickup', (req, res) => {
     enqueueLockerAction(lockerId, 'unlock');
     enqueueLockerAction(lockerId, 'LED_GREEN');
 
+    // Safety fallback: lock again after pickup grace period even if UI reset fails
+    setTimeout(() => {
+        markLockerAvailableAndLock(lockerId);
+    }, 12000);
+
     localTransactions = localTransactions.map((tx) => {
         if (tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING) {
             return {
@@ -902,6 +928,7 @@ app.post('/api/pickup', (req, res) => {
 app.post('/api/unlock', (req, res) => {
     const { lockerId } = req.body;
     enqueueLockerAction(lockerId, 'unlock');
+    enqueueLockerAction(lockerId, 'LED_GREEN');
 
     if (firebaseReady) {
         setDoc(doc(db, 'lockers', String(lockerId)), { action: 'unlock', updatedAt: new Date() }, { merge: true }).catch((error) => {
@@ -915,6 +942,7 @@ app.post('/api/unlock', (req, res) => {
 app.post('/api/lock', (req, res) => {
     const { lockerId } = req.body;
     enqueueLockerAction(lockerId, 'lock');
+    enqueueLockerAction(lockerId, 'LED_RED');
 
     if (firebaseReady) {
         setDoc(doc(db, 'lockers', String(lockerId)), { action: 'lock', updatedAt: new Date() }, { merge: true }).catch((error) => {

@@ -14,6 +14,7 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
   const [connectionError, setConnectionError] = useState(false);
   const pollInterval = useRef<number | null>(null);
   const baselineCreditRef = useRef<number>(0);
+  const hasPrintedRef = useRef(false);
 
   // Use a Ref to keep the latest onComplete function stable across re-renders
   const onCompleteRef = useRef(onComplete);
@@ -66,13 +67,27 @@ export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: P
   // 2. AUTO-REDIRECT: Watch for payment completion
   useEffect(() => {
     if (isPaymentComplete) {
+      if (!hasPrintedRef.current) {
+        hasPrintedRef.current = true;
+        fetch('http://localhost:3000/api/print-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lockerUnit: lockerId,
+            weight,
+            totalDue: price,
+            date: new Date().toLocaleDateString('en-GB')
+          })
+        }).catch(err => console.error("Printing failed:", err));
+      }
+
       // Timer waits 1.5s, then calls the STABLE ref function
       const timer = setTimeout(() => {
         onCompleteRef.current(); 
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isPaymentComplete]); // IMPORTANT: Do NOT include onComplete here
+  }, [isPaymentComplete, lockerId, price, weight]);
 
   return (
       <div className="available-lockers-container" style={{ marginTop: '12px'}}>

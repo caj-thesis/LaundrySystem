@@ -143,7 +143,7 @@ export default function App() {
           price: finalPrice,
           weight: finalWeight,
           pricePerKg: selectedPricePerKg,
-          phoneNumber: phoneNumber || 'N/A',
+          phoneNumber: phoneNumber || '',
           type: selectedLaundryType,
           status: 'Pending',
           laundryStatus: 'Dropped',
