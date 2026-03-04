@@ -825,16 +825,21 @@ async function reconcileLocalTransactions() {
 async function bootstrapFirebaseServices() {
     if (firebaseBootstrapped) return;
 
-    firebaseBootstrapped = true;
-    await initializeSettings();
-    await initializeLockers();
-    startDatabaseListener();
-    startSettingsListener();
-    startPrinterListener();
-    startLaundryStatusListener();
-    startOverdueListener();
-    startRemoteTransactionSyncListener();
-    checkOverduePickups();
+    try {
+        await initializeSettings();
+        await initializeLockers();
+        startDatabaseListener();
+        startSettingsListener();
+        startPrinterListener();
+        startLaundryStatusListener();
+        startOverdueListener();
+        startRemoteTransactionSyncListener();
+        checkOverduePickups();
+        firebaseBootstrapped = true;
+    } catch (error) {
+        firebaseBootstrapped = false;
+        throw error;
+    }
 }
 
 async function connectFirebaseAuth() {
