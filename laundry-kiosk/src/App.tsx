@@ -249,7 +249,7 @@ export default function App() {
         
         {currentScreen === 'available-lockers' && (
           <AvailableLockersPage 
-            lockers={lockers.filter(l => l.status === 'available')} 
+            lockers={lockers.filter(l => l.status === 'available' && l.isConnected !== false)} 
             onSelectLocker={handleLockerSelect} 
             onBack={handleAvailableLockersBack} 
           />
@@ -277,7 +277,7 @@ export default function App() {
         
         {currentScreen === 'pickup-lockers' && (
           <PickupLockersPage 
-            lockers={lockers.filter(l => l.status === 'occupied')} 
+            lockers={lockers.filter(l => l.status === 'occupied' && l.isConnected !== false)} 
             onSelectLocker={handlePickupLockerSelect} 
             onBack={handlePickupLockersBack} 
           />

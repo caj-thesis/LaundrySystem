@@ -167,12 +167,30 @@ function markLockerAvailableAndLock(lockerId) {
     enqueueLockerAction(lockerId, 'lock');
 }
 
+function applyLocalLockerAction(lockerId, action, options = {}) {
+    const key = `l${lockerId}`;
+    const normalizedAction = String(action || '').toLowerCase();
+
+    if (systemState[key]) {
+        systemState[key].action = normalizedAction || systemState[key].action;
+
+        if (options.status) {
+            systemState[key].status = options.status;
+        }
+    }
+
+    if (normalizedAction) {
+        enqueueLockerAction(lockerId, normalizedAction);
+    }
+}
+
+
 function getActiveTransactionByLocker(lockerId) {
     return localTransactions.find((tx) => tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING);
 }
 
 function getLocalLockers() {
-    return [1, 2, 3].map((id) => {
+    const lockers = [1, 2, 3].map((id) => {
         const key = `l${id}`;
         const hardware = systemState[key] || {};
         const active = getActiveTransactionByLocker(id);
@@ -189,7 +207,15 @@ function getLocalLockers() {
             currentTransactionId: active?.transactionId
         };
     });
+
+
+    if (!firebaseReady) {
+        return lockers.filter((locker) => locker.isConnected !== false);
+    }
+
+    return lockers;
 }
+
 
 // --- 1. HARDWARE WATCHER ---
 function updateStateFromFile() {
@@ -819,6 +845,7 @@ app.post('/api/dropoff', (req, res) => {
     const key = `l${payload.lockerId}`;
     if (systemState[key]) {
         systemState[key].status = 'occupied';
+        systemState[key].action = 'lock';
     }
 
     const savedTx = {
@@ -851,6 +878,8 @@ app.post('/api/pickup', (req, res) => {
     });
     persistLocalTransactions();
 
+    // Match online listener behavior even when running offline.
+    applyLocalLockerAction(lockerId, 'unlock', { status: 'available' });
 
     const completedTransactions = localTransactions.filter((tx) =>
         tx.lockerId === Number(lockerId) &&
@@ -869,7 +898,7 @@ app.post('/api/pickup', (req, res) => {
 
 app.post('/api/unlock', (req, res) => {
     const { lockerId } = req.body;
-    enqueueLockerAction(lockerId, 'unlock');
+    applyLocalLockerAction(lockerId, 'unlock');
 
     if (firebaseReady) {
         setDoc(doc(db, 'lockers', String(lockerId)), { action: 'unlock', updatedAt: new Date() }, { merge: true }).catch((error) => {
@@ -882,7 +911,7 @@ app.post('/api/unlock', (req, res) => {
 
 app.post('/api/lock', (req, res) => {
     const { lockerId } = req.body;
-    enqueueLockerAction(lockerId, 'lock');
+    applyLocalLockerAction(lockerId, 'lock');
 
     if (firebaseReady) {
         setDoc(doc(db, 'lockers', String(lockerId)), { action: 'lock', updatedAt: new Date() }, { merge: true }).catch((error) => {
