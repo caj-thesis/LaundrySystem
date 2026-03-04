@@ -14,12 +14,13 @@ interface WeighingPageProps {
 export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice, doorStatus, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
   const [isReturning, setIsReturning] = useState(false);
+  const safeCurrentWeight = Math.max(0, currentWeight);
 
   // State to freeze the weight when the user locks the locker
   const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
 
   // Determine which weight to use: the frozen one (if locked) or the live one
-  const displayWeight = frozenWeight !== null ? frozenWeight : currentWeight;
+  const displayWeight = frozenWeight !== null ? frozenWeight : safeCurrentWeight;
 
   // UPDATED: Calculate price based on the passed prop, not a hardcoded value
   const calculatedPrice = displayWeight * pricePerKg;
@@ -67,7 +68,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
       return;
     }
 
-    setFrozenWeight(currentWeight);
+    setFrozenWeight(safeCurrentWeight);
     setStep('weighing'); 
     
     try {
