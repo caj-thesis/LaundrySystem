@@ -231,7 +231,7 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name in ['ADDED', 'MODIFIED']:
             data = change.document.to_dict()
-            status = data.get('laundryStatus')
+            laundry_status = str(data.get('laundryStatus', '')).strip().lower()
             phone = data.get('phoneNumber')
             trans_id = data.get('transactionId', 'N/A')
             pin = data.get('pin', 'N/A')
@@ -255,20 +255,23 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
             msg = ""
             updates = {} 
 
+            is_dropoff_completed = laundry_status in ['dropped', 'pending']
+            is_laundry_done = laundry_status == 'done'
+
             # A. Manual Reminder
             if trigger_reminder:
                 msg = (
                     f"{SHOP_NAME}\n"
-                    f"REMINDER: Your laundry is ready!\n"
+                    f"OVERDUE REMINDER: Your laundry is ready for pickup.\n"
                     f"Ref: {trans_id}\n"
-                    f"Please pickup within 24 hours."
+                    f"Please claim it as soon as possible."
                 )
-                log_gsm(f"Triggering Manual Reminder for {phone}")
+                log_gsm(f"Triggering overdue reminder for {phone}")
                 updates['triggerReminder'] = False
                 updates['reminderSent'] = True
 
             # B. Dropoff Receipt (Standard)
-            elif status == 'Pending':
+            elif is_dropoff_completed:
                 if not code_sms_sent:
                     msg = (
                         f"{SHOP_NAME}\n"
@@ -284,7 +287,7 @@ def on_transaction_snapshot(col_snapshot, changes, read_time):
                     updates['codeSmsSent'] = True
 
             # C. Pickup/Ready Notification
-            elif status == 'Done':
+            elif is_laundry_done:
                 
                 # 👇 ADD THIS: Force the LED to turn yellow immediately
                 if locker_id:
@@ -350,7 +353,7 @@ if db:
     print("🎧 Listening for Firebase updates...")
     try:
         # Start Listeners
-        db.collection('transactions').where('laundryStatus', 'in', ['Pending', 'Done']).on_snapshot(on_transaction_snapshot)
+        db.collection('transactions').where('laundryStatus', 'in', ['Dropped', 'Pending', 'Done']).on_snapshot(on_transaction_snapshot)
         db.collection('lockers').on_snapshot(on_locker_snapshot)
         
         # New Settings Listener
