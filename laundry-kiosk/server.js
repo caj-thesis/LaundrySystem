@@ -842,11 +842,8 @@ app.post('/api/dropoff', (req, res) => {
         droppedAt: req.body.droppedAt ? new Date(req.body.droppedAt) : new Date()
     };
 
-    const key = `l${payload.lockerId}`;
-    if (systemState[key]) {
-        systemState[key].status = 'occupied';
-        systemState[key].action = 'lock';
-    }
+    // This guarantees locking still happens when Firebase is offline/unreachable.
+    applyLocalLockerAction(payload.lockerId, 'lock', { status: 'occupied' });
 
     const savedTx = {
         ...payload,
