@@ -384,7 +384,17 @@ def consume_local_actions():
     for cmd in commands:
         locker_id = str(cmd.get('lockerId', ''))
         action = str(cmd.get('action', '')).upper()
-        prefix = 'u' if action == 'UNLOCK' else 'l' if action == 'LOCK' else None
+        prefix = None
+        if action == 'UNLOCK':
+            prefix = 'u'
+        elif action == 'LOCK':
+            prefix = 'l'
+        elif action == 'GREEN':
+            prefix = 'g'
+        elif action == 'RED':
+            prefix = 'r'
+        elif action == 'YELLOW':
+            prefix = 'y'
 
         if prefix and locker_id in ['1', '2', '3']:
             try:
