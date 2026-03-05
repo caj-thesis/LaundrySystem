@@ -66,7 +66,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
             width: '100%',
             // --- FIX START ---
             // 1. Constrain width for both modes so it doesn't get too wide
-            maxWidth: '600px', 
+            maxWidth: '100%', 
             // 2. Center the container
             margin: '0 auto'
             // --- FIX END ---

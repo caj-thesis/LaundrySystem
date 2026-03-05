@@ -3,12 +3,13 @@ import { Lock, Delete, AlertCircle } from 'lucide-react';
 
 interface PinCodePageProps {
   lockerId: number;
-  correctPin: string; // New Prop
+  correctPin: string;
+  transactionId?: string | null;
   onVerified: () => void;
   onCancel: () => void;
 }
 
-export function PinCodePage({ lockerId, correctPin, onVerified, onCancel }: PinCodePageProps) {
+export function PinCodePage({ lockerId, correctPin, transactionId, onVerified, onCancel }: PinCodePageProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
 
@@ -20,7 +21,6 @@ export function PinCodePage({ lockerId, correctPin, onVerified, onCancel }: PinC
 
       if (newPin.length === 4) {
         setTimeout(() => {
-          // Compare against the dynamic correctPin prop instead of hardcoded list
           if (newPin === correctPin) {
             onVerified();
           } else {
@@ -51,7 +51,14 @@ export function PinCodePage({ lockerId, correctPin, onVerified, onCancel }: PinC
         <div className="pin-info">
           <Lock size={64} className="pin-icon" />
           <h2 className="pin-title">Enter PIN Code</h2>
-          <p className="pin-locker">Locker {lockerId}</p>          
+          <p className="pin-locker">Locker {lockerId}</p>
+          
+          {transactionId && (
+            <div className="pin-transaction">
+              Transaction ID: {transactionId}
+            </div>
+          )}
+
           <div className="pin-display">
             <div className="pin-dots">
               {[0, 1, 2, 3].map((i) => (

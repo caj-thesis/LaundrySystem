@@ -792,7 +792,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-right: 26px;
+  padding-left: 22px;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -828,7 +828,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-left: 32px;
+  padding-right: 32px;
 }
 
 .cash-payment-container {

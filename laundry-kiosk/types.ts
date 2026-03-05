@@ -7,6 +7,7 @@ export interface Locker {
   readyTime?: string;
   pin?: string; 
   doorStatus?: string;
-  laundryStatus?: 'Dropped' | 'Processing' | 'Done';
+  laundryStatus?: 'Dropped' | 'Washing' | 'Done';
   isConnected?: boolean; 
+  currentTransactionId?: string;
 }

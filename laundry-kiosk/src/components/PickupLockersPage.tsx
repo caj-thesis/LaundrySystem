@@ -13,9 +13,9 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
   const getStatusText = (status?: string) => {
     switch(status) {
       case 'Dropped': return 'Dropped (Waiting)';
-      case 'Processing': return 'Processing';
+      case 'Washing': return 'Washing';
       case 'Done': return 'Ready for Pickup';
-      default: return 'Processing'; 
+      default: return 'Washing';
     }
   };
 
