@@ -77,6 +77,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [selectedLockerId, setSelectedLockerId] = useState<string | null>(null);
   const [transactionsById, setTransactionsById] = useState<Record<string, Transaction>>({});
   const [loading, setLoading] = useState(true);
+  const [detailsView, setDetailsView] = useState<'locker' | 'transaction'>('locker');
 
   useEffect(() => {
     const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
@@ -146,6 +147,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const transaction = selectedLocker?.currentTransactionId
     ? transactionsById[selectedLocker.currentTransactionId] || null
     : null;
+
+  useEffect(() => {
+    setDetailsView('locker');
+  }, [selectedLockerId]);
 
   const handleStatusChange = async () => {
     if (!transaction) return;
@@ -390,8 +395,64 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   </button>
                 </div>
 
-                {transaction ? (
+                {transaction && detailsView === 'locker' && (
+                  <button
+                    onClick={() => setDetailsView('transaction')}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8fafc',
+                      color: '#1f2937',
+                      padding: '10px',
+                      fontWeight: 600,
+                      marginBottom: '10px',
+                    }}
+                  >
+                    View Transaction Details
+                  </button>
+                )}
+
+                {detailsView === 'locker' ? (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#9ca3af',
+                      gap: '8px',
+                    }}
+                  >
+                    {transaction ? (
+                      <p style={{ fontSize: '14px', color: '#6b7280' }}>Tap the button above to view transaction details.</p>
+                    ) : (
+                      <>
+                        <AlertCircle size={28} />
+                        <p style={{ fontSize: '14px' }}>No active transaction for this locker.</p>
+                      </>
+                    )}
+                  </div>
+                ) : transaction ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <button
+                      onClick={() => setDetailsView('locker')}
+                      style={{
+                        alignSelf: 'flex-start',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        backgroundColor: 'white',
+                        color: '#374151',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        marginBottom: '8px',
+                      }}
+                    >
+                      ← Back to Locker Details
+                    </button>
+
                     <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7, marginBottom: '8px' }}>
                       <p><strong>TRN-ID:</strong> {transaction.id}</p>
                       <p><strong>Weight:</strong> {transaction.weight} kg</p>
