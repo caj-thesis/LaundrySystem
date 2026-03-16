@@ -8,6 +8,7 @@ import { PickupLockersPage } from './components/PickupLockersPage';
 import { PinCodePage } from './components/PinCodePage';
 import { PaymentPage } from './components/PaymentPage';
 import { ThankYouPage } from './components/ThankYouPage';
+import { AdminPage } from './components/AdminPage';
 import './styles/app.css';
 
 import { useLockerSystem } from './lockerSystem'; 
@@ -21,7 +22,8 @@ type Screen =
   | 'pickup-lockers'
   | 'pin-entry'
   | 'payment'
-  | 'thank-you';
+  | 'thank-you'
+  | 'admin';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
@@ -78,6 +80,9 @@ export default function App() {
   // --- NAVIGATION HANDLERS ---
   const handleWelcomeNext = () => setCurrentScreen('process-selection');
 
+  const handleAdminAccess = () => setCurrentScreen('admin');
+  const handleAdminExit = () => setCurrentScreen('welcome');
+  
   const handleProcessSelection = (process: 'dropoff' | 'pickup') => {
     setProcessType(process);
     if (process === 'dropoff') {
@@ -241,7 +246,17 @@ export default function App() {
   return (
     <div className="app-container">
       <div className="kiosk-screen">
-        {currentScreen === 'welcome' && <WelcomePage onNext={handleWelcomeNext} shopName={shopName} />}
+        {currentScreen === 'welcome' && (
+          <WelcomePage 
+            onNext={handleWelcomeNext} 
+            onSecretAdminAccess={handleAdminAccess} 
+            shopName={shopName} 
+          />
+        )}
+        
+        {currentScreen === 'admin' && (
+          <AdminPage onBack={handleAdminExit} />
+        )}
         
         {currentScreen === 'process-selection' && (
           <ProcessSelectionPage onSelect={handleProcessSelection} onBack={handleProcessBack} />
