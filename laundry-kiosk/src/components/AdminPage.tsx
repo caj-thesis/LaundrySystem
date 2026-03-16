@@ -350,7 +350,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               minHeight: 0,
             }}
           >
-            <h3 style={{ fontSize: '18px', color: '#1f2937', marginBottom: '8px' }}>Locker Details</h3>
+            <h3 style={{ fontSize: '18px', color: '#1f2937', marginBottom: '8px' }}>
+              {selectedLocker && detailsView === 'transaction' ? 'Transaction Details' : 'Locker Details'}
+            </h3>
 
             {!selectedLocker ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
