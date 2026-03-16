@@ -6,7 +6,6 @@ import {
   doc,
   onSnapshot,
   updateDoc,
-  type Timestamp,
 } from 'firebase/firestore';
 import {
   getFirestore,
@@ -53,13 +52,11 @@ type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
 interface Transaction {
   id: string;
   transactionDocId: string;
-  customerName: string;
-  phone: string;
+  price: number;
   weight: number;
   laundryType: string;
   laundryStatus: LaundryStatus;
   reminderSent: boolean;
-  timestamp: string;
 }
 
 interface Locker {
@@ -73,19 +70,6 @@ interface Locker {
 
 interface AdminPageProps {
   onBack: () => void;
-}
-
-function formatTimestamp(ts: unknown): string {
-  if (!ts) return 'N/A';
-  const candidate = ts as Timestamp | Date | string;
-
-  if (typeof candidate === 'string') return candidate;
-  if (candidate instanceof Date) return candidate.toISOString();
-  if (typeof (candidate as Timestamp).toDate === 'function') {
-    return (candidate as Timestamp).toDate().toISOString();
-  }
-
-  return 'N/A';
 }
 
 export function AdminPage({ onBack }: AdminPageProps) {
@@ -130,18 +114,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         const transactionDocId = docSnap.id;
         const transactionId = (data.transactionId as string) || transactionDocId;
-        const displayName = (data.customerName as string) || transactionId || 'Customer';
-
         const mappedTransaction: Transaction = {
           id: transactionId,
           transactionDocId,
-          customerName: displayName,
-          phone: (data.phoneNumber as string) || 'N/A',
+          price: Number(data.price || 0),
           weight: Number(data.weight || 0),
           laundryType: (data.type as string) || 'N/A',
           laundryStatus: ((data.laundryStatus as LaundryStatus) || 'Dropped') as LaundryStatus,
           reminderSent: Boolean(data.reminderSent),
-          timestamp: formatTimestamp(data.droppedAt),
         };
 
         next[transactionDocId] = mappedTransaction;
@@ -413,12 +393,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 {transaction ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7, marginBottom: '8px' }}>
-                      <p><strong>Txn:</strong> {transaction.id}</p>
-                      <p><strong>Customer:</strong> {transaction.customerName}</p>
-                      <p><strong>Phone:</strong> {transaction.phone}</p>
+                      <p><strong>TRN-ID:</strong> {transaction.id}</p>
                       <p><strong>Weight:</strong> {transaction.weight} kg</p>
-                      <p><strong>Service:</strong> {transaction.laundryType}</p>
-                      <p><strong>Dropped:</strong> {transaction.timestamp}</p>
+                      <p><strong>Price:</strong> ₱{transaction.price.toFixed(2)}</p>
+                      <p><strong>Type:</strong> {transaction.laundryType}</p>
                       <p>
                         <strong>Status:</strong>{' '}
                         <span className={`px-2 py-1 rounded-full text-xs ${getStatusDisplayInfo(transaction).colorClass}`}>
