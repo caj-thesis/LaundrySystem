@@ -1,12 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  updateDoc,
+  where,
+  type Timestamp,
+} from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
+import { BackgroundBubbles } from '../components/BackgroundBubbles';
 import '../styles/app.css';
 
-// --- Types ---
-type LaundryStatus = 'Available' | 'Dropped' | 'Washing' | 'Ready for Pick-up' | 'Done';
+const firebaseConfig = {
+  apiKey: 'AIzaSyCbRscvsw2FwgzdShLytikbb7Sw51ioLs4',
+  authDomain: 'laundrymanagementsystem-609a2.firebaseapp.com',
+  projectId: 'laundrymanagementsystem-609a2',
+  storageBucket: 'laundrymanagementsystem-609a2.firebasestorage.app',
+  messagingSenderId: '614368527448',
+  appId: '1:614368527448:web:1c59583754b6a47c3a762d',
+  measurementId: 'G-GYJKLMT5Q7',
+};
+
+const app = initializeApp(firebaseConfig, 'admin-page-app');
+
+function supportsPersistentCache() {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.indexedDB === 'undefined') return false;
+
+  try {
+    void window.localStorage.length;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const db = supportsPersistentCache()
+  ? initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  : getFirestore(app) ?? initializeFirestore(app, { localCache: memoryLocalCache() });
+
+type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
 
 interface Transaction {
   id: string;
+  transactionDocId: string;
   customerName: string;
   phone: string;
   weight: number;
@@ -20,100 +68,170 @@ interface Locker {
   id: string;
   lockerNumber: number;
   isLocked: boolean;
-  currentTransactionId?: string; // If present, indicates an ongoing transaction
+  isConnected: boolean;
+  status: 'available' | 'occupied';
+  currentTransactionId?: string;
 }
-
-// --- Mock Data (Replace with your Firebase/Backend fetch logic later) ---
-const mockLockers: Locker[] = [
-  { id: 'L1', lockerNumber: 1, isLocked: true, currentTransactionId: 'T001' },
-  { id: 'L2', lockerNumber: 2, isLocked: false },
-  { id: 'L3', lockerNumber: 3, isLocked: true, currentTransactionId: 'T002' },
-  { id: 'L4', lockerNumber: 4, isLocked: true, currentTransactionId: 'T003' },
-];
-
-const mockTransactions: Record<string, Transaction> = {
-  'T001': { id: 'T001', customerName: 'John Doe', phone: '09123456789', weight: 5, laundryType: 'Wash & Fold', laundryStatus: 'Dropped', reminderSent: false, timestamp: '2026-03-16T10:00:00Z' },
-  'T002': { id: 'T002', customerName: 'Jane Smith', phone: '09987654321', weight: 3, laundryType: 'Dry Clean', laundryStatus: 'Washing', reminderSent: false, timestamp: '2026-03-16T11:30:00Z' },
-  'T003': { id: 'T003', customerName: 'Alice Johnson', phone: '09112223333', weight: 7, laundryType: 'Comforters', laundryStatus: 'Done', reminderSent: true, timestamp: '2026-03-14T09:00:00Z' }, // Overdue example
-};
 
 interface AdminPageProps {
   onBack: () => void;
 }
 
+function formatTimestamp(ts: unknown): string {
+  if (!ts) return 'N/A';
+  const candidate = ts as Timestamp | Date | string;
+
+  if (typeof candidate === 'string') return candidate;
+  if (candidate instanceof Date) return candidate.toISOString();
+  if (typeof (candidate as Timestamp).toDate === 'function') {
+    return (candidate as Timestamp).toDate().toISOString();
+  }
+
+  return 'N/A';
+}
+
 export function AdminPage({ onBack }: AdminPageProps) {
-  const [lockers, setLockers] = useState<Locker[]>(mockLockers);
-  const [selectedLocker, setSelectedLocker] = useState<Locker | null>(null);
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const [lockers, setLockers] = useState<Locker[]>([]);
+  const [selectedLockerId, setSelectedLockerId] = useState<string | null>(null);
+  const [transactionsById, setTransactionsById] = useState<Record<string, Transaction>>({});
+  const [loading, setLoading] = useState(true);
 
-  // Load transaction details when a locker is selected
   useEffect(() => {
-    if (selectedLocker?.currentTransactionId) {
-      // In production, fetch this from Firebase
-      setTransaction(mockTransactions[selectedLocker.currentTransactionId]);
-    } else {
-      setTransaction(null);
-    }
-  }, [selectedLocker]);
+    const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
+      const next: Locker[] = snapshot.docs
+        .map((docSnap) => {
+          const data = docSnap.data();
+          const lockerNumber = Number(data.lockerId ?? docSnap.id);
 
-  // --- Handlers ---
+          return {
+            id: docSnap.id,
+            lockerNumber,
+            isLocked: data.action !== 'unlock',
+            isConnected: data.isConnected !== false,
+            status: data.status === 'occupied' ? 'occupied' : 'available',
+            currentTransactionId: data.currentTransactionId || undefined,
+          };
+        })
+        .filter((locker) => locker.isConnected)
+        .sort((a, b) => a.lockerNumber - b.lockerNumber);
 
-  const handleStatusChange = () => {
+      setLockers(next);
+      setLoading(false);
+    });
+
+    const txQuery = query(collection(db, 'transactions'), where('status', '==', 'pending'));
+    const unsubTransactions = onSnapshot(txQuery, (snapshot) => {
+      const next: Record<string, Transaction> = {};
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const transactionDocId = docSnap.id;
+        const transactionId = (data.transactionId as string) || transactionDocId;
+        const displayName = (data.customerName as string) || transactionId || 'Customer';
+
+        const mappedTransaction: Transaction = {
+          id: transactionId,
+          transactionDocId,
+          customerName: displayName,
+          phone: (data.phoneNumber as string) || 'N/A',
+          weight: Number(data.weight || 0),
+          laundryType: (data.type as string) || 'N/A',
+          laundryStatus: ((data.laundryStatus as LaundryStatus) || 'Dropped') as LaundryStatus,
+          reminderSent: Boolean(data.reminderSent),
+          timestamp: formatTimestamp(data.droppedAt),
+        };
+
+        next[transactionDocId] = mappedTransaction;
+        next[transactionId] = mappedTransaction;
+      });
+
+      setTransactionsById(next);
+    });
+
+    return () => {
+      unsubLockers();
+      unsubTransactions();
+    };
+  }, []);
+
+
+  const selectedLocker = useMemo(
+    () => lockers.find((locker) => locker.id === selectedLockerId) || null,
+    [lockers, selectedLockerId],
+  );
+
+  const transaction = selectedLocker?.currentTransactionId
+    ? transactionsById[selectedLocker.currentTransactionId] || null
+    : null;
+
+  const handleStatusChange = async () => {
     if (!transaction) return;
-  
+
     let nextStatus: LaundryStatus = transaction.laundryStatus;
-    
-    if (transaction.laundryStatus === 'Dropped') {
-      nextStatus = 'Washing';
-    } else if (transaction.laundryStatus === 'Washing') {
-      nextStatus = 'Ready for Pick-up';
-    } else if (transaction.laundryStatus === 'Ready for Pick-up') {
-      nextStatus = 'Done';
-    }
-  
-    if (nextStatus !== transaction.laundryStatus) {
-      // Update local state (Replace with Firebase update in production)
-      setTransaction({ ...transaction, laundryStatus: nextStatus });
-      alert(`Status updated to: ${nextStatus}`);
-    }
+
+    if (transaction.laundryStatus === 'Dropped') nextStatus = 'Washing';
+    else if (transaction.laundryStatus === 'Washing') nextStatus = 'Done';
+    else if (transaction.laundryStatus === 'Ready for Pick-up') nextStatus = 'Done';
+
+    if (nextStatus === transaction.laundryStatus) return;
+
+    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
+      laundryStatus: nextStatus,
+      ...(nextStatus === 'Done' ? { doneAt: new Date(), reminderSent: false } : {}),
+      updatedAt: new Date(),
+    });
   };
 
-  const handleResetOverdue = () => {
+  const handleResetOverdue = async () => {
     if (!selectedLocker || !transaction) return;
-    
-    // Logic to clear the locker, archive the transaction, and free up the space
-    setLockers(prev => prev.map(l => l.id === selectedLocker.id ? { ...l, currentTransactionId: undefined, isLocked: false } : l));
-    setSelectedLocker(null);
-    setTransaction(null);
-    alert('Locker has been reset. Transaction archived as overdue.');
+
+    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
+      status: 'archived',
+      lockerId: null,
+      archivedAt: new Date(),
+      note: 'Archived by admin page reset',
+    });
+
+    await updateDoc(doc(db, 'lockers', selectedLocker.id), {
+      status: 'available',
+      action: 'lock',
+      currentTransactionId: null,
+      updatedAt: new Date(),
+      adminCommand: null,
+    });
+
+    setSelectedLockerId(null);
   };
 
-  const toggleLock = () => {
+  const toggleLock = async () => {
     if (!selectedLocker) return;
-    // Hardware bridge/Firebase logic goes here
-    const newLockState = !selectedLocker.isLocked;
-    setLockers(prev => prev.map(l => l.id === selectedLocker.id ? { ...l, isLocked: newLockState } : l));
-    setSelectedLocker({ ...selectedLocker, isLocked: newLockState });
+
+    await updateDoc(doc(db, 'lockers', selectedLocker.id), {
+      action: selectedLocker.isLocked ? 'unlock' : 'lock',
+      updatedAt: new Date(),
+    });
   };
 
-  const printReceipt = () => {
+  const printReceipt = async () => {
     if (!transaction) return;
-    // Send payload to your Python hardware bridge / printer utility
-    console.log('Printing receipt for:', transaction.id);
-    alert('Sending receipt to thermal printer...');
+
+    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
+      triggerPrint: true,
+      updatedAt: new Date(),
+    });
   };
 
-  // --- Helper for Status Colors ---
   const getStatusDisplayInfo = (txn: Transaction) => {
-    if (txn.laundryStatus === 'Done' && txn.reminderSent) {
+    if ((txn.laundryStatus === 'Done' || txn.laundryStatus === 'Ready for Pick-up') && txn.reminderSent) {
       return { text: 'Overdue', colorClass: 'bg-yellow-100 text-yellow-800 border border-yellow-300' };
     }
-    
+
     switch (txn.laundryStatus) {
       case 'Dropped':
         return { text: 'Dropped', colorClass: 'bg-red-100 text-red-800 border border-red-300' };
       case 'Washing':
         return { text: 'Washing', colorClass: 'bg-blue-100 text-blue-800 border border-blue-300' };
+      case 'Done':
       case 'Ready for Pick-up':
         return { text: 'Ready for Pick-up', colorClass: 'bg-green-100 text-green-800 border border-green-300' };
       default:
@@ -122,160 +240,302 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 p-6 font-sans absolute inset-0 z-[100] w-full">
-      
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-          <p className="text-gray-500">Manage lockers and transactions</p>
-        </div>
-        <button 
-          onClick={onBack} 
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors shadow-sm"
-        >
-          <ArrowLeft size={18} /> Exit Admin Mode
+    <div
+      className="lockers-page"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        padding: '12px',
+        backgroundColor: '#f9fafb',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <BackgroundBubbles variant="tinted" />
+
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <button onClick={onBack} className="btn-return-absolute" style={{ zIndex: 10 }}>
+          <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+          Return
         </button>
-      </div>
 
-      <div className="flex gap-6 flex-1 overflow-hidden">
-        {/* Left Panel: Locker Grid */}
-        <div className="flex-1 bg-white p-6 rounded-xl shadow-md overflow-y-auto">
-          <h2 className="text-xl font-bold mb-4 text-gray-700">Locker Overview</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {lockers.map((locker) => {
-              const hasTransaction = !!locker.currentTransactionId;
-              const isSelected = selectedLocker?.id === locker.id;
-
-              return (
-                <button
-                  key={locker.id}
-                  onClick={() => setSelectedLocker(locker)}
-                  className={`relative p-6 rounded-lg border-2 transition-all flex flex-col items-center justify-center gap-2
-                    ${isSelected ? 'border-gray-800 ring-4 ring-gray-200' : 'border-gray-200 hover:border-gray-400'}
-                    ${hasTransaction ? 'bg-gray-50' : 'bg-white'}
-                  `}
-                >
-                  {/* Distinct sign for ongoing transaction */}
-                  {hasTransaction && (
-                    <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse" title="Ongoing Transaction"></span>
-                  )}
-                  
-                  <span className="text-4xl font-black text-gray-700">{locker.lockerNumber}</span>
-                  <div className="flex items-center gap-1 text-sm text-gray-500">
-                    {locker.isLocked ? <Lock size={16} /> : <Unlock size={16} />}
-                    {locker.isLocked ? 'Locked' : 'Unlocked'}
-                  </div>
-                </button>
-              );
-            })}
+        <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
+          <div className="instructions-header" style={{ marginBottom: '8px' }}>
+            <h2 style={{ margin: '0 0 4px 0' }}>Admin Dashboard</h2>
+            <p style={{ margin: '0' }}>Manage lockers and transactions (Firebase live)</p>
           </div>
         </div>
 
-        {/* Right Panel: Transaction Details & Controls */}
-        <div className="w-[400px] bg-white p-6 rounded-xl shadow-md flex flex-col overflow-y-auto">
-          <h2 className="text-xl font-bold mb-4 text-gray-700">Locker Details</h2>
-          
-          {selectedLocker ? (
-            <div className="flex flex-col h-full">
-              <div className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-200">
-                <h3 className="text-lg font-semibold flex items-center gap-2 mb-2">
-                  Locker #{selectedLocker.lockerNumber}
-                </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Status: {selectedLocker.isLocked ? <span className="text-red-600 font-medium">Secured</span> : <span className="text-green-600 font-medium">Open</span>}
-                </p>
-
-                {/* Hardware Controls */}
-                <div className="flex gap-2">
-                  <button 
-                    onClick={toggleLock}
-                    className="flex-1 bg-gray-800 text-white py-2 rounded-md hover:bg-gray-700 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    {selectedLocker.isLocked ? <Unlock size={18} /> : <Lock size={18} />}
-                    {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
-                  </button>
-                </div>
-              </div>
-
-              {transaction ? (
-                <div className="flex-1 flex flex-col">
-                  <h4 className="font-bold text-gray-700 mb-3 border-b pb-2">Active Transaction</h4>
-                  <div className="space-y-3 text-sm flex-1">
-                    <p><span className="text-gray-500 font-medium">Txn ID:</span> <span className="font-mono">{transaction.id}</span></p>
-                    <p><span className="text-gray-500 font-medium">Customer:</span> {transaction.customerName}</p>
-                    <p><span className="text-gray-500 font-medium">Phone:</span> {transaction.phone}</p>
-                    <p><span className="text-gray-500 font-medium">Weight:</span> {transaction.weight} kg</p>
-                    <p><span className="text-gray-500 font-medium">Service:</span> {transaction.laundryType}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-gray-500 font-medium">Status:</span> 
-                      {/* Dynamic Color Badge */}
-                      <span className={`px-3 py-1 rounded-full font-bold text-xs uppercase tracking-wide ${getStatusDisplayInfo(transaction).colorClass}`}>
-                        {getStatusDisplayInfo(transaction).text}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Conditional Action Buttons based on Status */}
-                  <div className="mt-6 flex flex-col gap-3">
-                    
-                    {/* Status Progression Logic */}
-                    {transaction.laundryStatus === 'Dropped' && (
-                      <button onClick={handleStatusChange} className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold shadow-sm transition-colors">
-                        Start Washing
-                      </button>
-                    )}
-                    
-                    {transaction.laundryStatus === 'Washing' && (
-                      <button onClick={handleStatusChange} className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold shadow-sm transition-colors">
-                        Set Ready for Pick-up
-                      </button>
-                    )}
-
-                    {transaction.laundryStatus === 'Ready for Pick-up' && (
-                      <button onClick={handleStatusChange} className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-semibold shadow-sm transition-colors">
-                        Mark as Done
-                      </button>
-                    )}
-
-                    {/* Overdue Reset Logic */}
-                    {transaction.laundryStatus === 'Done' && transaction.reminderSent ? (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p className="text-xs text-yellow-700 flex items-center gap-1 mb-2 font-medium">
-                          <AlertCircle size={14} /> Item is marked Done and reminder was sent.
-                        </p>
-                        <button onClick={handleResetOverdue} className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 font-semibold flex items-center justify-center gap-2 transition-colors">
-                          <RefreshCw size={18} /> Reset Overdue Locker
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-xs text-gray-500 flex items-center gap-1 mb-2">
-                          <Info size={14} /> Laundry is not yet set for overdue.
-                        </p>
-                        <button disabled className="w-full bg-gray-200 text-gray-400 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
-                          <RefreshCw size={18} /> Reset Overdue Locker
-                        </button>
-                      </div>
-                    )}
-
-                    <button onClick={printReceipt} className="w-full bg-white border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 mt-2">
-                      <Printer size={18} /> Print Receipt
-                    </button>
-                  </div>
-                </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', flex: 1, minHeight: 0 }}>
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+            }}
+          >
+            <h3 style={{ fontSize: '18px', color: '#1f2937', marginBottom: '8px' }}>Locker Overview</h3>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {loading ? (
+                <p style={{ color: '#6b7280' }}>Loading lockers…</p>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                  <Info size={48} className="mb-4 opacity-50" />
-                  <p>No active transaction for this locker.</p>
+                <div
+                  className="lockers-grid-container"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))',
+                    gap: '10px',
+                  }}
+                >
+                  {lockers.map((locker) => {
+                    const isSelected = selectedLocker?.id === locker.id;
+                    const isOccupied = locker.status === 'occupied';
+
+                    return (
+                      <button
+                        key={locker.id}
+                        onClick={() => setSelectedLockerId(locker.id)}
+                        style={{
+                          backgroundColor: isSelected ? '#dbeafe' : isOccupied ? '#fef2f2' : '#ecfdf5',
+                          border: isSelected
+                            ? '2px solid #3b82f6'
+                            : isOccupied
+                              ? '2px solid #fecaca'
+                              : '2px solid #a7f3d0',
+                          borderRadius: '12px',
+                          padding: '10px',
+                          height: '108px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          gap: '4px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          position: 'relative',
+                        }}
+                      >
+                        {locker.currentTransactionId && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              height: 8,
+                              width: 8,
+                              backgroundColor: '#ef4444',
+                              borderRadius: 999,
+                            }}
+                            title="Ongoing Transaction"
+                          />
+                        )}
+                        <span style={{ fontSize: '20px', fontWeight: 700, color: '#374151' }}>Locker {locker.lockerNumber}</span>
+                        <span style={{ fontSize: '12px', color: locker.isLocked ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                          {locker.isLocked ? 'Locked' : 'Unlocked'}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase' }}>{locker.status}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
-          ) : (
-            <div className="h-full flex items-center justify-center text-gray-400">
-              <p>Select a locker to view details.</p>
-            </div>
-          )}
+          </div>
+
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+            }}
+          >
+            <h3 style={{ fontSize: '18px', color: '#1f2937', marginBottom: '8px' }}>Locker Details</h3>
+
+            {!selectedLocker ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
+                <p>Select a locker to view details.</p>
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    backgroundColor: '#f9fafb',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '10px',
+                    padding: '10px',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <p style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
+                    Locker #{selectedLocker.lockerNumber}
+                  </p>
+                  <p style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px' }}>
+                    Status:{' '}
+                    <span style={{ fontWeight: 600, color: selectedLocker.isLocked ? '#ef4444' : '#10b981' }}>
+                      {selectedLocker.isLocked ? 'Secured' : 'Open'}
+                    </span>
+                  </p>
+                  <button
+                    onClick={toggleLock}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#1f2937',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '14px',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
+                    {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
+                  </button>
+                </div>
+
+                {transaction ? (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7, marginBottom: '8px' }}>
+                      <p><strong>Txn:</strong> {transaction.id}</p>
+                      <p><strong>Customer:</strong> {transaction.customerName}</p>
+                      <p><strong>Phone:</strong> {transaction.phone}</p>
+                      <p><strong>Weight:</strong> {transaction.weight} kg</p>
+                      <p><strong>Service:</strong> {transaction.laundryType}</p>
+                      <p><strong>Dropped:</strong> {transaction.timestamp}</p>
+                      <p>
+                        <strong>Status:</strong>{' '}
+                        <span className={`px-2 py-1 rounded-full text-xs ${getStatusDisplayInfo(transaction).colorClass}`}>
+                          {getStatusDisplayInfo(transaction).text}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {transaction.laundryStatus === 'Dropped' && (
+                        <button
+                          onClick={handleStatusChange}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderRadius: '8px',
+                            backgroundColor: '#2563eb',
+                            color: 'white',
+                            padding: '10px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Start Washing
+                        </button>
+                      )}
+
+                      {transaction.laundryStatus === 'Washing' && (
+                        <button
+                          onClick={handleStatusChange}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderRadius: '8px',
+                            backgroundColor: '#059669',
+                            color: 'white',
+                            padding: '10px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Set Ready for Pick-up
+                        </button>
+                      )}
+
+                      {(transaction.laundryStatus === 'Done' || transaction.laundryStatus === 'Ready for Pick-up') &&
+                      transaction.reminderSent ? (
+                        <button
+                          onClick={handleResetOverdue}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            borderRadius: '8px',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            padding: '10px',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <RefreshCw size={16} /> Reset Overdue Locker
+                        </button>
+                      ) : (
+                        <div
+                          style={{
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            backgroundColor: '#f9fafb',
+                            color: '#6b7280',
+                            fontSize: '12px',
+                            padding: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <Info size={14} /> Laundry is not yet set for overdue.
+                        </div>
+                      )}
+
+                      <button
+                        onClick={printReceipt}
+                        style={{
+                          width: '100%',
+                          border: '2px solid #d1d5db',
+                          borderRadius: '8px',
+                          backgroundColor: 'white',
+                          color: '#374151',
+                          padding: '10px',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Printer size={16} /> Print Receipt
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#9ca3af',
+                      gap: '8px',
+                    }}
+                  >
+                    <AlertCircle size={28} />
+                    <p style={{ fontSize: '14px' }}>No active transaction for this locker.</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
