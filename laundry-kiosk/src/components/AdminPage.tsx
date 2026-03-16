@@ -356,44 +356,46 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             ) : (
               <>
-                <div
-                  style={{
-                    backgroundColor: '#f9fafb',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '10px',
-                    padding: '10px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <p style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
-                    Locker #{selectedLocker.lockerNumber}
-                  </p>
-                  <p style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px' }}>
-                    Status:{' '}
-                    <span style={{ fontWeight: 600, color: selectedLocker.isLocked ? '#ef4444' : '#10b981' }}>
-                      {selectedLocker.isLocked ? 'Secured' : 'Open'}
-                    </span>
-                  </p>
-                  <button
-                    onClick={toggleLock}
+                {detailsView === 'locker' && (
+                  <div
                     style={{
-                      width: '100%',
-                      backgroundColor: '#1f2937',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '14px',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      gap: '6px',
+                      backgroundColor: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '10px',
+                      padding: '10px',
+                      marginBottom: '10px',
                     }}
                   >
-                    {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-                    {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
-                  </button>
-                </div>
+                    <p style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
+                      Locker #{selectedLocker.lockerNumber}
+                    </p>
+                    <p style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px' }}>
+                      Status:{' '}
+                      <span style={{ fontWeight: 600, color: selectedLocker.isLocked ? '#ef4444' : '#10b981' }}>
+                        {selectedLocker.isLocked ? 'Secured' : 'Open'}
+                      </span>
+                    </p>
+                    <button
+                      onClick={toggleLock}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#1f2937',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontSize: '14px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
+                      {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
+                    </button>
+                  </div>
+                )}
 
                 {transaction && detailsView === 'locker' && (
                   <button
