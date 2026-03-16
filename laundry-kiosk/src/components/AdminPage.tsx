@@ -67,6 +67,7 @@ interface Locker {
   id: string;
   lockerNumber: number;
   isLocked: boolean;
+  isConnected: boolean;
   status: 'available' | 'occupied';
   currentTransactionId?: string;
 }
@@ -105,10 +106,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
             id: docSnap.id,
             lockerNumber,
             isLocked: data.action !== 'unlock',
+            isConnected: data.isConnected !== false,
             status: data.status === 'occupied' ? 'occupied' : 'available',
             currentTransactionId: data.currentTransactionId || undefined,
           };
         })
+        .filter((locker) => locker.isConnected)
         .sort((a, b) => a.lockerNumber - b.lockerNumber);
 
       setLockers(next);
@@ -144,6 +147,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       unsubTransactions();
     };
   }, []);
+
 
   const selectedLocker = useMemo(
     () => lockers.find((locker) => locker.id === selectedLockerId) || null,
