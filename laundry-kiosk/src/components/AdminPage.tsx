@@ -6,7 +6,6 @@ import {
   doc,
   onSnapshot,
   updateDoc,
-  type Timestamp,
 } from 'firebase/firestore';
 import {
   getFirestore,
@@ -53,13 +52,11 @@ type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
 interface Transaction {
   id: string;
   transactionDocId: string;
-  customerName: string;
-  phone: string;
+  price: number;
   weight: number;
   laundryType: string;
   laundryStatus: LaundryStatus;
   reminderSent: boolean;
-  timestamp: string;
 }
 
 interface Locker {
@@ -75,24 +72,12 @@ interface AdminPageProps {
   onBack: () => void;
 }
 
-function formatTimestamp(ts: unknown): string {
-  if (!ts) return 'N/A';
-  const candidate = ts as Timestamp | Date | string;
-
-  if (typeof candidate === 'string') return candidate;
-  if (candidate instanceof Date) return candidate.toISOString();
-  if (typeof (candidate as Timestamp).toDate === 'function') {
-    return (candidate as Timestamp).toDate().toISOString();
-  }
-
-  return 'N/A';
-}
-
 export function AdminPage({ onBack }: AdminPageProps) {
   const [lockers, setLockers] = useState<Locker[]>([]);
   const [selectedLockerId, setSelectedLockerId] = useState<string | null>(null);
   const [transactionsById, setTransactionsById] = useState<Record<string, Transaction>>({});
   const [loading, setLoading] = useState(true);
+  const [detailsView, setDetailsView] = useState<'locker' | 'transaction'>('locker');
 
   useEffect(() => {
     const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
@@ -130,18 +115,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         const transactionDocId = docSnap.id;
         const transactionId = (data.transactionId as string) || transactionDocId;
-        const displayName = (data.customerName as string) || transactionId || 'Customer';
-
         const mappedTransaction: Transaction = {
           id: transactionId,
           transactionDocId,
-          customerName: displayName,
-          phone: (data.phoneNumber as string) || 'N/A',
+          price: Number(data.price || 0),
           weight: Number(data.weight || 0),
           laundryType: (data.type as string) || 'N/A',
           laundryStatus: ((data.laundryStatus as LaundryStatus) || 'Dropped') as LaundryStatus,
           reminderSent: Boolean(data.reminderSent),
-          timestamp: formatTimestamp(data.droppedAt),
         };
 
         next[transactionDocId] = mappedTransaction;
@@ -166,6 +147,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const transaction = selectedLocker?.currentTransactionId
     ? transactionsById[selectedLocker.currentTransactionId] || null
     : null;
+
+  useEffect(() => {
+    setDetailsView('locker');
+  }, [selectedLockerId]);
 
   const handleStatusChange = async () => {
     if (!transaction) return;
@@ -371,54 +356,110 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             ) : (
               <>
-                <div
-                  style={{
-                    backgroundColor: '#f9fafb',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '10px',
-                    padding: '10px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <p style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
-                    Locker #{selectedLocker.lockerNumber}
-                  </p>
-                  <p style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px' }}>
-                    Status:{' '}
-                    <span style={{ fontWeight: 600, color: selectedLocker.isLocked ? '#ef4444' : '#10b981' }}>
-                      {selectedLocker.isLocked ? 'Secured' : 'Open'}
-                    </span>
-                  </p>
-                  <button
-                    onClick={toggleLock}
+                {detailsView === 'locker' && (
+                  <div
                     style={{
-                      width: '100%',
-                      backgroundColor: '#1f2937',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '14px',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      gap: '6px',
+                      backgroundColor: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '10px',
+                      padding: '10px',
+                      marginBottom: '10px',
                     }}
                   >
-                    {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-                    {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
-                  </button>
-                </div>
+                    <p style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '4px' }}>
+                      Locker #{selectedLocker.lockerNumber}
+                    </p>
+                    <p style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px' }}>
+                      Status:{' '}
+                      <span style={{ fontWeight: 600, color: selectedLocker.isLocked ? '#ef4444' : '#10b981' }}>
+                        {selectedLocker.isLocked ? 'Secured' : 'Open'}
+                      </span>
+                    </p>
+                    <button
+                      onClick={toggleLock}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#1f2937',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontSize: '14px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
+                      {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
+                    </button>
+                  </div>
+                )}
 
-                {transaction ? (
+                {transaction && detailsView === 'locker' && (
+                  <button
+                    onClick={() => setDetailsView('transaction')}
+                    style={{
+                      width: '100%',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8fafc',
+                      color: '#1f2937',
+                      padding: '10px',
+                      fontWeight: 600,
+                      marginBottom: '10px',
+                    }}
+                  >
+                    View Transaction Details
+                  </button>
+                )}
+
+                {detailsView === 'locker' ? (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#9ca3af',
+                      gap: '8px',
+                    }}
+                  >
+                    {transaction ? (
+                      <p style={{ fontSize: '14px', color: '#6b7280' }}>Tap the button above to view transaction details.</p>
+                    ) : (
+                      <>
+                        <AlertCircle size={28} />
+                        <p style={{ fontSize: '14px' }}>No active transaction for this locker.</p>
+                      </>
+                    )}
+                  </div>
+                ) : transaction ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <button
+                      onClick={() => setDetailsView('locker')}
+                      style={{
+                        alignSelf: 'flex-start',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '8px',
+                        backgroundColor: 'white',
+                        color: '#374151',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        marginBottom: '8px',
+                      }}
+                    >
+                      ← Back to Locker Details
+                    </button>
+
                     <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7, marginBottom: '8px' }}>
-                      <p><strong>Txn:</strong> {transaction.id}</p>
-                      <p><strong>Customer:</strong> {transaction.customerName}</p>
-                      <p><strong>Phone:</strong> {transaction.phone}</p>
+                      <p><strong>TRN-ID:</strong> {transaction.id}</p>
                       <p><strong>Weight:</strong> {transaction.weight} kg</p>
-                      <p><strong>Service:</strong> {transaction.laundryType}</p>
-                      <p><strong>Dropped:</strong> {transaction.timestamp}</p>
+                      <p><strong>Price:</strong> ₱{transaction.price.toFixed(2)}</p>
+                      <p><strong>Type:</strong> {transaction.laundryType}</p>
                       <p>
                         <strong>Status:</strong>{' '}
                         <span className={`px-2 py-1 rounded-full text-xs ${getStatusDisplayInfo(transaction).colorClass}`}>
