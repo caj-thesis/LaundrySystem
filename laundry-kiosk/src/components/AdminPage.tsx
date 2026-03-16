@@ -216,8 +216,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
     });
   };
 
-  const handleAdminPinSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleAdminPinSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
 
     if (adminPinInput === ADMIN_PIN) {
       setIsAdminAuthenticated(true);
@@ -227,6 +227,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
     setPinError('Invalid admin PIN.');
     setAdminPinInput('');
+  };
+
+  const handlePinDigitPress = (digit: string) => {
+    if (adminPinInput.length >= 4) return;
+    setAdminPinInput((prev) => `${prev}${digit}`);
+    if (pinError) setPinError('');
+  };
+
+  const handlePinDelete = () => {
+    setAdminPinInput((prev) => prev.slice(0, -1));
+    if (pinError) setPinError('');
+  };
+
+  const handlePinClear = () => {
+    setAdminPinInput('');
+    if (pinError) setPinError('');
   };
 
   const getStatusDisplayInfo = (txn: Transaction) => {
@@ -289,24 +305,92 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Enter admin PIN to access dashboard.</p>
               <input
                 type="password"
-                inputMode="numeric"
-                maxLength={4}
                 value={adminPinInput}
-                onChange={(event) => {
-                  setAdminPinInput(event.target.value.replace(/\D/g, ''));
-                  if (pinError) setPinError('');
-                }}
+                readOnly
                 placeholder="Enter 4-digit PIN"
-                autoFocus
                 style={{
-                  border: '1px solid #d1d5db',
+                  border: '1px solid #dbe5f1',
                   borderRadius: '8px',
                   padding: '10px 12px',
-                  fontSize: '16px',
-                  letterSpacing: '2px',
+                  fontSize: '20px',
+                  letterSpacing: '6px',
+                  textAlign: 'center',
+                  backgroundColor: '#f8fbff',
+                  color: '#1f2937',
                 }}
               />
-              {pinError && <p style={{ margin: 0, color: '#dc2626', fontSize: '14px' }}>{pinError}</p>}
+              {pinError && <p style={{ margin: 0, color: '#dc2626', fontSize: '14px', textAlign: 'center' }}>{pinError}</p>}
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                  gap: '8px',
+                }}
+              >
+                {[...'123456789'].map((digit) => (
+                  <button
+                    key={digit}
+                    type="button"
+                    onClick={() => handlePinDigitPress(digit)}
+                    style={{
+                      border: '1px solid #dbe5f1',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8fbff',
+                      color: '#1f2937',
+                      padding: '10px',
+                      fontWeight: 700,
+                      fontSize: '18px',
+                    }}
+                  >
+                    {digit}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handlePinClear}
+                  style={{
+                    border: '1px solid #f3d6d6',
+                    borderRadius: '8px',
+                    backgroundColor: '#fff5f5',
+                    color: '#b91c1c',
+                    padding: '10px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePinDigitPress('0')}
+                  style={{
+                    border: '1px solid #dbe5f1',
+                    borderRadius: '8px',
+                    backgroundColor: '#f8fbff',
+                    color: '#1f2937',
+                    padding: '10px',
+                    fontWeight: 700,
+                    fontSize: '18px',
+                  }}
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePinDelete}
+                  style={{
+                    border: '1px solid #dbe5f1',
+                    borderRadius: '8px',
+                    backgroundColor: '#eef4ff',
+                    color: '#1e3a8a',
+                    padding: '10px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+
               <button
                 type="submit"
                 style={{
