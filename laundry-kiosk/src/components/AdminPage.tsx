@@ -523,7 +523,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         >
                           <RefreshCw size={16} /> Reset Overdue Locker
                         </button>
-                      ) : (
+                      ) : transaction.laundryStatus === 'Done' ? (
                         <div
                           style={{
                             border: '1px solid #e5e7eb',
@@ -539,7 +539,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         >
                           <Info size={14} /> Laundry is not yet set for overdue.
                         </div>
-                      )}
+                      ) : null}
 
                       <button
                         onClick={printReceipt}
