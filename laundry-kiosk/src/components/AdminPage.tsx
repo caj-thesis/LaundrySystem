@@ -54,6 +54,7 @@ type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
 
 interface Transaction {
   id: string;
+  transactionDocId: string;
   customerName: string;
   phone: string;
   weight: number;
@@ -124,11 +125,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data();
-        const id = docSnap.id;
-        const displayName = (data.customerName as string) || (data.transactionId as string) || 'Customer';
+        const transactionDocId = docSnap.id;
+        const transactionId = (data.transactionId as string) || transactionDocId;
+        const displayName = (data.customerName as string) || transactionId || 'Customer';
 
-        next[id] = {
-          id,
+        const mappedTransaction: Transaction = {
+          id: transactionId,
+          transactionDocId,
           customerName: displayName,
           phone: (data.phoneNumber as string) || 'N/A',
           weight: Number(data.weight || 0),
@@ -137,6 +140,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
           reminderSent: Boolean(data.reminderSent),
           timestamp: formatTimestamp(data.droppedAt),
         };
+
+        next[transactionDocId] = mappedTransaction;
+        next[transactionId] = mappedTransaction;
       });
 
       setTransactionsById(next);
@@ -169,7 +175,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
     if (nextStatus === transaction.laundryStatus) return;
 
-    await updateDoc(doc(db, 'transactions', transaction.id), {
+    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
       laundryStatus: nextStatus,
       ...(nextStatus === 'Done' ? { doneAt: new Date(), reminderSent: false } : {}),
       updatedAt: new Date(),
@@ -179,7 +185,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const handleResetOverdue = async () => {
     if (!selectedLocker || !transaction) return;
 
-    await updateDoc(doc(db, 'transactions', transaction.id), {
+    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
       status: 'archived',
       lockerId: null,
       archivedAt: new Date(),
@@ -209,7 +215,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const printReceipt = async () => {
     if (!transaction) return;
 
-    await updateDoc(doc(db, 'transactions', transaction.id), {
+    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
       triggerPrint: true,
       updatedAt: new Date(),
     });
