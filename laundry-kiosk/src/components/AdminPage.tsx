@@ -5,9 +5,7 @@ import {
   collection,
   doc,
   onSnapshot,
-  query,
   updateDoc,
-  where,
   type Timestamp,
 } from 'firebase/firestore';
 import {
@@ -119,12 +117,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setLoading(false);
     });
 
-    const txQuery = query(collection(db, 'transactions'), where('status', '==', 'pending'));
-    const unsubTransactions = onSnapshot(txQuery, (snapshot) => {
+    const unsubTransactions = onSnapshot(collection(db, 'transactions'), (snapshot) => {
       const next: Record<string, Transaction> = {};
 
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data();
+        const statusValue = String(data.status ?? '').toLowerCase();
+
+        if (statusValue !== 'pending') {
+          return;
+        }
+
         const transactionDocId = docSnap.id;
         const transactionId = (data.transactionId as string) || transactionDocId;
         const displayName = (data.customerName as string) || transactionId || 'Customer';
