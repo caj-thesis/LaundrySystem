@@ -73,12 +73,17 @@ interface AdminPageProps {
   onBack: () => void;
 }
 
+const ADMIN_PIN = '1000';
+
 export function AdminPage({ onBack }: AdminPageProps) {
   const [lockers, setLockers] = useState<Locker[]>([]);
   const [selectedLockerId, setSelectedLockerId] = useState<string | null>(null);
   const [transactionsById, setTransactionsById] = useState<Record<string, Transaction>>({});
   const [loading, setLoading] = useState(true);
   const [detailsView, setDetailsView] = useState<'locker' | 'transaction'>('locker');
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [pinError, setPinError] = useState('');
 
   useEffect(() => {
     const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
@@ -211,6 +216,34 @@ export function AdminPage({ onBack }: AdminPageProps) {
     });
   };
 
+  const handleAdminPinSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
+    if (adminPinInput === ADMIN_PIN) {
+      setIsAdminAuthenticated(true);
+      setPinError('');
+      return;
+    }
+
+    setPinError('Invalid admin PIN.');
+    setAdminPinInput('');
+  };
+
+  const handlePinDigitPress = (digit: string) => {
+    setAdminPinInput((prev) => `${prev}${digit}`);
+    if (pinError) setPinError('');
+  };
+
+  const handlePinDelete = () => {
+    setAdminPinInput((prev) => prev.slice(0, -1));
+    if (pinError) setPinError('');
+  };
+
+  const handlePinClear = () => {
+    setAdminPinInput('');
+    if (pinError) setPinError('');
+  };
+
   const getStatusDisplayInfo = (txn: Transaction) => {
     if ((txn.laundryStatus === 'Done' || txn.laundryStatus === 'Ready for Pick-up') && txn.reminderSent) {
       return { text: 'Overdue', colorClass: 'bg-yellow-100 text-yellow-800 border border-yellow-300' };
@@ -228,6 +261,154 @@ export function AdminPage({ onBack }: AdminPageProps) {
         return { text: txn.laundryStatus, colorClass: 'bg-gray-100 text-gray-800 border border-gray-300' };
     }
   };
+
+  if (!isAdminAuthenticated) {
+    return (
+      <div
+        className="lockers-page"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          padding: '12px',
+          backgroundColor: '#f9fafb',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <BackgroundBubbles variant="tinted" />
+
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <button onClick={onBack} className="btn-return-absolute" style={{ zIndex: 10 }}>
+            <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+            Return
+          </button>
+
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <form
+              onSubmit={handleAdminPinSubmit}
+              style={{
+                width: '100%',
+                maxWidth: '360px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <h2 style={{ margin: 0, color: '#111827' }}>Admin Security Check</h2>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Enter admin PIN to access dashboard.</p>
+              <input
+                type="password"
+                value={adminPinInput}
+                readOnly
+                placeholder="Enter PIN"
+                style={{
+                  border: '1px solid #dbe5f1',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  fontSize: '20px',
+                  letterSpacing: '6px',
+                  textAlign: 'center',
+                  backgroundColor: '#f8fbff',
+                  color: '#1f2937',
+                }}
+              />
+              {pinError && <p style={{ margin: 0, color: '#dc2626', fontSize: '14px', textAlign: 'center' }}>{pinError}</p>}
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                  gap: '8px',
+                }}
+              >
+                {[...'123456789'].map((digit) => (
+                  <button
+                    key={digit}
+                    type="button"
+                    onClick={() => handlePinDigitPress(digit)}
+                    style={{
+                      border: '1px solid #dbe5f1',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8fbff',
+                      color: '#1f2937',
+                      padding: '10px',
+                      fontWeight: 700,
+                      fontSize: '18px',
+                    }}
+                  >
+                    {digit}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handlePinClear}
+                  style={{
+                    border: '1px solid #f3d6d6',
+                    borderRadius: '8px',
+                    backgroundColor: '#fff5f5',
+                    color: '#b91c1c',
+                    padding: '10px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePinDigitPress('0')}
+                  style={{
+                    border: '1px solid #dbe5f1',
+                    borderRadius: '8px',
+                    backgroundColor: '#f8fbff',
+                    color: '#1f2937',
+                    padding: '10px',
+                    fontWeight: 700,
+                    fontSize: '18px',
+                  }}
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePinDelete}
+                  style={{
+                    border: '1px solid #dbe5f1',
+                    borderRadius: '8px',
+                    backgroundColor: '#eef4ff',
+                    color: '#1e3a8a',
+                    padding: '10px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  border: 'none',
+                  borderRadius: '8px',
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  padding: '10px',
+                  fontWeight: 600,
+                }}
+              >
+                Unlock Admin Page
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
