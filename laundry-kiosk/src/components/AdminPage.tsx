@@ -52,6 +52,7 @@ type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
 interface Transaction {
   id: string;
   transactionDocId: string;
+  pinCode: string;
   price: number;
   weight: number;
   laundryType: string;
@@ -118,6 +119,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         const mappedTransaction: Transaction = {
           id: transactionId,
           transactionDocId,
+          pinCode: String(data.pinCode ?? data.pin ?? '0000'),
           price: Number(data.price || 0),
           weight: Number(data.weight || 0),
           laundryType: (data.type as string) || 'N/A',
@@ -457,6 +459,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                     <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7, marginBottom: '8px' }}>
                       <p><strong>TRN-ID:</strong> {transaction.id}</p>
+                      <p><strong>Pin Code:</strong> {transaction.pinCode}</p>
                       <p><strong>Weight:</strong> {transaction.weight} kg</p>
                       <p><strong>Price:</strong> ₱{transaction.price.toFixed(2)}</p>
                       <p><strong>Type:</strong> {transaction.laundryType}</p>
