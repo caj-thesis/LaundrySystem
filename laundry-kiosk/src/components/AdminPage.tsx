@@ -308,13 +308,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
 
-  const overdueHourOptions = [
-    { value: 12, label: '12 hours' },
-    { value: 24, label: '24 hours' },
-    { value: 36, label: '36 hours' },
-    { value: 48, label: '48 hours (recommended)' },
-    { value: 72, label: '72 hours' },
-  ];
+  const overdueHourOptions = [24, 48, 72, 96, 120].map((hours) => ({
+    value: hours,
+    label: `${hours} hours${hours === 48 ? ' (recommended)' : ''}`,
+  }));
 
   const getStatusDisplayInfo = (txn: Transaction) => {
     if ((txn.laundryStatus === 'Done' || txn.laundryStatus === 'Ready for Pick-up') && txn.reminderSent) {
@@ -539,149 +536,162 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         {isSettingsOpen ? (
           /* --- SETTINGS PAGE VIEW --- */
-          <div style={{ marginTop: '54px', flex: 1, display: 'flex', justifyContent: 'center', minHeight: 0, overflow: 'hidden' }}>
-            <form 
-              onSubmit={handleSaveSettings}
-              style={{
-                width: '100%',
-                maxWidth: '760px',
-                backgroundColor: 'white',
-                borderRadius: '12px',
-                border: '1px solid #e5e7eb',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '20px',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                minHeight: 0
-              }}
-            >
-              <div>
-                <h2 style={{ fontSize: '24px', color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Settings size={28} /> Kiosk Settings
+          <>
+            <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
+              <div className="instructions-header" style={{ marginBottom: '8px' }}>
+                <h2 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Settings size={22} /> Admin Settings
                 </h2>
-                <p style={{ color: '#6b7280', margin: '4px 0 0 0', fontSize: '14px' }}>
-                  Update the dynamic pricing and shop details.
-                </p>
+                <p style={{ margin: '0' }}>Configure pricing, overdue reminders, and shop profile details</p>
               </div>
+            </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Laundry Shop Name</label>
-                <input 
-                  type="text" 
-                  value={shopName} 
-                  onChange={(e) => setShopName(e.target.value)}
-                  style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '16px' }}
-                />
-              </div>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minHeight: 0, overflow: 'hidden' }}>
+              <form 
+                onSubmit={handleSaveSettings}
+                style={{
+                  width: '100%',
+                  maxWidth: '980px',
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  minHeight: 0
+                }}
+              >
+                <div>
+                  <h3 style={{ fontSize: '20px', color: '#111827', margin: 0 }}>Kiosk Settings</h3>
+                  <p style={{ color: '#6b7280', margin: '4px 0 0 0', fontSize: '14px' }}>
+                    Update the dynamic pricing and shop details.
+                  </p>
+                </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-                {/* Clothes Pricing */}
-                <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                  <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Clothes Pricing</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (₱)</label>
-                      <input 
-                        type="number" 
-                        name="clothesPrice" 
-                        value={prices.clothesPrice} 
-                        onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-                      />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Laundry Shop Name</label>
+                  <input 
+                    type="text" 
+                    value={shopName} 
+                    onChange={(e) => setShopName(e.target.value)}
+                    inputMode="text"
+                    autoComplete="off"
+                    onTouchStart={(e) => e.currentTarget.focus()}
+                    style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', fontSize: '16px', color: '#000000' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                  {/* Clothes Pricing */}
+                  <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                    <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Clothes Pricing</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (₱)</label>
+                        <input 
+                          type="number" 
+                          name="clothesPrice" 
+                          value={prices.clothesPrice} 
+                          onChange={handlePriceChange}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (₱)</label>
+                        <input 
+                          type="number" 
+                          name="minClothesPrice" 
+                          value={prices.minClothesPrice} 
+                          onChange={handlePriceChange}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (₱)</label>
-                      <input 
-                        type="number" 
-                        name="minClothesPrice" 
-                        value={prices.minClothesPrice} 
-                        onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-                      />
+                  </div>
+
+                  {/* Bed Sheets Pricing */}
+                  <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                    <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Bed Sheets Pricing</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (₱)</label>
+                        <input 
+                          type="number" 
+                          name="bedSheetPrice" 
+                          value={prices.bedSheetPrice} 
+                          onChange={handlePriceChange}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (₱)</label>
+                        <input 
+                          type="number" 
+                          name="minBedSheetPrice" 
+                          value={prices.minBedSheetPrice} 
+                          onChange={handlePriceChange}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Bed Sheets Pricing */}
-                <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                  <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Bed Sheets Pricing</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (₱)</label>
-                      <input 
-                        type="number" 
-                        name="bedSheetPrice" 
-                        value={prices.bedSheetPrice} 
-                        onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (₱)</label>
-                      <input 
-                        type="number" 
-                        name="minBedSheetPrice" 
-                        value={prices.minBedSheetPrice} 
-                        onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                  </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Overdue Reminder Window</label>
+                  <select
+                    value={String(overdueHours)}
+                    onChange={(e) => setOverdueHours(Number(e.target.value))}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      fontSize: '16px',
+                      backgroundColor: '#f9fafb',
+                      color: '#000000'
+                    }}
+                  >
+                    {overdueHourOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+                    Laundry marked as done beyond this selected time will be considered overdue.
+                  </p>
                 </div>
-              </div>
 
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Overdue Reminder Window</label>
-                <select
-                  value={String(overdueHours)}
-                  onChange={(e) => setOverdueHours(Number(e.target.value))}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #d1d5db',
-                    fontSize: '16px',
-                    backgroundColor: 'white'
-                  }}
-                >
-                  {overdueHourOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
-                  Laundry marked as done beyond this selected time will be considered overdue.
-                </p>
-              </div>
-
-              <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <button
-                  type="submit"
-                  style={{
-                    backgroundColor: '#2563eb',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '12px 24px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  <Save size={18} /> Save Settings
-                </button>
-                {saveStatus === 'success' && <span style={{ color: '#059669', fontWeight: 600, fontSize: '14px' }}>✓ Settings saved successfully</span>}
-                {saveStatus === 'error' && <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '14px' }}>✗ Failed to save. Check server connection.</span>}
-              </div>
-            </form>
-          </div>
+                <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <button
+                    type="submit"
+                    style={{
+                      backgroundColor: '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '12px 24px',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Save size={18} /> Save Settings
+                  </button>
+                  {saveStatus === 'success' && <span style={{ color: '#059669', fontWeight: 600, fontSize: '14px' }}>✓ Settings saved successfully</span>}
+                  {saveStatus === 'error' && <span style={{ color: '#dc2626', fontWeight: 600, fontSize: '14px' }}>✗ Failed to save. Check server connection.</span>}
+                </div>
+              </form>
+            </div>
+          </>
         ) : (
           /* --- MAIN DASHBOARD VIEW --- */
           <>
