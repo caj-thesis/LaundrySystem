@@ -307,7 +307,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 type="password"
                 value={adminPinInput}
                 readOnly
-                placeholder="Enter 4-digit PIN"
+                placeholder="Enter PIN"
                 style={{
                   border: '1px solid #dbe5f1',
                   borderRadius: '8px',
@@ -435,7 +435,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
           <div className="instructions-header" style={{ marginBottom: '8px' }}>
             <h2 style={{ margin: '0 0 4px 0' }}>Admin Dashboard</h2>
-            <p style={{ margin: '0' }}>Manage lockers and transactions (Firebase live)</p>
+            <p style={{ margin: '0' }}>Manage lockers and transactions</p>
           </div>
         </div>
 
