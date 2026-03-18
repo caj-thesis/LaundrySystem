@@ -299,9 +299,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
-  const handleOpenSettings = async () => {
-    await loadSettings();
+  const handleOpenSettings = () => {
     setIsSettingsOpen(true);
+    void loadSettings();
   };
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -543,9 +543,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <>
             <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
               <div className="instructions-header" style={{ marginBottom: '8px', textAlign: 'center' }}>
-                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <h2 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <Settings size={22} /> Admin Settings
                 </h2>
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
+                  Update pricing, overdue reminders, and kiosk branding for the admin panel.
+                </p>
               </div>
             </div>
 
@@ -565,7 +568,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   gap: '20px',
                   overflowY: 'auto',
                   overflowX: 'hidden',
-                  minHeight: 0
+                  minHeight: 0,
+                  colorScheme: 'light'
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -577,7 +581,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     inputMode="text"
                     autoComplete="off"
                     onTouchStart={(e) => e.currentTarget.focus()}
-                    style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', fontSize: '16px', color: '#000000' }}
+                    style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', fontSize: '16px', color: '#000000', colorScheme: 'light' }}
                   />
                 </div>
 
@@ -593,7 +597,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="clothesPrice" 
                           value={prices.clothesPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                       <div>
@@ -603,7 +607,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="minClothesPrice" 
                           value={prices.minClothesPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                     </div>
@@ -620,7 +624,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="bedSheetPrice" 
                           value={prices.bedSheetPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                       <div>
@@ -630,7 +634,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="minBedSheetPrice" 
                           value={prices.minBedSheetPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                     </div>
@@ -649,7 +653,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       border: '1px solid #d1d5db',
                       fontSize: '16px',
                       backgroundColor: '#f9fafb',
-                      color: '#000000'
+                      color: '#000000',
+                      colorScheme: 'light'
                     }}
                   >
                     {overdueHourOptions.map((option) => (
