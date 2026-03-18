@@ -94,6 +94,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     minClothesPrice: 50,
     minBedSheetPrice: 50
   });
+  const [overdueHours, setOverdueHours] = useState(48);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
@@ -170,6 +171,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               minClothesPrice: data.minClothesPrice ?? 50,
               minBedSheetPrice: data.minBedSheetPrice ?? 50,
             });
+            setOverdueHours(data.overdueHours ?? 48);
           }
         })
         .catch(e => console.error("Failed to load settings:", e));
@@ -284,6 +286,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           laundryShopName: shopName,
+          overdueHours,
           ...prices
         })
       });
@@ -303,6 +306,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
     const { name, value } = e.target;
     setPrices(prev => ({ ...prev, [name]: Number(value) }));
   };
+
+
+  const overdueHourOptions = [
+    { value: 12, label: '12 hours' },
+    { value: 24, label: '24 hours' },
+    { value: 36, label: '36 hours' },
+    { value: 48, label: '48 hours (recommended)' },
+    { value: 72, label: '72 hours' },
+  ];
 
   const getStatusDisplayInfo = (txn: Transaction) => {
     if ((txn.laundryStatus === 'Done' || txn.laundryStatus === 'Ready for Pick-up') && txn.reminderSent) {
@@ -527,12 +539,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         {isSettingsOpen ? (
           /* --- SETTINGS PAGE VIEW --- */
-          <div style={{ marginTop: '54px', flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <div style={{ marginTop: '54px', flex: 1, display: 'flex', justifyContent: 'center', minHeight: 0, overflow: 'hidden' }}>
             <form 
               onSubmit={handleSaveSettings}
               style={{
                 width: '100%',
-                maxWidth: '600px',
+                maxWidth: '760px',
                 backgroundColor: 'white',
                 borderRadius: '12px',
                 border: '1px solid #e5e7eb',
@@ -541,7 +553,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '20px',
-                overflowY: 'auto'
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                minHeight: 0
               }}
             >
               <div>
@@ -563,7 +577,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                 {/* Clothes Pricing */}
                 <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                   <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Clothes Pricing</h3>
@@ -619,7 +633,32 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               </div>
 
-              <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Overdue Reminder Window</label>
+                <select
+                  value={String(overdueHours)}
+                  onChange={(e) => setOverdueHours(Number(e.target.value))}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '16px',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  {overdueHourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+                  Laundry marked as done beyond this selected time will be considered overdue.
+                </p>
+              </div>
+
+              <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <button
                   type="submit"
                   style={{
