@@ -299,9 +299,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
-  const handleOpenSettings = async () => {
-    await loadSettings();
+  const handleOpenSettings = () => {
     setIsSettingsOpen(true);
+    void loadSettings();
   };
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
