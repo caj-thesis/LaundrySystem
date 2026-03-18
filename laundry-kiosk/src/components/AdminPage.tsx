@@ -516,10 +516,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
             <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
               <div className="instructions-header" style={{ marginBottom: '8px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <Settings size={22} /> Admin Settings
+                  Admin Settings
                 </h2>
                 <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
-                  Update pricing, overdue reminders, and kiosk branding for the admin panel.
+                  Update pricing, overdue reminders, and name of the laundry shop.
                 </p>
               </div>
             </div>

@@ -3,7 +3,7 @@
   "clothesPrice": 25,
   "bedSheetPrice": 50,
   "minClothesPrice": 50,
-  "minBedSheetPrice": 50,
+  "minBedSheetPrice": 125,
   "overdueHours": 48,
   "receiptFootnote": "Thank you for using our service!"
 }
