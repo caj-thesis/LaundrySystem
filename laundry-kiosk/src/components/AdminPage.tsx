@@ -1,51 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, Settings, Save } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import {
-  collection,
-  doc,
-  onSnapshot,
-  updateDoc,
-} from 'firebase/firestore';
-import {
-  getFirestore,
-  initializeFirestore,
-  memoryLocalCache,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from 'firebase/firestore';
 import { BackgroundBubbles } from '../components/BackgroundBubbles';
 import '../styles/app.css';
-
-const firebaseConfig = {
-  apiKey: 'AIzaSyCbRscvsw2FwgzdShLytikbb7Sw51ioLs4',
-  authDomain: 'laundrymanagementsystem-609a2.firebaseapp.com',
-  projectId: 'laundrymanagementsystem-609a2',
-  storageBucket: 'laundrymanagementsystem-609a2.firebasestorage.app',
-  messagingSenderId: '614368527448',
-  appId: '1:614368527448:web:1c59583754b6a47c3a762d',
-  measurementId: 'G-GYJKLMT5Q7',
-};
-
-const app = initializeApp(firebaseConfig, 'admin-page-app');
-
-function supportsPersistentCache() {
-  if (typeof window === 'undefined') return false;
-  if (typeof window.indexedDB === 'undefined') return false;
-
-  try {
-    void window.localStorage.length;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const db = supportsPersistentCache()
-  ? initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-    })
-  : getFirestore(app) ?? initializeFirestore(app, { localCache: memoryLocalCache() });
 
 type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
 
@@ -104,6 +60,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
   });
   const [overdueHours, setOverdueHours] = useState(DEFAULT_SETTINGS.overdueHours);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [actionError, setActionError] = useState('');
+
+  const loadAdminOverview = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/admin/overview');
+      if (!response.ok) {
+        throw new Error('Failed to load admin overview');
+      }
+
+      const data = await response.json();
+      setLockers(Array.isArray(data.lockers) ? data.lockers : []);
+      setTransactionsById(data.transactionsById ?? {});
+      setActionError('');
+    } catch (error) {
+      console.error('Failed to load admin overview:', error);
+      setActionError('Failed to load local admin controls.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -129,64 +105,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
   }, [loadSettings]);
 
   useEffect(() => {
-    const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
-      const next: Locker[] = snapshot.docs
-        .map((docSnap) => {
-          const data = docSnap.data();
-          const lockerNumber = Number(data.lockerId ?? docSnap.id);
+    void loadAdminOverview();
+    const intervalId = window.setInterval(() => {
+      void loadAdminOverview();
+    }, 3000);
 
-          return {
-            id: docSnap.id,
-            lockerNumber,
-            isLocked: data.action !== 'unlock',
-            isConnected: data.isConnected !== false,
-            status: data.status === 'occupied' ? 'occupied' : 'available',
-            currentTransactionId: data.currentTransactionId || undefined,
-          };
-        })
-        .filter((locker) => locker.isConnected)
-        .sort((a, b) => a.lockerNumber - b.lockerNumber);
-
-      setLockers(next);
-      setLoading(false);
-    });
-
-    const unsubTransactions = onSnapshot(collection(db, 'transactions'), (snapshot) => {
-      const next: Record<string, Transaction> = {};
-
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const statusValue = String(data.status ?? '').toLowerCase();
-
-        if (statusValue !== 'pending') {
-          return;
-        }
-
-        const transactionDocId = docSnap.id;
-        const transactionId = (data.transactionId as string) || transactionDocId;
-        const mappedTransaction: Transaction = {
-          id: transactionId,
-          transactionDocId,
-          pinCode: String(data.pinCode ?? data.pin ?? '0000'),
-          price: Number(data.price || 0),
-          weight: Number(data.weight || 0),
-          laundryType: (data.type as string) || 'N/A',
-          laundryStatus: ((data.laundryStatus as LaundryStatus) || 'Dropped') as LaundryStatus,
-          reminderSent: Boolean(data.reminderSent),
-        };
-
-        next[transactionDocId] = mappedTransaction;
-        next[transactionId] = mappedTransaction;
-      });
-
-      setTransactionsById(next);
-    });
-
-    return () => {
-      unsubLockers();
-      unsubTransactions();
-    };
-  }, []);
+    return () => window.clearInterval(intervalId);
+  }, [loadAdminOverview]);
 
   const selectedLocker = useMemo(
     () => lockers.find((locker) => locker.id === selectedLockerId) || null,
@@ -212,30 +137,47 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
     if (nextStatus === transaction.laundryStatus) return;
 
-    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
-      laundryStatus: nextStatus,
-      ...(nextStatus === 'Done' ? { doneAt: new Date(), reminderSent: false } : {}),
-      updatedAt: new Date(),
+    const response = await fetch('http://localhost:3000/api/admin/transaction/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transactionId: transaction.id,
+        laundryStatus: nextStatus,
+      }),
     });
+
+    if (!response.ok) {
+      setActionError('Failed to update the local laundry status.');
+      return;
+    }
+
+    const data = await response.json();
+    setLockers(data.overview?.lockers ?? []);
+    setTransactionsById(data.overview?.transactionsById ?? {});
+    setActionError('');
   };
 
   const handleResetOverdue = async () => {
     if (!selectedLocker || !transaction) return;
 
-    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
-      status: 'archived',
-      lockerId: null,
-      archivedAt: new Date(),
-      note: 'Archived by admin page reset',
+    const response = await fetch('http://localhost:3000/api/admin/transaction/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lockerId: selectedLocker.id,
+        transactionId: transaction.id,
+      }),
     });
 
-    await updateDoc(doc(db, 'lockers', selectedLocker.id), {
-      status: 'available',
-      action: 'lock',
-      currentTransactionId: null,
-      updatedAt: new Date(),
-      adminCommand: null,
-    });
+    if (!response.ok) {
+      setActionError('Failed to reset the local overdue transaction.');
+      return;
+    }
+
+    const data = await response.json();
+    setLockers(data.overview?.lockers ?? []);
+    setTransactionsById(data.overview?.transactionsById ?? {});
+    setActionError('');
 
     setSelectedLockerId(null);
   };
@@ -243,19 +185,37 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const toggleLock = async () => {
     if (!selectedLocker) return;
 
-    await updateDoc(doc(db, 'lockers', selectedLocker.id), {
-      action: selectedLocker.isLocked ? 'unlock' : 'lock',
-      updatedAt: new Date(),
+    const endpoint = selectedLocker.isLocked ? 'unlock' : 'lock';
+    const response = await fetch(`http://localhost:3000/api/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lockerId: selectedLocker.id }),
     });
+
+    if (!response.ok) {
+      setActionError('Failed to update the local door control.');
+      return;
+    }
+
+    setActionError('');
+    void loadAdminOverview();
   };
 
   const printReceipt = async () => {
     if (!transaction) return;
 
-    await updateDoc(doc(db, 'transactions', transaction.transactionDocId), {
-      triggerPrint: true,
-      updatedAt: new Date(),
+    const response = await fetch('http://localhost:3000/api/admin/transaction/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactionId: transaction.id }),
     });
+
+    if (!response.ok) {
+      setActionError('Failed to print the local receipt.');
+      return;
+    }
+
+    setActionError('');
   };
 
   const handleAdminPinSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
@@ -711,9 +671,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
             <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
               <div className="instructions-header" style={{ marginBottom: '8px' }}>
                 <h2 style={{ margin: '0 0 4px 0' }}>Admin Dashboard</h2>
-                <p style={{ margin: '0' }}>Manage lockers and transactions</p>
+                <p style={{ margin: '0' }}>Manage lockers and transactions locally on this kiosk.</p>
               </div>
             </div>
+
+            {actionError && (
+              <div
+                style={{
+                  marginBottom: '12px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #fecaca',
+                  backgroundColor: '#fef2f2',
+                  color: '#b91c1c',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                {actionError}
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', flex: 1, minHeight: 0 }}>
               <div
