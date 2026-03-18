@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, Settings, Save } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import {
@@ -97,6 +97,25 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [overdueHours, setOverdueHours] = useState(48);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/settings');
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.laundryShopName) setShopName(data.laundryShopName);
+      setPrices({
+        clothesPrice: data.clothesPrice ?? 25,
+        bedSheetPrice: data.bedSheetPrice ?? 40,
+        minClothesPrice: data.minClothesPrice ?? 50,
+        minBedSheetPrice: data.minBedSheetPrice ?? 50,
+      });
+      setOverdueHours(data.overdueHours ?? 48);
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  }, []);
+
   useEffect(() => {
     const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
       const next: Locker[] = snapshot.docs
@@ -156,28 +175,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
       unsubTransactions();
     };
   }, []);
-
-  // Fetch Settings when opened
-  useEffect(() => {
-    if (isSettingsOpen) {
-      fetch('http://localhost:3000/api/settings')
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data) {
-            if (data.laundryShopName) setShopName(data.laundryShopName);
-            setPrices({
-              clothesPrice: data.clothesPrice ?? 25,
-              bedSheetPrice: data.bedSheetPrice ?? 40,
-              minClothesPrice: data.minClothesPrice ?? 50,
-              minBedSheetPrice: data.minBedSheetPrice ?? 50,
-            });
-            setOverdueHours(data.overdueHours ?? 48);
-          }
-        })
-        .catch(e => console.error("Failed to load settings:", e));
-    }
-  }, [isSettingsOpen]);
-
 
   const selectedLocker = useMemo(
     () => lockers.find((locker) => locker.id === selectedLockerId) || null,
@@ -300,6 +297,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setSaveStatus('error');
     }
     setTimeout(() => setSaveStatus('idle'), 3000);
+  };
+
+  const handleOpenSettings = async () => {
+    await loadSettings();
+    setIsSettingsOpen(true);
   };
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -508,7 +510,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
         {/* Settings Button (Top Right) */}
         {!isSettingsOpen && (
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={() => {
+              void handleOpenSettings();
+            }}
             style={{
               position: 'absolute',
               top: '12px',
@@ -538,11 +542,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
           /* --- SETTINGS PAGE VIEW --- */
           <>
             <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
-              <div className="instructions-header" style={{ marginBottom: '8px' }}>
-                <h2 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="instructions-header" style={{ marginBottom: '8px', textAlign: 'center' }}>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <Settings size={22} /> Admin Settings
                 </h2>
-                <p style={{ margin: '0' }}>Configure pricing, overdue reminders, and shop profile details</p>
               </div>
             </div>
 
@@ -565,13 +568,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   minHeight: 0
                 }}
               >
-                <div>
-                  <h3 style={{ fontSize: '20px', color: '#111827', margin: 0 }}>Kiosk Settings</h3>
-                  <p style={{ color: '#6b7280', margin: '4px 0 0 0', fontSize: '14px' }}>
-                    Update the dynamic pricing and shop details.
-                  </p>
-                </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '14px', fontWeight: 600, color: '#374151' }}>Laundry Shop Name</label>
                   <input 
