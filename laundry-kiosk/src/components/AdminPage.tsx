@@ -308,13 +308,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
 
-  const overdueHourOptions = [
-    { value: 12, label: '12 hours' },
-    { value: 24, label: '24 hours' },
-    { value: 36, label: '36 hours' },
-    { value: 48, label: '48 hours (recommended)' },
-    { value: 72, label: '72 hours' },
-  ];
+  const overdueHourOptions = [24, 48, 72, 96, 120].map((hours) => ({
+    value: hours,
+    label: `${hours} hours${hours === 48 ? ' (recommended)' : ''}`,
+  }));
 
   const getStatusDisplayInfo = (txn: Transaction) => {
     if ((txn.laundryStatus === 'Done' || txn.laundryStatus === 'Ready for Pick-up') && txn.reminderSent) {
@@ -539,7 +536,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         {isSettingsOpen ? (
           /* --- SETTINGS PAGE VIEW --- */
-          <div style={{ marginTop: '54px', flex: 1, display: 'flex', justifyContent: 'center', minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ marginTop: '68px', flex: 1, display: 'flex', justifyContent: 'center', minHeight: 0, overflow: 'hidden' }}>
             <form 
               onSubmit={handleSaveSettings}
               style={{
@@ -573,7 +570,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   type="text" 
                   value={shopName} 
                   onChange={(e) => setShopName(e.target.value)}
-                  style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '16px' }}
+                  inputMode="text"
+                  autoComplete="off"
+                  onTouchStart={(e) => e.currentTarget.focus()}
+                  style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', fontSize: '16px' }}
                 />
               </div>
 
@@ -589,7 +589,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         name="clothesPrice" 
                         value={prices.clothesPrice} 
                         onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', boxSizing: 'border-box' }}
                       />
                     </div>
                     <div>
@@ -599,7 +599,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         name="minClothesPrice" 
                         value={prices.minClothesPrice} 
                         onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', boxSizing: 'border-box' }}
                       />
                     </div>
                   </div>
@@ -616,7 +616,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         name="bedSheetPrice" 
                         value={prices.bedSheetPrice} 
                         onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', boxSizing: 'border-box' }}
                       />
                     </div>
                     <div>
@@ -626,7 +626,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         name="minBedSheetPrice" 
                         value={prices.minBedSheetPrice} 
                         onChange={handlePriceChange}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', boxSizing: 'border-box' }}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', boxSizing: 'border-box' }}
                       />
                     </div>
                   </div>
@@ -644,7 +644,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     borderRadius: '8px',
                     border: '1px solid #d1d5db',
                     fontSize: '16px',
-                    backgroundColor: 'white'
+                    backgroundColor: '#f9fafb'
                   }}
                 >
                   {overdueHourOptions.map((option) => (
@@ -658,7 +658,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </p>
               </div>
 
-              <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <button
                   type="submit"
                   style={{
