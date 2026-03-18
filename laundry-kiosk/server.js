@@ -128,14 +128,20 @@ function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs =
     connect();
 }
 
-let localSettings = readJsonFile(LOCAL_SETTINGS_FILE, {
-    laundryShopName: 'CAJ Laundry Locker System',
+const defaultLocalSettings = {
+    laundryShopName: 'Laundry Management System',
     clothesPrice: 25,
-    bedSheetPrice: 40,
+    bedSheetPrice: 50,
     minClothesPrice: 50,
     minBedSheetPrice: 50,
+    overdueHours: 48,
     receiptFootnote: 'Thank you for using our service!'
-});
+};
+
+let localSettings = {
+    ...defaultLocalSettings,
+    ...readJsonFile(LOCAL_SETTINGS_FILE, defaultLocalSettings)
+};
 writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
 let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => {
@@ -241,16 +247,7 @@ async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
         const generalSnap = await getDoc(generalRef);
-
-        const defaultSettings = {
-            laundryShopName: "CAJ Laundry Locker System",
-            overdueHours: 48,
-            clothesPrice: 25,  
-            bedSheetPrice: 40,
-            minClothesPrice: 50,   
-            minBedSheetPrice: 50,
-            receiptFootnote: "Thank you for using our service!" 
-        };
+        const defaultSettings = { ...defaultLocalSettings };
 
         if (!generalSnap.exists()) {
             console.log("⚙️  Initializing 'settings/general' with default prices...");
@@ -321,6 +318,7 @@ function startSettingsListener() {
                 bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : localSettings.bedSheetPrice,
                 minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : localSettings.minClothesPrice,     
                 minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice,
+                overdueHours: data.overdueHours !== undefined ? data.overdueHours : localSettings.overdueHours,
                 receiptFootnote: data.receiptFootnote !== undefined ? data.receiptFootnote : localSettings.receiptFootnote
             };
             writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
@@ -813,6 +811,42 @@ connectFirebaseAuth();
 app.get('/api/status', (req, res) => res.json(systemState));
 app.get('/api/lockers', (req, res) => res.json(getLocalLockers()));
 app.get('/api/settings', (req, res) => res.json(localSettings));
+app.post('/api/settings', async (req, res) => {
+    const toNumber = (value, fallback) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    localSettings = {
+        ...localSettings,
+        laundryShopName: typeof req.body.laundryShopName === 'string' && req.body.laundryShopName.trim()
+            ? req.body.laundryShopName.trim()
+            : localSettings.laundryShopName,
+        clothesPrice: toNumber(req.body.clothesPrice, localSettings.clothesPrice),
+        bedSheetPrice: toNumber(req.body.bedSheetPrice, localSettings.bedSheetPrice),
+        minClothesPrice: toNumber(req.body.minClothesPrice, localSettings.minClothesPrice),
+        minBedSheetPrice: toNumber(req.body.minBedSheetPrice, localSettings.minBedSheetPrice),
+        overdueHours: toNumber(req.body.overdueHours, localSettings.overdueHours),
+        receiptFootnote: typeof req.body.receiptFootnote === 'string'
+            ? req.body.receiptFootnote
+            : localSettings.receiptFootnote
+    };
+
+    writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
+    SYSTEM_SETTINGS.overdueLimitMs = Number(localSettings.overdueHours) * 60 * 60 * 1000;
+
+    if (!firebaseReady) {
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: false });
+    }
+
+    try {
+        await setDoc(doc(db, 'settings', 'general'), localSettings, { merge: true });
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: true });
+    } catch (error) {
+        console.error('⚠️ Failed to sync settings to Firebase:', error);
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: false });
+    }
+});
 
 app.post('/api/dropoff', (req, res) => {
     const payload = {

@@ -74,6 +74,14 @@ interface AdminPageProps {
 }
 
 const ADMIN_PIN = '1000';
+const DEFAULT_SETTINGS = {
+  laundryShopName: 'Laundry Management System',
+  clothesPrice: 25,
+  bedSheetPrice: 50,
+  minClothesPrice: 50,
+  minBedSheetPrice: 50,
+  overdueHours: 48,
+};
 
 export function AdminPage({ onBack }: AdminPageProps) {
   const [lockers, setLockers] = useState<Locker[]>([]);
@@ -87,14 +95,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [shopName, setShopName] = useState('CAJ Laundry Locker System');
+  const [shopName, setShopName] = useState(DEFAULT_SETTINGS.laundryShopName);
   const [prices, setPrices] = useState({
-    clothesPrice: 25,
-    bedSheetPrice: 40,
-    minClothesPrice: 50,
-    minBedSheetPrice: 50
+    clothesPrice: DEFAULT_SETTINGS.clothesPrice,
+    bedSheetPrice: DEFAULT_SETTINGS.bedSheetPrice,
+    minClothesPrice: DEFAULT_SETTINGS.minClothesPrice,
+    minBedSheetPrice: DEFAULT_SETTINGS.minBedSheetPrice
   });
-  const [overdueHours, setOverdueHours] = useState(48);
+  const [overdueHours, setOverdueHours] = useState(DEFAULT_SETTINGS.overdueHours);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const loadSettings = useCallback(async () => {
@@ -105,16 +113,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
       const data = await response.json();
       if (data.laundryShopName) setShopName(data.laundryShopName);
       setPrices({
-        clothesPrice: data.clothesPrice ?? 25,
-        bedSheetPrice: data.bedSheetPrice ?? 40,
-        minClothesPrice: data.minClothesPrice ?? 50,
-        minBedSheetPrice: data.minBedSheetPrice ?? 50,
+        clothesPrice: data.clothesPrice ?? DEFAULT_SETTINGS.clothesPrice,
+        bedSheetPrice: data.bedSheetPrice ?? DEFAULT_SETTINGS.bedSheetPrice,
+        minClothesPrice: data.minClothesPrice ?? DEFAULT_SETTINGS.minClothesPrice,
+        minBedSheetPrice: data.minBedSheetPrice ?? DEFAULT_SETTINGS.minBedSheetPrice,
       });
-      setOverdueHours(data.overdueHours ?? 48);
+      setOverdueHours(data.overdueHours ?? DEFAULT_SETTINGS.overdueHours);
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
   }, []);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   useEffect(() => {
     const unsubLockers = onSnapshot(collection(db, 'lockers'), (snapshot) => {
@@ -299,9 +311,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
-  const handleOpenSettings = async () => {
-    await loadSettings();
+  const handleOpenSettings = () => {
     setIsSettingsOpen(true);
+    void loadSettings();
   };
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -543,9 +555,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <>
             <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
               <div className="instructions-header" style={{ marginBottom: '8px', textAlign: 'center' }}>
-                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <h2 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <Settings size={22} /> Admin Settings
                 </h2>
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
+                  Update pricing, overdue reminders, and kiosk branding for the admin panel.
+                </p>
               </div>
             </div>
 
@@ -565,7 +580,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   gap: '20px',
                   overflowY: 'auto',
                   overflowX: 'hidden',
-                  minHeight: 0
+                  minHeight: 0,
+                  colorScheme: 'light'
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -577,7 +593,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     inputMode="text"
                     autoComplete="off"
                     onTouchStart={(e) => e.currentTarget.focus()}
-                    style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', fontSize: '16px', color: '#000000' }}
+                    style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', fontSize: '16px', color: '#000000', colorScheme: 'light' }}
                   />
                 </div>
 
@@ -593,7 +609,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="clothesPrice" 
                           value={prices.clothesPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                       <div>
@@ -603,7 +619,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="minClothesPrice" 
                           value={prices.minClothesPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                     </div>
@@ -620,7 +636,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="bedSheetPrice" 
                           value={prices.bedSheetPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                       <div>
@@ -630,7 +646,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           name="minBedSheetPrice" 
                           value={prices.minBedSheetPrice} 
                           onChange={handlePriceChange}
-                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: '#f9fafb', color: '#000000', boxSizing: 'border-box', colorScheme: 'light' }}
                         />
                       </div>
                     </div>
@@ -649,7 +665,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       border: '1px solid #d1d5db',
                       fontSize: '16px',
                       backgroundColor: '#f9fafb',
-                      color: '#000000'
+                      color: '#000000',
+                      colorScheme: 'light'
                     }}
                   >
                     {overdueHourOptions.map((option) => (
