@@ -128,14 +128,20 @@ function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs =
     connect();
 }
 
-let localSettings = readJsonFile(LOCAL_SETTINGS_FILE, {
-    laundryShopName: 'CAJ Laundry Locker System',
+const defaultLocalSettings = {
+    laundryShopName: 'Laundry Management System',
     clothesPrice: 25,
-    bedSheetPrice: 40,
+    bedSheetPrice: 50,
     minClothesPrice: 50,
     minBedSheetPrice: 50,
+    overdueHours: 48,
     receiptFootnote: 'Thank you for using our service!'
-});
+};
+
+let localSettings = {
+    ...defaultLocalSettings,
+    ...readJsonFile(LOCAL_SETTINGS_FILE, defaultLocalSettings)
+};
 writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
 let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => {
@@ -197,6 +203,60 @@ function getLocalLockers() {
     });
 }
 
+function getActiveLocalTransactionsById() {
+    return localTransactions.reduce((acc, tx) => {
+        if (tx.status !== TRANSACTION_STATUS.PENDING) return acc;
+
+        const transactionId = tx.transactionId || tx.firebaseDocId;
+        if (!transactionId) return acc;
+
+        const mapped = {
+            id: transactionId,
+            transactionDocId: tx.firebaseDocId || transactionId,
+            pinCode: String(tx.pinCode ?? tx.pin ?? '0000'),
+            price: Number(tx.price || 0),
+            weight: Number(tx.weight || 0),
+            laundryType: tx.type || 'N/A',
+            laundryStatus: tx.laundryStatus || 'Dropped',
+            reminderSent: Boolean(tx.reminderSent),
+        };
+
+        acc[transactionId] = mapped;
+        if (mapped.transactionDocId) {
+            acc[mapped.transactionDocId] = mapped;
+        }
+        return acc;
+    }, {});
+}
+
+function getAdminOverview() {
+    const lockers = getLocalLockers()
+        .filter((locker) => locker.isConnected !== false)
+        .map((locker) => ({
+            id: String(locker.id),
+            lockerNumber: Number(locker.id),
+            isLocked: systemState[`l${locker.id}`]?.action !== 'unlock',
+            isConnected: locker.isConnected !== false,
+            status: locker.status === 'occupied' ? 'occupied' : 'available',
+            currentTransactionId: locker.currentTransactionId || undefined,
+        }))
+        .sort((a, b) => a.lockerNumber - b.lockerNumber);
+
+    return {
+        lockers,
+        transactionsById: getActiveLocalTransactionsById(),
+    };
+}
+
+function findLocalTransaction(transactionId) {
+    return localTransactions.find((tx) => tx.transactionId === transactionId || tx.firebaseDocId === transactionId);
+}
+
+async function syncLocalTransactionUpdate(tx, updates) {
+    if (!firebaseReady || !tx?.firebaseDocId) return;
+    await updateDoc(doc(db, 'transactions', tx.firebaseDocId), updates);
+}
+
 // --- 1. HARDWARE WATCHER ---
 function updateStateFromFile() {
     if (!fs.existsSync(STATE_FILE)) return;
@@ -241,16 +301,7 @@ async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
         const generalSnap = await getDoc(generalRef);
-
-        const defaultSettings = {
-            laundryShopName: "CAJ Laundry Locker System",
-            overdueHours: 48,
-            clothesPrice: 25,  
-            bedSheetPrice: 40,
-            minClothesPrice: 50,   
-            minBedSheetPrice: 50,
-            receiptFootnote: "Thank you for using our service!" 
-        };
+        const defaultSettings = { ...defaultLocalSettings };
 
         if (!generalSnap.exists()) {
             console.log("⚙️  Initializing 'settings/general' with default prices...");
@@ -321,6 +372,7 @@ function startSettingsListener() {
                 bedSheetPrice: data.bedSheetPrice !== undefined ? data.bedSheetPrice : localSettings.bedSheetPrice,
                 minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : localSettings.minClothesPrice,     
                 minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice,
+                overdueHours: data.overdueHours !== undefined ? data.overdueHours : localSettings.overdueHours,
                 receiptFootnote: data.receiptFootnote !== undefined ? data.receiptFootnote : localSettings.receiptFootnote
             };
             writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
@@ -813,6 +865,137 @@ connectFirebaseAuth();
 app.get('/api/status', (req, res) => res.json(systemState));
 app.get('/api/lockers', (req, res) => res.json(getLocalLockers()));
 app.get('/api/settings', (req, res) => res.json(localSettings));
+app.get('/api/admin/overview', (req, res) => res.json(getAdminOverview()));
+app.post('/api/settings', async (req, res) => {
+    const toNumber = (value, fallback) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    localSettings = {
+        ...localSettings,
+        laundryShopName: typeof req.body.laundryShopName === 'string' && req.body.laundryShopName.trim()
+            ? req.body.laundryShopName.trim()
+            : localSettings.laundryShopName,
+        clothesPrice: toNumber(req.body.clothesPrice, localSettings.clothesPrice),
+        bedSheetPrice: toNumber(req.body.bedSheetPrice, localSettings.bedSheetPrice),
+        minClothesPrice: toNumber(req.body.minClothesPrice, localSettings.minClothesPrice),
+        minBedSheetPrice: toNumber(req.body.minBedSheetPrice, localSettings.minBedSheetPrice),
+        overdueHours: toNumber(req.body.overdueHours, localSettings.overdueHours),
+        receiptFootnote: typeof req.body.receiptFootnote === 'string'
+            ? req.body.receiptFootnote
+            : localSettings.receiptFootnote
+    };
+
+    writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
+    SYSTEM_SETTINGS.overdueLimitMs = Number(localSettings.overdueHours) * 60 * 60 * 1000;
+
+    if (!firebaseReady) {
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: false });
+    }
+
+    try {
+        await setDoc(doc(db, 'settings', 'general'), localSettings, { merge: true });
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: true });
+    } catch (error) {
+        console.error('⚠️ Failed to sync settings to Firebase:', error);
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: false });
+    }
+});
+app.post('/api/admin/transaction/status', async (req, res) => {
+    const { transactionId, laundryStatus } = req.body;
+    const tx = findLocalTransaction(transactionId);
+
+    if (!tx || tx.status !== TRANSACTION_STATUS.PENDING) {
+        return res.status(404).json({ success: false, message: 'Active transaction not found.' });
+    }
+
+    tx.laundryStatus = laundryStatus;
+    tx.updatedAt = new Date();
+
+    if (laundryStatus === 'Done') {
+        tx.doneAt = new Date();
+        tx.reminderSent = false;
+    }
+
+    persistLocalTransactions();
+
+    try {
+        await syncLocalTransactionUpdate(tx, {
+            laundryStatus: tx.laundryStatus,
+            ...(laundryStatus === 'Done' ? { doneAt: tx.doneAt, reminderSent: false } : {}),
+            updatedAt: new Date(),
+        });
+    } catch (error) {
+        console.error('⚠️ Failed to sync local transaction status to Firebase:', error);
+    }
+
+    res.json({ success: true, overview: getAdminOverview() });
+});
+
+app.post('/api/admin/transaction/reset', async (req, res) => {
+    const { lockerId, transactionId } = req.body;
+    const tx = findLocalTransaction(transactionId);
+
+    if (!tx) {
+        return res.status(404).json({ success: false, message: 'Transaction not found.' });
+    }
+
+    tx.status = TRANSACTION_STATUS.ARCHIVED;
+    tx.lockerId = null;
+    tx.archivedAt = new Date();
+    tx.note = 'Archived by local admin reset';
+    tx.updatedAt = new Date();
+    persistLocalTransactions();
+
+    markLockerAvailableAndLock(lockerId);
+
+    try {
+        await syncLocalTransactionUpdate(tx, {
+            status: TRANSACTION_STATUS.ARCHIVED,
+            lockerId: null,
+            archivedAt: tx.archivedAt,
+            note: tx.note,
+            updatedAt: new Date(),
+        });
+
+        if (firebaseReady) {
+            await setDoc(doc(db, 'lockers', String(lockerId)), {
+                status: 'available',
+                action: 'lock',
+                currentTransactionId: null,
+                updatedAt: new Date(),
+                adminCommand: null,
+            }, { merge: true });
+        }
+    } catch (error) {
+        console.error('⚠️ Failed to sync local reset to Firebase:', error);
+    }
+
+    res.json({ success: true, overview: getAdminOverview() });
+});
+
+app.post('/api/admin/transaction/print', (req, res) => {
+    const { transactionId } = req.body;
+    const tx = findLocalTransaction(transactionId);
+
+    if (!tx) {
+        return res.status(404).json({ success: false, message: 'Transaction not found.' });
+    }
+
+    executePrintCommand({
+        transactionId: tx.transactionId,
+        pin: tx.pinCode ?? tx.pin,
+        processType: tx.status === TRANSACTION_STATUS.COMPLETED ? 'pickup' : 'dropoff',
+        weight: tx.weight,
+        price: tx.price,
+        type: tx.type,
+        shopName: localSettings.laundryShopName || 'Laundry Management System',
+        receiptFootnote: localSettings.receiptFootnote || 'Thank you for using our service!',
+    });
+
+    res.json({ success: true });
+});
 
 app.post('/api/dropoff', (req, res) => {
     const payload = {
