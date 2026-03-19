@@ -29,12 +29,6 @@ fi
 KIOSK_APP_DIR="/home/caj/laundry-kiosk"
 cd "$KIOSK_APP_DIR" || { echo "Directory not found"; exit 1; }
 
-# Check for Firebase Key
-if [ ! -f "serviceAccountKey.json" ]; then
-    echo "CRITICAL ERROR: serviceAccountKey.json is missing!"
-    exit 1
-fi
-
 # Check for system packages
 DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
 for pkg in "${DEPENDENCIES[@]}"; do
@@ -45,9 +39,9 @@ for pkg in "${DEPENDENCIES[@]}"; do
 done
 
 # Ensure Node modules are installed
-if [ ! -d "node_modules" ] || [ ! -d "node_modules/firebase" ]; then
-    echo "Installing/Updating Node dependencies..."
-    npm install express cors serialport firebase --save
+if [ ! -d "node_modules" ]; then
+    echo "Installing Node dependencies..."
+    npm install
 fi
 
 # --- 4. HARDWARE & BACKEND STARTUP ---
@@ -61,7 +55,7 @@ if [ -f "hardware_bridge.py" ]; then
         
         echo "📦 Installing required Python libraries..."
         pip install --upgrade pip
-        pip install firebase-admin pyserial
+        pip install pyserial
         
         if [ $? -eq 0 ]; then
             echo "✅ Python environment created and dependencies installed."

@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+laundry.db
+laundry.db-shm
+laundry.db-wal
 
 # Editor directories and files
 .vscode/*

@@ -1,24 +1,26 @@
 # --- IMPORTS ---
-import firebase_admin
-from firebase_admin import credentials, firestore
+import datetime
+import json
+import os
+import sqlite3
+import sys
+import time
+
 import serial
 import serial.tools.list_ports
-import time
-import sys
-import os
-import json
-import datetime
 
 # FORCE FLUSHING OF LOGS
 sys.stdout.reconfigure(line_buffering=True)
 
 # --- CONFIGURATION ---
-BAUD_RATE = 115200 
+BAUD_RATE = 115200
 LOG_FILE = "gsm_logs.log"
-STATE_FILE = "sys_state.json" 
+STATE_FILE = "sys_state.json"
 LOCKER_ACTIONS_FILE = "locker_actions.json"
-UPDATE_INTERVAL = 0.2 
-RECONNECT_INTERVAL = 3.0        
+DB_FILE = "laundry.db"
+UPDATE_INTERVAL = 0.2
+RECONNECT_INTERVAL = 3.0
+DATABASE_POLL_INTERVAL = 1.0
 
 # --- LED COLOR DEFINITIONS ---
 LED_OFF = 0
@@ -28,178 +30,104 @@ LED_BLUE = 3
 LED_YELLOW = 4
 
 # --- GLOBAL STATE ---
-SHOP_NAME = "CAJ LAUNDRY LOCKER CO." # Default name
+SHOP_NAME = "CAJ LAUNDRY LOCKER CO."
+last_database_poll = 0.0
+database_ready_logged = False
 
 # --- LOGGING ---
 def log_gsm(message):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"📱 {timestamp} {message}")
+    print(f"[GSM] {timestamp} {message}")
     try:
-        with open(LOG_FILE, "a") as f:
-            f.write(f"[{timestamp}] {message}\n")
-    except:
+        with open(LOG_FILE, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
         pass
 
-# --- FIREBASE SETUP ---
-key_path = "serviceAccountKey.json"
-FIREBASE_RETRY_INTERVAL = RECONNECT_INTERVAL
 
-firestore_listeners_started = False
-firestore_listener_handles = []
-last_firebase_attempt = 0
-_firebase_unavailable_logged = False
-
-def connect_firebase_if_needed():
-    global _firebase_unavailable_logged
-
-    if not os.path.exists(key_path):
-        if not _firebase_unavailable_logged:
-            print(f"⚠️ [FIREBASE] Firebase unavailable: {key_path} not found.")
-            _firebase_unavailable_logged = True
+def get_db_connection():
+    if not os.path.exists(DB_FILE):
         return None
 
-    try:
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(key_path)
-            firebase_admin.initialize_app(cred)
-        client = firestore.client()
-        if _firebase_unavailable_logged:
-            print("✅ [FIREBASE] Firebase connection restored.")
-        else:
-            print("✅ [FIREBASE] Authenticated")
-        _firebase_unavailable_logged = False
-        return client
-    except Exception as e:
-        if not _firebase_unavailable_logged:
-            print(f"⚠️ [FIREBASE] Firebase unavailable: {e}")
-            _firebase_unavailable_logged = True
-        return None
+    connection = sqlite3.connect(DB_FILE)
+    connection.row_factory = sqlite3.Row
+    return connection
 
-def stop_firebase_listeners():
-    global firestore_listeners_started, firestore_listener_handles
 
-    for unsubscribe in firestore_listener_handles:
-        try:
-            unsubscribe()
-        except Exception:
-            pass
+def valid_phone_number(value):
+    return isinstance(value, str) and len(value) == 11 and value.startswith("09") and value.isdigit()
 
-    firestore_listener_handles = []
-    firestore_listeners_started = False
-
-def start_firebase_listeners(db_client):
-    global firestore_listeners_started, firestore_listener_handles
-
-    if not db_client:
-        return False
-
-    if firestore_listeners_started:
-        return True
-
-    try:
-        firestore_listener_handles = [
-            db_client.collection('transactions').where('laundryStatus', 'in', ['Dropped', 'Pending', 'Done']).on_snapshot(on_transaction_snapshot),
-            db_client.collection('lockers').on_snapshot(on_locker_snapshot),
-            db_client.collection('settings').document('general').on_snapshot(on_settings_snapshot),
-        ]
-        firestore_listeners_started = True
-        print("✅ [FIREBASE] Firebase listeners restored.")
-        return True
-    except Exception as e:
-        stop_firebase_listeners()
-        print(f"⚠️ [FIREBASE] Listener registration failed: {e}")
-        return False
-
-db = connect_firebase_if_needed()
 
 # --- DYNAMIC PORT DISCOVERY ---
 def find_ports():
-    """
-    Scans all available USB serial ports to identify which is the GSM module
-    and which is the Arduino based on their responses.
-    """
-    print("🔎 Scanning ports for devices...")
+    print("[HW] Scanning serial ports...")
     ports = serial.tools.list_ports.comports()
     found_arduino = None
     found_gsm = None
 
     for port in ports:
-        # Skip internal Raspberry Pi Bluetooth/Serial ports
-        if "ttyAMA" in port.device: 
+        if "ttyAMA" in port.device:
             continue
-        
-        print(f"   👉 Testing {port.device}...")
-        try:
-            # Open port temporarily for testing
-            with serial.Serial(port.device, BAUD_RATE, timeout=1.5) as s:
-                time.sleep(2) # Wait for device reset (Arduino auto-resets on connect)
-                
-                # 1. TEST FOR GSM (Send AT command)
-                s.write(b'AT\r\n')
-                time.sleep(0.5)
-                response = s.read_all().decode('utf-8', errors='ignore')
-                
-                if "OK" in response:
-                    print(f"      📱 IDENTIFIED: GSM Module on {port.device}")
-                    found_gsm = port.device
-                    continue # Move to next port
 
-                # 2. TEST FOR ARDUINO (Listen for data stream)
-                # Arduino continuously sends "DATA|..."
+        print(f"[HW] Testing {port.device}...")
+        try:
+            with serial.Serial(port.device, BAUD_RATE, timeout=1.5) as serial_handle:
+                time.sleep(2)
+                serial_handle.write(b"AT\r\n")
+                time.sleep(0.5)
+                response = serial_handle.read_all().decode("utf-8", errors="ignore")
+
+                if "OK" in response:
+                    print(f"[HW] GSM module detected on {port.device}")
+                    found_gsm = port.device
+                    continue
+
                 start_time = time.time()
                 while time.time() - start_time < 3.0:
-                    line = s.readline().decode('utf-8', errors='ignore').strip()
+                    line = serial_handle.readline().decode("utf-8", errors="ignore").strip()
                     if line.startswith("DATA"):
-                        print(f"      🤖 IDENTIFIED: Arduino on {port.device}")
+                        print(f"[HW] Arduino detected on {port.device}")
                         found_arduino = port.device
                         break
-        except Exception as e:
-            print(f"      ⚠️ Could not read {port.device}: {e}")
-            continue
-            
+        except Exception as error:
+            print(f"[HW] Could not read {port.device}: {error}")
+
     return found_arduino, found_gsm
 
-# --- HARDWARE CONNECTION ---
-def connect_hardware():
-    print("--- Connecting to Hardware ---")
-    
-    # 1. Find the correct ports dynamically
-    ard_path, gsm_path = find_ports()
-    
-    # 2. Connect to Arduino
-    ard = None
-    if ard_path:
-        try:
-            print(f"🔌 Opening Arduino Connection at {ard_path}...")
-            ard = serial.Serial(ard_path, BAUD_RATE, timeout=1)
-            time.sleep(2) 
-            print(f"✅ ARDUINO connected.")
-        except Exception as e:
-            print(f"⚠️ Arduino Connection Failed: {e}")
-    else:
-        print("❌ ARDUINO NOT DETECTED during scan.")
 
-    # 3. Connect to GSM
-    modem = None
+def connect_hardware():
+    print("[HW] Connecting to hardware...")
+    arduino_path, gsm_path = find_ports()
+
+    arduino_handle = None
+    if arduino_path:
+        try:
+            print(f"[HW] Opening Arduino on {arduino_path}")
+            arduino_handle = serial.Serial(arduino_path, BAUD_RATE, timeout=1)
+            time.sleep(2)
+            print("[HW] Arduino connected")
+        except Exception as error:
+            print(f"[HW] Arduino connection failed: {error}")
+    else:
+        print("[HW] Arduino not detected during scan")
+
+    gsm_handle = None
     if gsm_path:
         try:
-            print(f"🔌 Opening GSM Connection at {gsm_path}...")
-            modem = serial.Serial(gsm_path, BAUD_RATE, timeout=1)
-            modem.write(b'AT\r\n')
+            print(f"[HW] Opening GSM on {gsm_path}")
+            gsm_handle = serial.Serial(gsm_path, BAUD_RATE, timeout=1)
+            gsm_handle.write(b"AT\r\n")
             time.sleep(0.5)
-            print(f"✅ GSM connected.")
-        except Exception as e:
-            print(f"⚠️ GSM Connection Failed: {e}")
+            print("[HW] GSM connected")
+        except Exception as error:
+            print(f"[HW] GSM connection failed: {error}")
     else:
-        print("❌ GSM MODULE NOT DETECTED during scan.")
+        print("[HW] GSM module not detected during scan")
 
-    return ard, modem
+    return arduino_handle, gsm_handle
+
 
 def reconnect_arduino_if_needed(current_arduino, last_attempt_ts):
-    """
-    Recover from transient serial disconnects (common when the USB device resets).
-    Keeps the kiosk operational offline by restoring local DATA stream updates.
-    """
     if current_arduino and current_arduino.is_open:
         return current_arduino, last_attempt_ts
 
@@ -207,208 +135,235 @@ def reconnect_arduino_if_needed(current_arduino, last_attempt_ts):
     if now - last_attempt_ts < RECONNECT_INTERVAL:
         return current_arduino, last_attempt_ts
 
-    print("🔁 Attempting Arduino reconnection...")
+    print("[HW] Attempting Arduino reconnection...")
     new_arduino, _ = connect_hardware()
     if new_arduino and new_arduino.is_open:
-        print("✅ Arduino reconnected. Restoring local hardware stream.")
+        print("[HW] Arduino reconnected")
         return new_arduino, now
 
     return current_arduino, now
 
 
-# Initialize connections
 arduino, gsm = connect_hardware()
 
 # --- STATE TRACKING ---
-local_door_states = { "1": None, "2": None, "3": None }
-local_connection_states = { "1": None, "2": None, "3": None }
+local_door_states = {"1": None, "2": None, "3": None}
+local_connection_states = {"1": None, "2": None, "3": None}
+last_led_states = {"1": None, "2": None, "3": None}
+
 
 # --- LED CONTROL FUNCTIONS ---
 def send_led_command(locker_id, color_code):
     action_char = None
-    if color_code == LED_RED:      action_char = 'r'
-    elif color_code == LED_GREEN:  action_char = 'g'
-    elif color_code == LED_YELLOW: action_char = 'y'
-    elif color_code == LED_BLUE:   action_char = 'r' 
+    if color_code == LED_RED:
+        action_char = "r"
+    elif color_code == LED_GREEN:
+        action_char = "g"
+    elif color_code == LED_YELLOW:
+        action_char = "y"
+    elif color_code == LED_BLUE:
+        action_char = "r"
 
     if arduino and arduino.is_open and action_char:
         try:
             command = f"{action_char}{locker_id}\n"
-            arduino.write(command.encode('utf-8'))
-        except Exception as e:
-            print(f"❌ LED Write Error: {e}")
+            arduino.write(command.encode("utf-8"))
+        except Exception as error:
+            print(f"[HW] LED write error: {error}")
 
-def process_locker_leds(locker_id, locker_data):
-    raw_status = locker_data.get('collectionStatus', locker_data.get('status', ''))
-    
-    # If locker is disconnected, force RED LED
-    is_connected = locker_data.get('isConnected', True)
-    if not is_connected:
-        send_led_command(locker_id, LED_RED) 
+
+def set_led_state(locker_id, color_code):
+    if last_led_states.get(locker_id) == color_code:
         return
 
-    status = raw_status.lower()
-    if status == 'available':
-        send_led_command(locker_id, LED_GREEN)
-        return 
+    last_led_states[locker_id] = color_code
+    send_led_command(locker_id, color_code)
 
-    current_tx_id = locker_data.get('currentTransactionId')
-    is_done = False
-    if current_tx_id and db:
-        try:
-            tx_ref = db.collection('transactions').document(current_tx_id)
-            tx_doc = tx_ref.get()
-            if tx_doc.exists:
-                tx_data = tx_doc.to_dict()
-                if tx_data.get('laundryStatus', '') == 'Done':
-                    is_done = True
-        except Exception as e:
-            pass
 
-    if is_done:
-        send_led_command(locker_id, LED_YELLOW)
-    else:
-        send_led_command(locker_id, LED_RED)
+def process_locker_led(locker_id, locker_status, laundry_status):
+    is_connected = local_connection_states.get(locker_id)
+    if is_connected is False:
+        set_led_state(locker_id, LED_RED)
+        return
 
-# --- LISTENERS ---
+    if locker_status == "available":
+        set_led_state(locker_id, LED_GREEN)
+        return
 
-# 1. Settings Listener (Dynamic Shop Name)
-def on_settings_snapshot(col_snapshot, changes, read_time):
+    if str(laundry_status or "").strip().lower() == "done":
+        set_led_state(locker_id, LED_YELLOW)
+        return
+
+    set_led_state(locker_id, LED_RED)
+
+
+def send_sms(phone_number, message):
+    if not gsm or not gsm.is_open:
+        return False
+
+    try:
+        gsm.write(b"AT+CMGF=1\r\n")
+        time.sleep(0.5)
+        gsm.write(f'AT+CMGS="{phone_number}"\r\n'.encode("utf-8"))
+        time.sleep(0.5)
+        gsm.write(message.encode("utf-8"))
+        gsm.write(bytes([26]))
+        time.sleep(3)
+        return True
+    except Exception as error:
+        log_gsm(f"SMS error for {phone_number}: {error}")
+        return False
+
+
+def process_database_state():
     global SHOP_NAME
-    for change in changes:
-        if change.type.name in ['ADDED', 'MODIFIED']:
-            data = change.document.to_dict()
-            name = data.get('laundryShopName', "CAJ LAUNDRY LOCKER CO.")
-            SHOP_NAME = name.upper() # Ensure it is uppercase for the receipt style
-            print(f"⚙️ Shop Name Updated: {SHOP_NAME}")
+    global last_database_poll
+    global database_ready_logged
 
-# 2. Transaction Listener (SMS Logic)
-def on_transaction_snapshot(col_snapshot, changes, read_time):
-    for change in changes:
-        if change.type.name in ['ADDED', 'MODIFIED']:
-            data = change.document.to_dict()
-            laundry_status = str(data.get('laundryStatus', '')).strip().lower()
-            phone = data.get('phoneNumber')
-            trans_id = data.get('transactionId', 'N/A')
-            pin = data.get('pin', 'N/A')
-            
-            # 👇 ADD THIS: Get the locker ID from the transaction
-            locker_id = data.get('lockerId')
-            
-            # Retrieve flags
-            trigger_reminder = data.get('triggerReminder', False)
-            reminder_sent_flag = data.get('reminderSent', False) 
-            code_sms_sent = data.get('codeSmsSent', False)       
-            done_sms_sent = data.get('doneSmsSent', False)       
+    now = time.time()
+    if now - last_database_poll < DATABASE_POLL_INTERVAL:
+        return
 
-            # Get Receipt Details
-            weight = float(data.get('weight', 0))
-            price = float(data.get('price', 0))
-            current_time = datetime.datetime.now().strftime("%m/%d/%Y %H:%M")
+    last_database_poll = now
+    connection = get_db_connection()
+    if connection is None:
+        if database_ready_logged:
+            print("[DB] SQLite database unavailable")
+            database_ready_logged = False
+        return
 
-            if not phone or not gsm: continue
-            
-            msg = ""
-            updates = {} 
+    if not database_ready_logged:
+        print("[DB] SQLite polling active")
+        database_ready_logged = True
 
-            is_dropoff_completed = laundry_status in ['dropped', 'pending']
-            is_laundry_done = laundry_status == 'done'
+    try:
+        settings_row = connection.execute(
+            "SELECT laundryShopName FROM settings WHERE id = 1"
+        ).fetchone()
+        if settings_row and settings_row["laundryShopName"]:
+            SHOP_NAME = str(settings_row["laundryShopName"]).upper()
 
-            # A. Manual Reminder
+        pending_transactions = connection.execute(
+            """
+            SELECT transactionId, lockerId, phoneNumber, pin, price, weight, laundryStatus,
+                   triggerReminder, reminderSent, reminderSentAt, codeSmsSent, doneSmsSent
+            FROM transactions
+            WHERE status = 'Pending'
+            ORDER BY updatedAt ASC
+            """
+        ).fetchall()
+
+        locker_rows = connection.execute(
+            """
+            SELECT id, status, currentTransactionId
+            FROM lockers
+            ORDER BY id ASC
+            """
+        ).fetchall()
+
+        transaction_by_id = {row["transactionId"]: row for row in pending_transactions}
+        timestamp = datetime.datetime.now().strftime("%m/%d/%Y %H:%M")
+        db_now = datetime.datetime.now().isoformat()
+
+        for tx in pending_transactions:
+            transaction_id = tx["transactionId"]
+            phone = tx["phoneNumber"]
+            laundry_status = str(tx["laundryStatus"] or "").strip().lower()
+            trigger_reminder = bool(tx["triggerReminder"])
+            reminder_sent = bool(tx["reminderSent"])
+            code_sms_sent = bool(tx["codeSmsSent"])
+            done_sms_sent = bool(tx["doneSmsSent"])
+
+            if not valid_phone_number(phone):
+                if trigger_reminder:
+                    connection.execute(
+                        """
+                        UPDATE transactions
+                        SET triggerReminder = 0, updatedAt = ?
+                        WHERE transactionId = ?
+                        """,
+                        (db_now, transaction_id),
+                    )
+                    connection.commit()
+                continue
+
+            message = None
+            updates = None
+
             if trigger_reminder:
-                msg = (
+                message = (
                     f"{SHOP_NAME}\n"
                     f"OVERDUE REMINDER: Your laundry is ready for pickup.\n"
-                    f"Ref: {trans_id}\n"
+                    f"Ref: {transaction_id}\n"
                     f"Please claim it as soon as possible."
                 )
-                log_gsm(f"Triggering overdue reminder for {phone}")
-                updates['triggerReminder'] = False
-                updates['reminderSent'] = True
+                updates = (
+                    """
+                    UPDATE transactions
+                    SET triggerReminder = 0,
+                        reminderSent = 1,
+                        reminderSentAt = COALESCE(reminderSentAt, ?),
+                        updatedAt = ?
+                    WHERE transactionId = ?
+                    """,
+                    (db_now, db_now, transaction_id),
+                )
+            elif laundry_status in ["dropped", "pending"] and not code_sms_sent:
+                message = (
+                    f"{SHOP_NAME}\n"
+                    f"Date: {timestamp}\n"
+                    f"Trans #: {transaction_id}\n"
+                    f"Service: DROPOFF\n"
+                    f"Weight: {float(tx['weight'] or 0):.2f} kg\n"
+                    f"Price: PHP {float(tx['price'] or 0):.2f}\n"
+                    f"----------------\n"
+                    f"PIN: {tx['pin']}\n"
+                    f"Keep this PIN safe!"
+                )
+                updates = (
+                    """
+                    UPDATE transactions
+                    SET codeSmsSent = 1, updatedAt = ?
+                    WHERE transactionId = ?
+                    """,
+                    (db_now, transaction_id),
+                )
+            elif laundry_status == "done" and not done_sms_sent and not reminder_sent:
+                message = (
+                    f"{SHOP_NAME}\n"
+                    f"Date: {timestamp}\n"
+                    f"Trans #: {transaction_id}\n"
+                    f"Service: READY FOR PICKUP\n"
+                    f"----------------\n"
+                    f"Status: WASHING COMPLETE\n"
+                    f"Please proceed to payment."
+                )
+                updates = (
+                    """
+                    UPDATE transactions
+                    SET doneSmsSent = 1, updatedAt = ?
+                    WHERE transactionId = ?
+                    """,
+                    (db_now, transaction_id),
+                )
 
-            # B. Dropoff Receipt (Standard)
-            elif is_dropoff_completed:
-                if not code_sms_sent:
-                    msg = (
-                        f"{SHOP_NAME}\n"
-                        f"Date: {current_time}\n"
-                        f"Trans #: {trans_id}\n"
-                        f"Service: DROPOFF\n"
-                        f"Weight: {weight:.2f} kg\n"
-                        f"Price: PHP {price:.2f}\n"
-                        f"----------------\n"
-                        f"PIN: {pin}\n"
-                        f"Keep this PIN safe!"
-                    )
-                    updates['codeSmsSent'] = True
+            if message:
+                log_gsm(f"Sending SMS to {phone} for {transaction_id}")
+                if send_sms(phone, message):
+                    connection.execute(updates[0], updates[1])
+                    connection.commit()
 
-            # C. Pickup/Ready Notification
-            elif is_laundry_done:
-                
-                # 👇 ADD THIS: Force the LED to turn yellow immediately
-                if locker_id:
-                    send_led_command(str(locker_id), LED_YELLOW)
+        for locker in locker_rows:
+            locker_id = str(locker["id"])
+            current_transaction_id = locker["currentTransactionId"]
+            transaction = transaction_by_id.get(current_transaction_id) if current_transaction_id else None
+            laundry_status = transaction["laundryStatus"] if transaction else None
+            process_locker_led(locker_id, locker["status"], laundry_status)
 
-                if not done_sms_sent and not reminder_sent_flag:
-                    msg = (
-                        f"{SHOP_NAME}\n"
-                        f"Date: {current_time}\n"
-                        f"Trans #: {trans_id}\n"
-                        f"Service: READY FOR PICKUP\n"
-                        f"----------------\n"
-                        f"Status: WASHING COMPLETE\n"
-                        f"Please proceed to payment."
-                    )
-                    updates['doneSmsSent'] = True
-
-            # D. Send SMS & Update DB
-            if msg:
-                log_gsm(f"Sending SMS to {phone}")
-                try:
-                    gsm.write(b'AT+CMGF=1\r\n')
-                    time.sleep(0.5)
-                    gsm.write(f'AT+CMGS="{phone}"\r\n'.encode())
-                    time.sleep(0.5)
-                    gsm.write(msg.encode())
-                    gsm.write(bytes([26])) 
-                    time.sleep(3)
-                    
-                    if updates:
-                        try:
-                            change.document.reference.update(updates)
-                            print(f"📝 Updated flags: {list(updates.keys())}")
-                        except Exception as e:
-                            log_gsm(f"Error updating DB flags: {e}")
-
-                except Exception as e:
-                    log_gsm(f"SMS Error: {e}")
-
-def on_locker_snapshot(col_snapshot, changes, read_time):
-    for change in changes:
-        if change.type.name in ['ADDED', 'MODIFIED']: 
-            data = change.document.to_dict()
-            locker_id = change.document.id
-            process_locker_leds(locker_id, data)
-
-            action = data.get('action')
-            cmd_prefix = None
-            if action:
-                act = action.upper()
-                if act == 'UNLOCK': cmd_prefix = 'u'
-                elif act == 'LOCK': cmd_prefix = 'l'
-
-            if arduino and cmd_prefix:
-                try:
-                    command = f"{cmd_prefix}{locker_id}\n"
-                    arduino.write(command.encode('utf-8'))
-                    print(f"📤 Action: {action} -> Sent: '{command.strip()}'")
-                except Exception as e:
-                    print(f"❌ Serial Write Error: {e}")
-
-if db:
-    print("🎧 Listening for Firebase updates...")
-    start_firebase_listeners(db)
-
+    except Exception as error:
+        print(f"[DB] Polling error: {error}")
+    finally:
+        connection.close()
 
 
 def consume_local_actions():
@@ -419,8 +374,8 @@ def consume_local_actions():
         return
 
     try:
-        with open(LOCKER_ACTIONS_FILE, 'r') as f:
-            commands = json.load(f)
+        with open(LOCKER_ACTIONS_FILE, "r", encoding="utf-8") as handle:
+            commands = json.load(handle)
     except Exception:
         return
 
@@ -428,124 +383,96 @@ def consume_local_actions():
         return
 
     remaining = []
-    for cmd in commands:
-        locker_id = str(cmd.get('lockerId', ''))
-        action = str(cmd.get('action', '')).upper()
-        prefix = 'u' if action == 'UNLOCK' else 'l' if action == 'LOCK' else None
+    for command in commands:
+        locker_id = str(command.get("lockerId", ""))
+        action = str(command.get("action", "")).upper()
+        prefix = "u" if action == "UNLOCK" else "l" if action == "LOCK" else None
 
-        if prefix and locker_id in ['1', '2', '3']:
+        if prefix and locker_id in ["1", "2", "3"]:
             try:
-                arduino.write(f"{prefix}{locker_id}\n".encode('utf-8'))
-                print(f"📤 Local Action: {action} -> Locker {locker_id}")
-            except Exception as e:
-                print(f"❌ Local command failed: {e}")
-                remaining.append(cmd)
+                arduino.write(f"{prefix}{locker_id}\n".encode("utf-8"))
+                print(f"[HW] Local action {action} -> locker {locker_id}")
+            except Exception as error:
+                print(f"[HW] Local command failed: {error}")
+                remaining.append(command)
         else:
-            remaining.append(cmd)
+            remaining.append(command)
 
     try:
-        with open(LOCKER_ACTIONS_FILE, 'w') as f:
-            json.dump(remaining, f)
+        with open(LOCKER_ACTIONS_FILE, "w", encoding="utf-8") as handle:
+            json.dump(remaining, handle)
     except Exception:
         pass
 
-# --- MAIN LOOP ---
-print("🚀 Hybrid Bridge Running...")
+
+print("[BRIDGE] Local hardware bridge running with SQLite polling")
 last_file_update = 0
 last_heartbeat = time.time()
 last_reconnect_attempt = 0
 
 while True:
     arduino, last_reconnect_attempt = reconnect_arduino_if_needed(arduino, last_reconnect_attempt)
-
-    now = time.time()
-    if db is None or not firestore_listeners_started:
-        if now - last_firebase_attempt >= FIREBASE_RETRY_INTERVAL:
-            last_firebase_attempt = now
-            print("🔁 [FIREBASE] Retrying Firebase connection...")
-            db = connect_firebase_if_needed()
-            if db:
-                start_firebase_listeners(db)
     consume_local_actions()
+    process_database_state()
 
     if arduino and arduino.in_waiting:
         try:
-            line = arduino.readline().decode('utf-8', errors='ignore').strip()
-            
+            line = arduino.readline().decode("utf-8", errors="ignore").strip()
+
             if line.startswith("DATA"):
                 last_heartbeat = time.time()
-                
-                # --- FILE UPDATE FOR UI ---
+
                 if time.time() - last_file_update > UPDATE_INTERVAL:
-                    state = { "raw_data": line, "timestamp": time.time() }
+                    state = {"raw_data": line, "timestamp": time.time()}
                     temp_file = STATE_FILE + ".tmp"
-                    with open(temp_file, "w") as f:
-                        json.dump(state, f)
+                    with open(temp_file, "w", encoding="utf-8") as handle:
+                        json.dump(state, handle)
                     os.replace(temp_file, STATE_FILE)
                     last_file_update = time.time()
 
-                # --- PARSE LOCKER STATUS ---
-                parts = line.split('|')
+                parts = line.split("|")
                 for part in parts:
-                    if part.startswith('L') and ':' in part:
+                    if part.startswith("L") and ":" in part:
                         try:
-                            l_data = part.split(':')
-                            l_id = l_data[0].replace('L', '') 
-                            door_status = l_data[2]      
-                            conn_flag = l_data[3].strip() if len(l_data) > 3 else None
-                            
-                            # Support both payload formats:
-                            # 1) DATA|L1:1.2:OPEN:1 (with connectivity flag)
-                            # 2) DATA|L1:1.2:OPEN   (legacy/no flag -> assume connected)
+                            locker_data = part.split(":")
+                            locker_id = locker_data[0].replace("L", "")
+                            door_status = locker_data[2]
+                            conn_flag = locker_data[3].strip() if len(locker_data) > 3 else None
                             is_hw_connected = (conn_flag == "1") if conn_flag is not None else True
-                            
-                            if local_connection_states.get(l_id) != is_hw_connected:
-                                conn_display = conn_flag if conn_flag is not None else "(missing)"
-                                print(f"🔌 Locker {l_id} Status Change: Received Flag='{conn_display}' -> Connected={is_hw_connected}")
-                                local_connection_states[l_id] = is_hw_connected
-                                
-                                if db:
-                                    db.collection('lockers').document(l_id).update({
-                                        'isConnected': is_hw_connected,
-                                        'doorStatus': door_status if is_hw_connected else "OFFLINE"
-                                    })
 
-                            if is_hw_connected:
-                                if local_door_states.get(l_id) != door_status:
-                                    local_door_states[l_id] = door_status
-                                    if db:
-                                        print(f"🔄 Locker {l_id} Door -> {door_status}")
-                                        db.collection('lockers').document(l_id).update({
-                                            'doorStatus': door_status 
-                                        })
+                            if local_connection_states.get(locker_id) != is_hw_connected:
+                                local_connection_states[locker_id] = is_hw_connected
+                                print(
+                                    f"[HW] Locker {locker_id} connection -> {is_hw_connected}"
+                                )
 
-                        except Exception as e:
-                            pass 
+                            if local_door_states.get(locker_id) != door_status:
+                                local_door_states[locker_id] = door_status
+                                print(f"[HW] Locker {locker_id} door -> {door_status}")
+                        except Exception:
+                            pass
 
             elif line.startswith("COIN_ADDED:"):
                 try:
                     amount = int(line.split(":")[1])
-                    print(f"💰 COIN INSERTED: {amount}")
+                    print(f"[HW] Coin inserted: {amount}")
                 except ValueError:
                     pass
 
-        except Exception as e:
-            print(f"Serial Read Error: {e}")
+        except Exception as error:
+            print(f"[HW] Serial read error: {error}")
             try:
                 if arduino and arduino.is_open:
                     arduino.close()
             except Exception:
                 pass
 
-    # WATCHDOG
     if time.time() - last_heartbeat > 5.0:
-        if local_connection_states["1"] != False: 
-            print("⚠️ LOST CONNECTION TO MAIN CONTROLLER")
-            for l_id in ["1", "2", "3"]:
-                local_connection_states[l_id] = False
-                local_door_states[l_id] = "OFFLINE"
-                if db:
-                    db.collection('lockers').document(l_id).update({'doorStatus': 'OFFLINE', 'isConnected': False})
-        last_heartbeat = time.time() - 4.0 
+        if local_connection_states["1"] is not False:
+            print("[HW] Lost connection to main controller")
+            for locker_id in ["1", "2", "3"]:
+                local_connection_states[locker_id] = False
+                local_door_states[locker_id] = "OFFLINE"
+        last_heartbeat = time.time() - 4.0
 
     time.sleep(0.01)

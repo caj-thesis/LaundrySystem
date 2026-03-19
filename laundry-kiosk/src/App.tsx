@@ -137,7 +137,7 @@ export default function App() {
         body: JSON.stringify({ lockerId: selectedLockerId }),
       }).catch(e => console.error("Hardware Error:", e));
 
-      // 4. Save local transaction first, then server syncs to Firebase when available
+      // 4. Save the transaction into the local SQLite-backed kiosk service
       await fetch('http://localhost:3000/api/dropoff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
