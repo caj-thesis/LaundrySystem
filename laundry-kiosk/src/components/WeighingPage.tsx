@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, X, AlertTriangle } from 'lucide-react';
+import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, AlertTriangle } from 'lucide-react';
 
 interface WeighingPageProps {
   lockerId: number;
@@ -85,7 +85,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   
    // 3. Simulate Locking & Final Weighing
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
 
     if (step === 'weighing') {
       timer = setTimeout(() => {

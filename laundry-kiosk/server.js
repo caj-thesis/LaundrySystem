@@ -71,6 +71,13 @@ function sanitizeWeight(value) {
     return Math.max(0, parsed);
 }
 
+function toMillis(value) {
+    if (!value) return null;
+    if (value?.toDate) return value.toDate().getTime();
+    const dateValue = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(dateValue.getTime()) ? null : dateValue.getTime();
+}
+
 function readJsonFile(filePath, fallback) {
     try {
         if (!fs.existsSync(filePath)) return fallback;
@@ -128,6 +135,12 @@ function startResilientSnapshotListener(targetRef, label, onNext, retryDelayMs =
     connect();
 }
 
+const defaultSettingsSync = {
+    settingsSynced: true,
+    lastError: null,
+    updatedAt: null
+};
+
 const defaultLocalSettings = {
     laundryShopName: 'Laundry Management System',
     clothesPrice: 25,
@@ -135,33 +148,72 @@ const defaultLocalSettings = {
     minClothesPrice: 50,
     minBedSheetPrice: 50,
     overdueHours: 48,
-    receiptFootnote: 'Thank you for using our service!'
+    receiptFootnote: 'Thank you for using our service!',
+    sync: defaultSettingsSync
 };
 
-let localSettings = {
-    ...defaultLocalSettings,
-    ...readJsonFile(LOCAL_SETTINGS_FILE, defaultLocalSettings)
-};
+function normalizeSettingsSync(sync = {}) {
+    return {
+        settingsSynced: sync?.settingsSynced !== undefined ? Boolean(sync.settingsSynced) : true,
+        lastError: sync?.lastError || null,
+        updatedAt: sync?.updatedAt || null
+    };
+}
+
+function normalizeLocalSettings(raw = {}) {
+    return {
+        ...defaultLocalSettings,
+        ...raw,
+        sync: normalizeSettingsSync(raw?.sync)
+    };
+}
+
+function buildSettingsFirebasePayload(settings = localSettings) {
+    const { sync, ...payload } = normalizeLocalSettings(settings);
+    return payload;
+}
+
+let localSettings = normalizeLocalSettings(readJsonFile(LOCAL_SETTINGS_FILE, defaultLocalSettings));
+let localSettingsDirty = localSettings.sync.settingsSynced === false;
 writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 
-let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => {
+function normalizeTransactionSync(tx = {}) {
+    const normalizedStatus = normalizeTransactionStatus(tx?.status);
+    return {
+        transactionSynced: tx?.sync?.transactionSynced !== undefined
+            ? Boolean(tx.sync.transactionSynced)
+            : Boolean(tx?.firebaseDocId),
+        pickupSynced: tx?.sync?.pickupSynced !== undefined
+            ? Boolean(tx.sync.pickupSynced)
+            : normalizedStatus !== TRANSACTION_STATUS.COMPLETED,
+        lastError: tx?.sync?.lastError || null
+    };
+}
+
+function normalizeLocalTransaction(tx = {}) {
     const normalizedStatus = normalizeTransactionStatus(tx?.status);
     return {
         ...tx,
         type: normalizeLaundryType(tx?.type),
         status: normalizedStatus,
+        laundryStatus: tx?.laundryStatus || (normalizedStatus === TRANSACTION_STATUS.PENDING ? 'Dropped' : tx?.laundryStatus),
         droppedAt: tx?.droppedAt ? new Date(tx.droppedAt) : (tx?.timestamp ? new Date(tx.timestamp) : new Date()),
-        sync: {
-            transactionSynced: Boolean(tx?.sync?.transactionSynced || tx?.firebaseDocId),
-            pickupSynced: Boolean(tx?.sync?.pickupSynced || normalizedStatus === TRANSACTION_STATUS.COMPLETED),
-            lastError: tx?.sync?.lastError || null
-        }
+        sync: normalizeTransactionSync({ ...tx, status: normalizedStatus })
     };
-});
+}
+
+let localTransactions = readJsonFile(LOCAL_TRANSACTIONS_FILE, []).map((tx) => normalizeLocalTransaction(tx));
 writeJsonFile(LOCAL_TRANSACTIONS_FILE, localTransactions);
 
 function persistLocalTransactions() {
+    localTransactions = localTransactions.map((tx) => normalizeLocalTransaction(tx));
     writeJsonFile(LOCAL_TRANSACTIONS_FILE, localTransactions);
+}
+
+function persistLocalSettings() {
+    localSettings = normalizeLocalSettings(localSettings);
+    localSettingsDirty = localSettings.sync.settingsSynced === false;
+    writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
 }
 
 function enqueueLockerAction(lockerId, action) {
@@ -248,14 +300,41 @@ function getAdminOverview() {
     };
 }
 
+function buildPrintPayloadFromTransaction(tx) {
+    return {
+        transactionId: tx.transactionId,
+        pin: tx.pinCode ?? tx.pin,
+        processType: tx.status === TRANSACTION_STATUS.COMPLETED ? 'pickup' : 'dropoff',
+        weight: tx.weight,
+        price: tx.price,
+        type: tx.type,
+        shopName: (localSettings.laundryShopName || 'Laundry Management System').toUpperCase(),
+        receiptFootnote: localSettings.receiptFootnote || 'Thank you for using our service!',
+    };
+}
+
+function processPendingLocalPrints() {
+    let hasChanges = false;
+
+    localTransactions.forEach((tx) => {
+        if (!tx.triggerPrint) return;
+
+        executePrintCommand(buildPrintPayloadFromTransaction(tx));
+        tx.triggerPrint = false;
+        tx.updatedAt = new Date();
+        tx.sync = { ...tx.sync, transactionSynced: false, lastError: null };
+        hasChanges = true;
+    });
+
+    if (hasChanges) {
+        persistLocalTransactions();
+    }
+}
+
 function findLocalTransaction(transactionId) {
     return localTransactions.find((tx) => tx.transactionId === transactionId || tx.firebaseDocId === transactionId);
 }
 
-async function syncLocalTransactionUpdate(tx, updates) {
-    if (!firebaseReady || !tx?.firebaseDocId) return;
-    await updateDoc(doc(db, 'transactions', tx.firebaseDocId), updates);
-}
 
 // --- 1. HARDWARE WATCHER ---
 function updateStateFromFile() {
@@ -301,7 +380,7 @@ async function initializeSettings() {
     try {
         const generalRef = doc(db, "settings", "general");
         const generalSnap = await getDoc(generalRef);
-        const defaultSettings = { ...defaultLocalSettings };
+        const defaultSettings = buildSettingsFirebasePayload(defaultLocalSettings);
 
         if (!generalSnap.exists()) {
             console.log("⚙️  Initializing 'settings/general' with default prices...");
@@ -365,7 +444,15 @@ function startSettingsListener() {
         if (docSnap.exists()) {
             const data = docSnap.data();
 
-            localSettings = {
+            const remoteUpdatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : null);
+            const localUpdatedAt = localSettings.sync.updatedAt ? new Date(localSettings.sync.updatedAt) : null;
+
+            if (localSettingsDirty && localUpdatedAt && (!remoteUpdatedAt || remoteUpdatedAt.getTime() < localUpdatedAt.getTime())) {
+                console.log('[SETTINGS] Skipping older remote snapshot because local settings are pending sync.');
+                return;
+            }
+
+            localSettings = normalizeLocalSettings({
                 ...localSettings,
                 laundryShopName: data.laundryShopName || localSettings.laundryShopName,
                 clothesPrice: data.clothesPrice !== undefined ? data.clothesPrice : localSettings.clothesPrice,
@@ -373,9 +460,14 @@ function startSettingsListener() {
                 minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : localSettings.minClothesPrice,     
                 minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : localSettings.minBedSheetPrice,
                 overdueHours: data.overdueHours !== undefined ? data.overdueHours : localSettings.overdueHours,
-                receiptFootnote: data.receiptFootnote !== undefined ? data.receiptFootnote : localSettings.receiptFootnote
-            };
-            writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
+                receiptFootnote: data.receiptFootnote !== undefined ? data.receiptFootnote : localSettings.receiptFootnote,
+                sync: {
+                    settingsSynced: true,
+                    lastError: null,
+                    updatedAt: remoteUpdatedAt ? remoteUpdatedAt.toISOString() : localSettings.sync.updatedAt
+                }
+            });
+            persistLocalSettings();
 
             if (data.overdueMinutes !== undefined && Number(data.overdueMinutes) > 0) {
                  const mins = Number(data.overdueMinutes);
@@ -501,30 +593,40 @@ function startLaundryStatusListener() {
 async function checkOverduePickups() {
     const currentLimitMs = SYSTEM_SETTINGS.overdueLimitMs;
     const now = new Date();
-    try {
-        const q = query(
-            collection(db, "transactions"), 
-            where("status", "==", TRANSACTION_STATUS.PENDING),
-            where("laundryStatus", "==", "Done")
-        );
-        const snapshot = await getDocs(q);
-        snapshot.forEach(async (docSnap) => {
-            const data = docSnap.data();
-            if (data.doneAt) {
-                const doneTime = data.doneAt.toDate();
-                const diffMs = now.getTime() - doneTime.getTime();
-                if (!data.reminderSent && diffMs > currentLimitMs) {
-                    console.log(`      ⚡ OVERDUE! Sending reminder...`);
-                    await updateDoc(docSnap.ref, {
-                        triggerReminder: true,  
-                        reminderSent: true,     
-                        reminderSentAt: new Date(),
-                        note: `Auto-reminder sent after overdue.`
-                    });
-                }
+    let hasLocalUpdates = false;
+
+    for (const tx of localTransactions) {
+        if (tx.status !== TRANSACTION_STATUS.PENDING || tx.laundryStatus !== 'Done' || !tx.doneAt || tx.reminderSent) {
+            continue;
+        }
+
+        const doneTime = tx.doneAt instanceof Date ? tx.doneAt : new Date(tx.doneAt);
+        const diffMs = now.getTime() - doneTime.getTime();
+        if (diffMs <= currentLimitMs) {
+            continue;
+        }
+
+        console.log(`      ⚡ OVERDUE! Queueing reminder for TRX ${tx.transactionId || tx.firebaseDocId || 'N/A'}...`);
+        tx.triggerReminder = true;
+        tx.reminderSent = true;
+        tx.reminderSentAt = now;
+        tx.note = 'Auto-reminder sent after overdue.';
+        tx.updatedAt = now;
+        tx.sync = { ...tx.sync, transactionSynced: false, lastError: null };
+        hasLocalUpdates = true;
+
+        if (firebaseReady) {
+            try {
+                await syncTransactionToFirebase(tx);
+            } catch (error) {
+                console.error('⚠️ Failed to sync overdue reminder update. Queued for retry:', error);
             }
-        });
-    } catch (error) {}
+        }
+    }
+
+    if (hasLocalUpdates) {
+        persistLocalTransactions();
+    }
 }
 setInterval(checkOverduePickups, 30 * 1000);
 
@@ -614,6 +716,14 @@ function startRemoteTransactionSyncListener() {
 
                 if (localIndex !== -1) {
                     const localTx = localTransactions[localIndex];
+                    const remoteUpdatedAt = remoteTx.updatedAt?.toDate ? remoteTx.updatedAt.toDate() : (remoteTx.updatedAt ? new Date(remoteTx.updatedAt) : null);
+                    const localUpdatedAt = localTx.updatedAt ? new Date(localTx.updatedAt) : null;
+                    const hasPendingLocalSync = localTx.sync && (!localTx.sync.transactionSynced || !localTx.sync.pickupSynced);
+
+                    if (hasPendingLocalSync && localUpdatedAt && (!remoteUpdatedAt || remoteUpdatedAt.getTime() < localUpdatedAt.getTime())) {
+                        console.log(`[SYNC] ⏭️ Skipping older remote snapshot for TRX ${txId} because local changes are pending sync.`);
+                        return;
+                    }
                     
                     const normalizedRemoteStatus = normalizeTransactionStatus(remoteTx.status);
 
@@ -622,12 +732,12 @@ function startRemoteTransactionSyncListener() {
                         console.log(`[SYNC] 📥 Admin remotely changed TRX ${txId} status to: ${normalizedRemoteStatus}`);
                         
                         // Update the local database
-                        localTransactions[localIndex] = { 
+                        localTransactions[localIndex] = normalizeLocalTransaction({ 
                             ...localTx, 
                             ...remoteTx,
                             status: normalizedRemoteStatus,
-                            sync: { ...localTx.sync, transactionSynced: true } 
-                        };
+                            sync: { ...localTx.sync, transactionSynced: true, lastError: null } 
+                        });
                         hasChanges = true;
                         
                         // If it's no longer pending, free up the physical locker on the UI!
@@ -643,14 +753,19 @@ function startRemoteTransactionSyncListener() {
                     else if (
                         remoteTx.price !== localTx.price || 
                         remoteTx.weight !== localTx.weight ||
-                        remoteTx.laundryStatus !== localTx.laundryStatus
+                        remoteTx.laundryStatus !== localTx.laundryStatus ||
+                        remoteTx.triggerReminder !== localTx.triggerReminder ||
+                        remoteTx.reminderSent !== localTx.reminderSent ||
+                        remoteTx.doneSmsSent !== localTx.doneSmsSent ||
+                        toMillis(remoteTx.doneAt) !== toMillis(localTx.doneAt) ||
+                        toMillis(remoteTx.reminderSentAt) !== toMillis(localTx.reminderSentAt)
                     ) {
                          console.log(`[SYNC] 📥 Admin remotely updated details for TRX ${txId}`);
-                         localTransactions[localIndex] = { 
+                         localTransactions[localIndex] = normalizeLocalTransaction({ 
                              ...localTx, 
                              ...remoteTx, 
-                             sync: { ...localTx.sync, transactionSynced: true } 
-                         };
+                             sync: { ...localTx.sync, transactionSynced: true, lastError: null } 
+                         });
                          hasChanges = true;
                     }
                 }
@@ -664,20 +779,29 @@ function startRemoteTransactionSyncListener() {
     });
 }
 
-function executePrintCommand(data) {
-    // Dynamically find the printer port
+function writeReceiptToPrinter(receiptText) {
     const printerPorts = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
-    const PRINTER_PATH = printerPorts.find(p => fs.existsSync(p));
+    const PRINTER_PATH = printerPorts.find((printerPath) => fs.existsSync(printerPath));
 
     if (!PRINTER_PATH) {
-        console.error("❌ No USB Printer detected in /dev/usb/");
-        return;
+        console.error('❌ No USB Printer detected in /dev/usb/');
+        return false;
     }
 
-    // Extract receiptFootnote here
+    fs.writeFile(PRINTER_PATH, receiptText, (error) => {
+        if (error) {
+            console.error('Printer Error:', error);
+        } else {
+            console.log(`📝 Printed directly to ${PRINTER_PATH}`);
+        }
+    });
+
+    return true;
+}
+
+function executePrintCommand(data) {
     const { transactionId, pin, processType, weight, price, shopName, receiptFootnote } = data;
-    
-    // We use actual empty lines at the bottom to feed the paper
+
     const receiptText = `
    ${shopName}
    --------------------------
@@ -696,14 +820,7 @@ function executePrintCommand(data) {
 
 `;
 
-    // 🚀 Use Node.js native file system to write directly to the printer
-    fs.writeFile(PRINTER_PATH, receiptText, (error) => {
-        if (error) {
-            console.error("Printer Error:", error);
-        } else {
-            console.log(`📝 Printed directly to ${PRINTER_PATH}`);
-        }
-    });
+    writeReceiptToPrinter(receiptText);
 }
 
 // ==========================================================
@@ -723,6 +840,7 @@ async function syncTransactionToFirebase(tx) {
     payload.type = normalizeLaundryType(payload.type);
     if (payload.droppedAt) payload.droppedAt = new Date(payload.droppedAt);
     delete payload.timestamp;
+    delete payload.archivedFromLockerId;
     const transactionDocId = tx.transactionId || tx.firebaseDocId;
 
     if (!transactionDocId) {
@@ -740,6 +858,16 @@ async function syncTransactionToFirebase(tx) {
                  currentTransactionId: transactionDocId,
                  updatedAt: new Date()
              }, { merge: true });
+        }
+
+        if (payload.status === TRANSACTION_STATUS.ARCHIVED && tx.archivedFromLockerId) {
+            await setDoc(doc(db, 'lockers', String(tx.archivedFromLockerId)), {
+                status: 'available',
+                action: 'lock',
+                currentTransactionId: null,
+                updatedAt: new Date(),
+                adminCommand: null
+            }, { merge: true });
         }
 
         tx.firebaseDocId = transactionDocId;
@@ -765,7 +893,7 @@ async function syncPickupToFirebase(tx) {
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
-                triggerPrint: true
+                triggerPrint: Boolean(tx.triggerPrint)
             });
         } else {
             const q = query(
@@ -779,7 +907,7 @@ async function syncPickupToFirebase(tx) {
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(tx.pickedUpAt || Date.now()),
                 paymentId: tx.paymentId,
-                triggerPrint: true
+                triggerPrint: Boolean(tx.triggerPrint)
             }));
             await Promise.all(updates);
         }
@@ -801,6 +929,41 @@ async function syncPickupToFirebase(tx) {
     }
 }
 
+async function syncLocalSettingsToFirebase() {
+    if (localSettings.sync?.settingsSynced) return;
+    if (!firebaseReady) {
+        throw new Error('Firebase unavailable. Settings queued for retry.');
+    }
+
+    try {
+        const payload = buildSettingsFirebasePayload(localSettings);
+        payload.updatedAt = new Date(localSettings.sync.updatedAt || Date.now());
+        await setDoc(doc(db, 'settings', 'general'), payload, { merge: true });
+
+        localSettings = normalizeLocalSettings({
+            ...localSettings,
+            sync: {
+                settingsSynced: true,
+                lastError: null,
+                updatedAt: payload.updatedAt.toISOString()
+            }
+        });
+        persistLocalSettings();
+    } catch (error) {
+        localSettings = normalizeLocalSettings({
+            ...localSettings,
+            sync: {
+                ...localSettings.sync,
+                settingsSynced: false,
+                lastError: String(error?.message || error),
+                updatedAt: localSettings.sync.updatedAt || new Date().toISOString()
+            }
+        });
+        persistLocalSettings();
+        throw error;
+    }
+}
+
 async function reconcileLocalTransactions() {
     for (const tx of localTransactions) {
         try {
@@ -811,6 +974,12 @@ async function reconcileLocalTransactions() {
         } catch (error) {
             // Keep local-first behavior; retry on next interval
         }
+    }
+
+    try {
+        await syncLocalSettingsToFirebase();
+    } catch (error) {
+        // Keep local-first behavior; retry on next interval
     }
 }
 
@@ -841,6 +1010,7 @@ async function connectFirebaseAuth() {
 
         console.log('✅ [FIREBASE] Authenticated');
         await bootstrapFirebaseServices();
+        await syncLocalSettingsToFirebase();
         await reconcileLocalTransactions();
     } catch (error) {
         firebaseReady = false;
@@ -863,7 +1033,7 @@ connectFirebaseAuth();
 // ==========================================================
 
 app.get('/api/status', (req, res) => res.json(systemState));
-app.get('/api/lockers', (req, res) => res.json(getLocalLockers()));
+app.get('/api/lockers', (req, res) => res.json(getLocalLockers().filter((locker) => locker.isConnected !== false)));
 app.get('/api/settings', (req, res) => res.json(localSettings));
 app.get('/api/admin/overview', (req, res) => res.json(getAdminOverview()));
 app.post('/api/settings', async (req, res) => {
@@ -872,7 +1042,8 @@ app.post('/api/settings', async (req, res) => {
         return Number.isFinite(parsed) ? parsed : fallback;
     };
 
-    localSettings = {
+    const updatedAt = new Date().toISOString();
+    localSettings = normalizeLocalSettings({
         ...localSettings,
         laundryShopName: typeof req.body.laundryShopName === 'string' && req.body.laundryShopName.trim()
             ? req.body.laundryShopName.trim()
@@ -884,22 +1055,37 @@ app.post('/api/settings', async (req, res) => {
         overdueHours: toNumber(req.body.overdueHours, localSettings.overdueHours),
         receiptFootnote: typeof req.body.receiptFootnote === 'string'
             ? req.body.receiptFootnote
-            : localSettings.receiptFootnote
-    };
+            : localSettings.receiptFootnote,
+        sync: {
+            settingsSynced: false,
+            lastError: null,
+            updatedAt
+        }
+    });
 
-    writeJsonFile(LOCAL_SETTINGS_FILE, localSettings);
+    persistLocalSettings();
     SYSTEM_SETTINGS.overdueLimitMs = Number(localSettings.overdueHours) * 60 * 60 * 1000;
 
     if (!firebaseReady) {
+        localSettings = normalizeLocalSettings({
+            ...localSettings,
+            sync: {
+                ...localSettings.sync,
+                settingsSynced: false,
+                lastError: 'Firebase unavailable',
+                updatedAt
+            }
+        });
+        persistLocalSettings();
         return res.json({ success: true, settings: localSettings, syncedToFirebase: false });
     }
 
     try {
-        await setDoc(doc(db, 'settings', 'general'), localSettings, { merge: true });
-        return res.json({ success: true, settings: localSettings, syncedToFirebase: true });
+        await syncLocalSettingsToFirebase();
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: localSettings.sync.settingsSynced });
     } catch (error) {
         console.error('⚠️ Failed to sync settings to Firebase:', error);
-        return res.json({ success: true, settings: localSettings, syncedToFirebase: false });
+        return res.json({ success: true, settings: localSettings, syncedToFirebase: localSettings.sync.settingsSynced });
     }
 });
 app.post('/api/admin/transaction/status', async (req, res) => {
@@ -912,22 +1098,28 @@ app.post('/api/admin/transaction/status', async (req, res) => {
 
     tx.laundryStatus = laundryStatus;
     tx.updatedAt = new Date();
+    tx.sync = { ...tx.sync, transactionSynced: false, lastError: null };
 
     if (laundryStatus === 'Done') {
         tx.doneAt = new Date();
         tx.reminderSent = false;
+        tx.triggerReminder = false;
+        tx.reminderSentAt = null;
+        tx.doneSmsSent = false;
+    } else {
+        tx.doneAt = null;
+        tx.reminderSent = false;
+        tx.triggerReminder = false;
+        tx.reminderSentAt = null;
+        tx.doneSmsSent = false;
     }
 
     persistLocalTransactions();
 
     try {
-        await syncLocalTransactionUpdate(tx, {
-            laundryStatus: tx.laundryStatus,
-            ...(laundryStatus === 'Done' ? { doneAt: tx.doneAt, reminderSent: false } : {}),
-            updatedAt: new Date(),
-        });
+        await syncTransactionToFirebase(tx);
     } catch (error) {
-        console.error('⚠️ Failed to sync local transaction status to Firebase:', error);
+        console.error('⚠️ Failed to sync local transaction status to Firebase. Queued for retry:', error);
     }
 
     res.json({ success: true, overview: getAdminOverview() });
@@ -942,34 +1134,20 @@ app.post('/api/admin/transaction/reset', async (req, res) => {
     }
 
     tx.status = TRANSACTION_STATUS.ARCHIVED;
+    tx.archivedFromLockerId = Number(lockerId);
     tx.lockerId = null;
     tx.archivedAt = new Date();
     tx.note = 'Archived by local admin reset';
     tx.updatedAt = new Date();
+    tx.sync = { ...tx.sync, transactionSynced: false, lastError: null };
     persistLocalTransactions();
 
     markLockerAvailableAndLock(lockerId);
 
     try {
-        await syncLocalTransactionUpdate(tx, {
-            status: TRANSACTION_STATUS.ARCHIVED,
-            lockerId: null,
-            archivedAt: tx.archivedAt,
-            note: tx.note,
-            updatedAt: new Date(),
-        });
-
-        if (firebaseReady) {
-            await setDoc(doc(db, 'lockers', String(lockerId)), {
-                status: 'available',
-                action: 'lock',
-                currentTransactionId: null,
-                updatedAt: new Date(),
-                adminCommand: null,
-            }, { merge: true });
-        }
+        await syncTransactionToFirebase(tx);
     } catch (error) {
-        console.error('⚠️ Failed to sync local reset to Firebase:', error);
+        console.error('⚠️ Failed to sync local reset to Firebase. Queued for retry:', error);
     }
 
     res.json({ success: true, overview: getAdminOverview() });
@@ -997,10 +1175,36 @@ app.post('/api/admin/transaction/print', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/print-receipt', (req, res) => {
+    const { lockerUnit, weight, totalDue, date } = req.body || {};
+    const receiptText = `
+   ${(localSettings.laundryShopName || 'Laundry Management System').toUpperCase()}
+   --------------------------
+   Date: ${date || new Date().toLocaleDateString('en-GB')}
+   Locker: ${lockerUnit ?? 'N/A'}
+   --------------------------
+   Weight: ${Number(weight || 0).toFixed(2)} kg
+   Total:  PHP ${Number(totalDue || 0).toFixed(2)}
+   --------------------------
+   ${localSettings.receiptFootnote || 'Thank you for using our service!'}
+
+
+
+`;
+
+    const printed = writeReceiptToPrinter(receiptText);
+    if (!printed) {
+        return res.status(503).json({ success: false, message: 'Printer unavailable.' });
+    }
+
+    res.json({ success: true });
+});
+
 app.post('/api/dropoff', (req, res) => {
     const payload = {
         ...req.body,
         status: TRANSACTION_STATUS.PENDING,
+        laundryStatus: req.body.laundryStatus || 'Dropped',
         type: normalizeLaundryType(req.body.type),
         droppedAt: req.body.droppedAt ? new Date(req.body.droppedAt) : new Date()
     };
@@ -1010,12 +1214,14 @@ app.post('/api/dropoff', (req, res) => {
         systemState[key].status = 'occupied';
     }
 
-    const savedTx = {
+    const savedTx = normalizeLocalTransaction({
         ...payload,
-        sync: { transactionSynced: false, pickupSynced: false, lastError: null }
-    };
+        updatedAt: payload.droppedAt,
+        sync: { transactionSynced: false, pickupSynced: true, lastError: null }
+    });
     localTransactions.push(savedTx);
     persistLocalTransactions();
+    processPendingLocalPrints();
 
     syncTransactionToFirebase(savedTx).catch(() => {
         console.error('⚠️ Transaction queued for Firebase retry.');
@@ -1026,20 +1232,28 @@ app.post('/api/dropoff', (req, res) => {
 
 app.post('/api/pickup', (req, res) => {
     const { lockerId, paymentId } = req.body;
+    const lockerKey = `l${lockerId}`;
+    if (systemState[lockerKey]) {
+        systemState[lockerKey].status = 'available';
+        systemState[lockerKey].action = 'unlock';
+    }
+
     localTransactions = localTransactions.map((tx) => {
         if (tx.lockerId === Number(lockerId) && tx.status === TRANSACTION_STATUS.PENDING) {
-            return {
+            return normalizeLocalTransaction({
                 ...tx,
                 status: TRANSACTION_STATUS.COMPLETED,
                 pickedUpAt: new Date(),
                 paymentId,
-                sync: { ...tx.sync, pickupSynced: false }
-            };
+                triggerPrint: true,
+                updatedAt: new Date(),
+                sync: { ...tx.sync, transactionSynced: false, pickupSynced: false, lastError: null }
+            });
         }
         return tx;
     });
     persistLocalTransactions();
-
+    processPendingLocalPrints();
 
     const completedTransactions = localTransactions.filter((tx) =>
         tx.lockerId === Number(lockerId) &&
@@ -1048,9 +1262,15 @@ app.post('/api/pickup', (req, res) => {
     );
 
     completedTransactions.forEach((completedTx) => {
-        syncPickupToFirebase(completedTx).catch(() => {
-            console.error('⚠️ Pickup sync queued for Firebase retry.');
-        });
+        syncTransactionToFirebase(completedTx)
+            .catch(() => {
+                console.error('⚠️ Transaction completion queued for Firebase retry.');
+            })
+            .finally(() => {
+                syncPickupToFirebase(completedTx).catch(() => {
+                    console.error('⚠️ Pickup sync queued for Firebase retry.');
+                });
+            });
     });
 
     res.json({ success: true });

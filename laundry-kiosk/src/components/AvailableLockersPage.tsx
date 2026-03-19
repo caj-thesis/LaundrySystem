@@ -72,7 +72,7 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
             // --- FIX END ---
           }}>
 
-            {lockers.map((locker) => {
+            {visibleLockers.map((locker) => {
               const isOnline = locker.isConnected !== false;
               if (!isOnline) return null;
               const isAvailable = locker.status === 'available';

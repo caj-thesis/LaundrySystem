@@ -9,7 +9,8 @@ interface PickupLockersPageProps {
 }
 
 export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLockersPageProps) {
-  
+  const visibleLockers = lockers.filter((locker) => locker.isConnected !== false);
+
   const getStatusText = (status?: string) => {
     switch(status) {
       case 'Dropped': return 'Dropped (Waiting)';
@@ -65,7 +66,7 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
             padding: '4px'
           }}>
             
-            {lockers.length === 0 ? (
+            {visibleLockers.length === 0 ? (
               <div className="no-data-message" style={{ 
                 gridColumn: '1/-1', 
                 textAlign: 'center', 
@@ -82,7 +83,7 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
                 No items ready for pickup currently.
               </div>
             ) : (
-              lockers.map((locker) => {
+              visibleLockers.map((locker) => {
                 const isReady = locker.laundryStatus === 'Done';
                 
                 return (
