@@ -174,7 +174,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   // --- RENDER: STEP 2 - UNLOCKED (Live Scale View) ---
   if (step === 'unlocked') {
     return (
-      <div className="weighing-page" style={{ flexDirection: 'column', justifyContent: 'flex-start', padding: '0', height: '100%', position: 'relative' }}>
+      <div className="weighing-page" style={{ flexDirection: 'column', justifyContent: 'flex-start', padding: '0', height: '100%', position: 'relative', overflowY: 'auto', overflowX: 'hidden' }}>
         
         {/* Header Section */}
         <div className="page-header" style={{ marginTop: '16px', marginBottom: '8px' }}>
@@ -335,7 +335,8 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
       height: '100%', 
       padding: '0', 
       backgroundColor: '#f3f4f6',
-      overflow: 'hidden' 
+      overflowY: 'auto',
+      overflowX: 'hidden',
     }}>
       
       {/* Header */}
@@ -349,7 +350,6 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
           onClick={handleReturnToWeighing}
           className="btn-return-top"
           disabled={isReturning}
-          style={{ top: '12px' }}
         >
           <ArrowLeft size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} />
           {isReturning ? 'Returning...' : 'Return'}

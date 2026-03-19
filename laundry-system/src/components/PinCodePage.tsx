@@ -80,7 +80,7 @@ export function PinCodePage({ lockerId, correctPin, transactionId, onVerified, o
           </div>
 
           <div style={{ marginTop: '24px' }}>
-            <button onClick={onCancel} className="btn-return">
+            <button onClick={onCancel} className="btn-return-absolute">
               Return to Lockers
             </button>
           </div>

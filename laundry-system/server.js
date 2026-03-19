@@ -3,7 +3,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DatabaseSync } from 'node:sqlite';
+import initSqlJs from 'sql.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,13 +110,19 @@ function intToBool(value) {
   return Boolean(Number(value));
 }
 
-const database = new DatabaseSync(DB_FILE);
+const SQL = await initSqlJs({
+  locateFile: (file) => path.join(__dirname, 'node_modules', 'sql.js', 'dist', file),
+});
+
+const database = fs.existsSync(DB_FILE)
+  ? new SQL.Database(fs.readFileSync(DB_FILE))
+  : new SQL.Database();
+
+function persistDatabase() {
+  fs.writeFileSync(DB_FILE, Buffer.from(database.export()));
+}
 
 database.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA synchronous = NORMAL;
-  PRAGMA busy_timeout = 5000;
-
   CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     laundryShopName TEXT NOT NULL,
@@ -174,18 +180,52 @@ database.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_transactions_print
     ON transactions (triggerPrint);
+
+  CREATE TABLE IF NOT EXISTS overdue_logs (
+    logId TEXT PRIMARY KEY,
+    originalTransactionId TEXT NOT NULL,
+    archivedAt TEXT,
+    reason TEXT,
+    note TEXT,
+    status TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'Clothes',
+    price REAL NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_overdue_logs_transaction
+    ON overdue_logs (originalTransactionId, status);
 `);
 
+persistDatabase();
+
 function run(sql, ...params) {
-  return database.prepare(sql).run(...params);
+  database.run(sql, params);
+  persistDatabase();
 }
 
 function get(sql, ...params) {
-  return database.prepare(sql).get(...params);
+  const statement = database.prepare(sql, params);
+  try {
+    if (!statement.step()) return undefined;
+    return statement.getAsObject();
+  } finally {
+    statement.free();
+  }
 }
 
 function all(sql, ...params) {
-  return database.prepare(sql).all(...params);
+  const statement = database.prepare(sql, params);
+  const rows = [];
+
+  try {
+    while (statement.step()) {
+      rows.push(statement.getAsObject());
+    }
+  } finally {
+    statement.free();
+  }
+
+  return rows;
 }
 
 function normalizeTransactionRecord(raw = {}) {
@@ -265,6 +305,151 @@ function insertTransaction(record) {
     record.note,
     record.updatedAt,
   );
+}
+
+function getOverdueLogEntry(originalTransactionId) {
+  return get(
+    `SELECT *
+     FROM overdue_logs
+     WHERE originalTransactionId = ?`,
+    originalTransactionId,
+  );
+}
+
+function upsertOverdueLogForTransaction(transactionOrId, overrides = {}, options = {}) {
+  const transaction = typeof transactionOrId === 'string'
+    ? findTransaction(transactionOrId)
+    : transactionOrId;
+
+  if (!transaction) return;
+
+  const current = getOverdueLogEntry(transaction.transactionId);
+  if (!current && options.createIfMissing === false) {
+    return;
+  }
+
+  const logId = current?.logId || `ODL-${transaction.transactionId}`;
+  const reason = overrides.reason ?? current?.reason ?? 'Overdue transaction';
+  const note = overrides.note ?? current?.note ?? transaction.note ?? null;
+  const archivedAt = overrides.archivedAt ?? current?.archivedAt ?? transaction.archivedAt ?? null;
+  const status = overrides.status ?? current?.status ?? transaction.status ?? TRANSACTION_STATUS.PENDING;
+  const type = overrides.type ?? current?.type ?? transaction.type ?? 'Clothes';
+  const price = Number(overrides.price ?? current?.price ?? transaction.price ?? 0);
+
+  run(
+    `INSERT OR REPLACE INTO overdue_logs (
+      logId, originalTransactionId, archivedAt, reason, note, status, type, price
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    logId,
+    transaction.transactionId,
+    archivedAt,
+    reason,
+    note,
+    status,
+    type,
+    price,
+  );
+}
+
+function isOverdueLaundryStatus(laundryStatus) {
+  return laundryStatus === 'Done' || laundryStatus === 'Ready for Pick-up';
+}
+
+function hasOverdueSignal(transaction) {
+  return intToBool(transaction?.reminderSent) || intToBool(transaction?.triggerReminder);
+}
+
+function syncOverdueLogForTransaction(transactionOrId, overrides = {}, options = {}) {
+  const transaction = typeof transactionOrId === 'string'
+    ? findTransaction(transactionOrId)
+    : transactionOrId;
+
+  if (!transaction) return;
+
+  const current = getOverdueLogEntry(transaction.transactionId);
+  const shouldCreate = options.createIfMissing
+    ?? Boolean(current || hasOverdueSignal(transaction));
+
+  if (!shouldCreate && !current) {
+    return;
+  }
+
+  upsertOverdueLogForTransaction(transaction, overrides, { createIfMissing: shouldCreate });
+}
+
+function reconcileOverdueLogsFromTransactions() {
+  const rows = all(
+    `SELECT DISTINCT t.*
+     FROM transactions t
+     LEFT JOIN overdue_logs o
+       ON o.originalTransactionId = t.transactionId
+     WHERE t.doneAt IS NOT NULL
+       AND t.laundryStatus IN ('Done', 'Ready for Pick-up')
+       AND (t.reminderSent = 1 OR t.triggerReminder = 1 OR o.logId IS NOT NULL)`,
+  );
+
+  for (const transaction of rows) {
+    syncOverdueLogForTransaction(
+      transaction,
+      {
+        status: transaction.status || TRANSACTION_STATUS.PENDING,
+        archivedAt: transaction.status === TRANSACTION_STATUS.ARCHIVED ? transaction.archivedAt : null,
+      },
+      { createIfMissing: true },
+    );
+  }
+}
+
+function getOverdueLogsForAdmin() {
+  return all(
+    `SELECT
+       o.logId,
+       o.originalTransactionId,
+       o.archivedAt,
+       o.reason,
+       o.note,
+       o.status,
+       o.type,
+       o.price,
+       t.lockerId,
+       t.archivedFromLockerId,
+       t.phoneNumber,
+       t.paymentId,
+       t.doneAt,
+       t.laundryStatus,
+       t.pin
+     FROM overdue_logs o
+     LEFT JOIN transactions t
+       ON t.transactionId = o.originalTransactionId
+     ORDER BY
+       CASE o.status
+         WHEN 'Pending' THEN 0
+         WHEN 'Archived' THEN 1
+         ELSE 2
+       END,
+       COALESCE(o.archivedAt, t.doneAt) DESC`,
+  ).map((row) => ({
+    id: row.originalTransactionId,
+    transactionDocId: row.logId,
+    lockerId: row.lockerId !== null && row.lockerId !== undefined ? Number(row.lockerId) : null,
+    archivedFromLockerId: row.archivedFromLockerId !== null && row.archivedFromLockerId !== undefined
+      ? Number(row.archivedFromLockerId)
+      : null,
+    pinCode: String(row.pin ?? '0000'),
+    price: Number(row.price || 0),
+    weight: 0,
+    laundryType: row.type || 'Clothes',
+    laundryStatus: row.laundryStatus || 'Done',
+    reminderSent: true,
+    status: row.status || TRANSACTION_STATUS.PENDING,
+    phoneNumber: row.phoneNumber || '',
+    paymentId: row.paymentId || '',
+    droppedAt: null,
+    doneAt: row.doneAt || null,
+    pickedUpAt: null,
+    note: row.note || row.reason || '',
+    updatedAt: row.archivedAt || row.doneAt || null,
+  }));
 }
 
 function getSettings() {
@@ -502,7 +687,195 @@ function getAdminOverview() {
     }))
     .sort((a, b) => a.lockerNumber - b.lockerNumber);
 
-  return { lockers, transactionsById };
+  reconcileOverdueLogsFromTransactions();
+  const overdueTransactions = getOverdueLogsForAdmin();
+
+  return { lockers, transactionsById, overdueTransactions };
+}
+
+function formatTransactionForAdmin(row) {
+  return {
+    transactionId: row.transactionId,
+    lockerId: row.lockerId !== null && row.lockerId !== undefined ? Number(row.lockerId) : null,
+    archivedFromLockerId: row.archivedFromLockerId !== null && row.archivedFromLockerId !== undefined
+      ? Number(row.archivedFromLockerId)
+      : null,
+    pin: String(row.pin ?? '0000'),
+    price: Number(row.price || 0),
+    weight: Number(row.weight || 0),
+    pricePerKg: Number(row.pricePerKg || 0),
+    phoneNumber: row.phoneNumber || '',
+    type: row.type || 'Clothes',
+    status: row.status || TRANSACTION_STATUS.PENDING,
+    laundryStatus: row.laundryStatus || 'Dropped',
+    reminderSent: intToBool(row.reminderSent),
+    triggerReminder: intToBool(row.triggerReminder),
+    droppedAt: row.droppedAt || null,
+    doneAt: row.doneAt || null,
+    pickedUpAt: row.pickedUpAt || null,
+    paymentId: row.paymentId || '',
+    archivedAt: row.archivedAt || null,
+    note: row.note || '',
+    updatedAt: row.updatedAt || null,
+  };
+}
+
+function normalizeDateInput(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return null;
+  return normalized;
+}
+
+function buildStartDateIso(value) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) return null;
+  const dateValue = new Date(`${normalized}T00:00:00`);
+  return Number.isNaN(dateValue.getTime()) ? null : dateValue.toISOString();
+}
+
+function buildEndDateIso(value) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) return null;
+  const dateValue = new Date(`${normalized}T23:59:59.999`);
+  return Number.isNaN(dateValue.getTime()) ? null : dateValue.toISOString();
+}
+
+function getFilteredTransactions({
+  search = '',
+  status = 'all',
+  laundryStatus = 'all',
+  type = 'all',
+  lockerId = 'all',
+  startDate = '',
+  endDate = '',
+} = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (search) {
+    const term = `%${String(search).trim().toLowerCase()}%`;
+    conditions.push(`(
+      LOWER(transactionId) LIKE ?
+      OR LOWER(COALESCE(paymentId, '')) LIKE ?
+      OR LOWER(COALESCE(phoneNumber, '')) LIKE ?
+      OR LOWER(COALESCE(pin, '')) LIKE ?
+      OR LOWER(COALESCE(type, '')) LIKE ?
+    )`);
+    params.push(term, term, term, term, term);
+  }
+
+  if (status !== 'all') {
+    conditions.push(`status = ?`);
+    params.push(String(status));
+  }
+
+  if (laundryStatus !== 'all') {
+    conditions.push(`laundryStatus = ?`);
+    params.push(String(laundryStatus));
+  }
+
+  if (type !== 'all') {
+    conditions.push(`type = ?`);
+    params.push(String(type));
+  }
+
+  if (lockerId !== 'all') {
+    const parsedLockerId = Number(lockerId);
+    if (Number.isFinite(parsedLockerId)) {
+      conditions.push(`(lockerId = ? OR archivedFromLockerId = ?)`);
+      params.push(parsedLockerId, parsedLockerId);
+    }
+  }
+
+  const startIso = buildStartDateIso(startDate);
+  if (startIso) {
+    conditions.push(`droppedAt >= ?`);
+    params.push(startIso);
+  }
+
+  const endIso = buildEndDateIso(endDate);
+  if (endIso) {
+    conditions.push(`droppedAt <= ?`);
+    params.push(endIso);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const rows = all(
+    `SELECT *
+     FROM transactions
+     ${whereClause}
+     ORDER BY droppedAt DESC, updatedAt DESC`,
+    ...params,
+  );
+
+  return rows.map(formatTransactionForAdmin);
+}
+
+function getSalesSummary({ startDate = '', endDate = '' } = {}) {
+  const conditions = [`status = ?`, `pickedUpAt IS NOT NULL`];
+  const params = [TRANSACTION_STATUS.COMPLETED];
+
+  const startIso = buildStartDateIso(startDate);
+  if (startIso) {
+    conditions.push(`pickedUpAt >= ?`);
+    params.push(startIso);
+  }
+
+  const endIso = buildEndDateIso(endDate);
+  if (endIso) {
+    conditions.push(`pickedUpAt <= ?`);
+    params.push(endIso);
+  }
+
+  const rows = all(
+    `SELECT *
+     FROM transactions
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY pickedUpAt DESC, updatedAt DESC`,
+    ...params,
+  );
+
+  const summary = {
+    totalSales: 0,
+    totalTransactions: rows.length,
+    totalWeight: 0,
+    averageSale: 0,
+  };
+
+  const byTypeMap = new Map();
+  const dailySalesMap = new Map();
+
+  for (const row of rows) {
+    const price = Number(row.price || 0);
+    const weight = Number(row.weight || 0);
+    const type = row.type || 'Clothes';
+    const pickedUpAt = row.pickedUpAt || row.updatedAt || row.droppedAt;
+    const pickedUpDate = String(pickedUpAt || '').slice(0, 10) || 'Unknown';
+
+    summary.totalSales += price;
+    summary.totalWeight += weight;
+
+    const existingType = byTypeMap.get(type) || { type, totalSales: 0, totalTransactions: 0, totalWeight: 0 };
+    existingType.totalSales += price;
+    existingType.totalTransactions += 1;
+    existingType.totalWeight += weight;
+    byTypeMap.set(type, existingType);
+
+    const existingDay = dailySalesMap.get(pickedUpDate) || { date: pickedUpDate, totalSales: 0, totalTransactions: 0 };
+    existingDay.totalSales += price;
+    existingDay.totalTransactions += 1;
+    dailySalesMap.set(pickedUpDate, existingDay);
+  }
+
+  summary.averageSale = summary.totalTransactions ? summary.totalSales / summary.totalTransactions : 0;
+
+  return {
+    summary,
+    byType: Array.from(byTypeMap.values()).sort((a, b) => b.totalSales - a.totalSales),
+    dailySales: Array.from(dailySalesMap.values()).sort((a, b) => String(b.date).localeCompare(String(a.date))),
+    transactions: rows.map(formatTransactionForAdmin),
+  };
 }
 
 function writeReceiptToPrinter(receiptText) {
@@ -608,6 +981,16 @@ function checkOverduePickups() {
       toIso(now),
       tx.transactionId,
     );
+
+    syncOverdueLogForTransaction(
+      tx.transactionId,
+      {
+        status: TRANSACTION_STATUS.PENDING,
+        reason: 'Overdue pickup',
+        note: 'Auto-reminder queued after overdue threshold.',
+      },
+      { createIfMissing: true },
+    );
   }
 }
 
@@ -673,6 +1056,32 @@ app.get('/api/settings', (req, res) => {
 
 app.get('/api/admin/overview', (req, res) => {
   res.json(getAdminOverview());
+});
+
+app.get('/api/admin/transactions', (req, res) => {
+  const transactions = getFilteredTransactions({
+    search: req.query.search,
+    status: req.query.status,
+    laundryStatus: req.query.laundryStatus,
+    type: req.query.type,
+    lockerId: req.query.lockerId,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+
+  res.json({
+    transactions,
+    total: transactions.length,
+  });
+});
+
+app.get('/api/admin/sales', (req, res) => {
+  res.json(
+    getSalesSummary({
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+    }),
+  );
 });
 
 app.post('/api/settings', (req, res) => {
@@ -745,6 +1154,10 @@ app.post('/api/admin/transaction/status', (req, res) => {
     transactionId,
   );
 
+  syncOverdueLogForTransaction(transactionId, {
+    status: isDone ? TRANSACTION_STATUS.PENDING : tx.status,
+  });
+
   res.json({ success: true, overview: getAdminOverview() });
 });
 
@@ -767,6 +1180,19 @@ app.post('/api/admin/transaction/reset', (req, res) => {
     toIso(),
     transactionId,
   );
+
+  if (hasOverdueSignal(tx) || getOverdueLogEntry(transactionId)) {
+    syncOverdueLogForTransaction(
+      transactionId,
+      {
+        status: TRANSACTION_STATUS.ARCHIVED,
+        archivedAt: toIso(),
+        reason: 'Archived overdue transaction',
+        note: 'Archived by local admin reset',
+      },
+      { createIfMissing: true },
+    );
+  }
 
   markLockerAvailableAndLock(lockerId);
   res.json({ success: true, overview: getAdminOverview() });
@@ -793,6 +1219,60 @@ app.post('/api/admin/transaction/print', (req, res) => {
   });
 
   res.json({ success: true });
+});
+
+app.post('/api/admin/transaction/mark-paid', (req, res) => {
+  const { transactionId } = req.body;
+  const tx = findTransaction(transactionId);
+
+  if (!tx) {
+    return res.status(404).json({ success: false, message: 'Transaction not found.' });
+  }
+
+  if (tx.status === TRANSACTION_STATUS.COMPLETED) {
+    return res.json({ success: true, overview: getAdminOverview() });
+  }
+
+  const lockerId = tx.lockerId !== null && tx.lockerId !== undefined ? Number(tx.lockerId) : null;
+  const now = toIso();
+  const paymentId = tx.paymentId || `ADMIN-PAY-${Math.floor(Date.now() / 1000)}`;
+
+  run(
+    `UPDATE transactions
+     SET status = ?,
+         pickedUpAt = ?,
+         paymentId = ?,
+         reminderSent = 0,
+         triggerReminder = 0,
+         reminderSentAt = NULL,
+         triggerPrint = 1,
+         updatedAt = ?,
+         note = ?
+     WHERE transactionId = ?`,
+    TRANSACTION_STATUS.COMPLETED,
+    now,
+    paymentId,
+    now,
+    'Marked paid by local admin overdue settlement',
+    transactionId,
+  );
+
+  syncOverdueLogForTransaction(
+    transactionId,
+    {
+      status: TRANSACTION_STATUS.COMPLETED,
+      reason: 'Overdue transaction paid',
+      note: 'Marked paid by local admin overdue settlement',
+    },
+    { createIfMissing: true },
+  );
+
+  if (lockerId !== null && Number.isFinite(lockerId)) {
+    markLockerAvailableAndLock(lockerId);
+  }
+
+  processPendingPrints();
+  res.json({ success: true, overview: getAdminOverview() });
 });
 
 app.post('/api/print-receipt', (req, res) => {
@@ -877,6 +1357,18 @@ app.post('/api/pickup', (req, res) => {
     lockerId,
     TRANSACTION_STATUS.PENDING,
   );
+
+  if (hasOverdueSignal(active) || getOverdueLogEntry(active.transactionId)) {
+    syncOverdueLogForTransaction(
+      active.transactionId,
+      {
+        status: TRANSACTION_STATUS.COMPLETED,
+        reason: 'Overdue transaction paid',
+        note: 'Picked up and paid from kiosk',
+      },
+      { createIfMissing: true },
+    );
+  }
 
   updateLockerAction(lockerId, 'unlock');
   run(

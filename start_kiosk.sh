@@ -32,7 +32,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 # --- 3. PROJECT CHECKS ---
-KIOSK_APP_DIR="/home/caj/laundry-kiosk"
+KIOSK_APP_DIR="/home/caj/laundry-system"
 cd "$KIOSK_APP_DIR" || { echo "CRITICAL ERROR: $KIOSK_APP_DIR not found."; exit 1; }
 
 REQUIRED_FILES=("package.json" "server.js" "hardware_bridge.py")
@@ -57,7 +57,7 @@ if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
     sudo apt-get install -y "${MISSING_PACKAGES[@]}"
 fi
 
-if [ ! -d "node_modules" ]; then
+if [ ! -d "node_modules" ] || [ ! -d "node_modules/sql.js" ]; then
     echo "Installing Node dependencies..."
     if [ -f "package-lock.json" ]; then
         npm ci
@@ -71,24 +71,51 @@ fi
 [ -f "local_settings.json" ] || echo "{}" > local_settings.json
 [ -f "sys_state.json" ] || echo '{"raw_data":"","timestamp":0}' > sys_state.json
 
-wait_for_port() {
-    local host="$1"
-    local port="$2"
-    local label="$3"
-    local timeout_seconds="${4:-30}"
+wait_for_http() {
+    local url="$1"
+    local label="$2"
+    local timeout_seconds="${3:-30}"
     local elapsed=0
+    local backend_pid="${BACKEND_PID:-}"
+    local frontend_pid="${FRONTEND_PID:-}"
 
     while [ "$elapsed" -lt "$timeout_seconds" ]; do
-        if (echo > "/dev/tcp/${host}/${port}") >/dev/null 2>&1; then
-            echo "$label is ready on ${host}:${port}"
-            return 0
+        if command -v curl >/dev/null 2>&1; then
+            if curl --silent --fail --max-time 2 "$url" >/dev/null 2>&1; then
+                echo "$label is ready at $url"
+                return 0
+            fi
+        elif command -v wget >/dev/null 2>&1; then
+            if wget -q --spider --timeout=2 "$url"; then
+                echo "$label is ready at $url"
+                return 0
+            fi
+        else
+            if python3 - <<PY >/dev/null 2>&1
+import urllib.request
+urllib.request.urlopen("$url", timeout=2)
+PY
+            then
+                echo "$label is ready at $url"
+                return 0
+            fi
+        fi
+
+        if [ "$label" = "Backend Server" ] && [ -n "$backend_pid" ] && ! kill -0 "$backend_pid" >/dev/null 2>&1; then
+            echo "CRITICAL ERROR: Backend Server exited before becoming ready."
+            return 1
+        fi
+
+        if [ "$label" = "React Frontend" ] && [ -n "$frontend_pid" ] && ! kill -0 "$frontend_pid" >/dev/null 2>&1; then
+            echo "CRITICAL ERROR: React Frontend exited before becoming ready."
+            return 1
         fi
 
         sleep 1
         elapsed=$((elapsed + 1))
     done
 
-    echo "CRITICAL ERROR: Timed out waiting for $label on ${host}:${port}"
+    echo "CRITICAL ERROR: Timed out waiting for $label at $url"
     return 1
 }
 
@@ -114,13 +141,13 @@ echo "Starting backend server..."
 node server.js &
 BACKEND_PID=$!
 
-wait_for_port "127.0.0.1" "3000" "Backend Server" 30 || exit 1
+wait_for_http "http://127.0.0.1:3000/api/status" "Backend Server" 30 || exit 1
 
 echo "Starting React frontend..."
-npm run dev -- --port 5173 --strictPort &
+npm run dev -- --host 0.0.0.0 --port 5173 --strictPort &
 FRONTEND_PID=$!
 
-wait_for_port "127.0.0.1" "5173" "React Frontend" 60 || exit 1
+wait_for_http "http://127.0.0.1:5173" "React Frontend" 60 || exit 1
 
 # --- 5. DISPLAY & BROWSER ---
 export DISPLAY=:0

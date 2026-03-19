@@ -12,6 +12,27 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.centered-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 2rem;
+}
+
+.status-circle {
+  width: 96px;
+  height: 96px;
+  background-color: #eff6ff; /* blue-50 */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
 .app-container {
   display: flex;
   align-items: center;
@@ -77,38 +98,8 @@ body {
   background-color: #eff6ff;
 }
 
-.btn-return {
-  padding: 12px 24px;
-  background-color: #6b7280;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: background-color 0.2s;
-}
-
-.btn-return:hover {
-  background-color: #4b5563;
-}
-
-.btn-return-top {
-  position: absolute;
-  top: 18px;
-  left: 32px;
-  padding: 12px 24px;
-  background-color: #6b7280;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: background-color 0.2s;
-  z-index: 10;
-}
-
-.btn-return-top:hover {
-  background-color: #4b5563;
-}
-
+.btn-return,
+.btn-return-top,
 .btn-return-absolute {
   position: absolute;
   top: 32px;
@@ -123,6 +114,8 @@ body {
   z-index: 10;
 }
 
+.btn-return:hover,
+.btn-return-top:hover,
 .btn-return-absolute:hover {
   background-color: #4b5563;
 }
@@ -208,11 +201,6 @@ body {
   padding: 24px;
 }
 
-.available-lockers-container {
-  display: flex;
-  flex-direction: column;
-}
-
 .lockers-grid {
   flex: 1;
   overflow-y: auto;
@@ -262,6 +250,14 @@ body {
   color: #6b7280;
 }
 
+.no-data-message {
+  text-align: center;
+  grid-column: 1 / -1;
+  padding: 32px;
+  color: #6b7280;
+  font-size: 18px;
+}
+
 /* Drop Off Instructions Page */
 .dropoff-instructions-page {
   height: 100%;
@@ -271,19 +267,16 @@ body {
 }
 
 .instructions-container {
-  flex: 1;
   display: flex;
   flex-direction: column;
 }
 
 .instructions-header {
   margin-bottom: 24px;
-  text-align: center;
 }
 
 .instructions-header h2 {
   font-size: 30px;
-  text-align: center;
   color: #1f2937;
   margin-bottom: 8px;
 }
@@ -309,6 +302,21 @@ body {
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Minimal variant for prompts (e.g. "Ready to open?") */
+.instruction-item.minimal {
+  background-color: transparent;
+  box-shadow: none;
+  border: none;
+  justify-content: center;
+  text-align: center;
+  padding: 0;
+}
+
+.instruction-item.minimal .instruction-content {
+  width: 100%;
+  text-align: center;
 }
 
 .instruction-number {
@@ -349,12 +357,23 @@ body {
   background-color: #2563eb;
 }
 
+.btn-full:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.8;
+  box-shadow: none;
+}
+
 .btn-full.success {
   background-color: #10b981;
 }
 
 .btn-full.success:hover {
   background-color: #059669;
+}
+
+.btn-full.success:disabled {
+  background-color: #9ca3af;
 }
 
 /* Weighing Page */
@@ -385,6 +404,7 @@ body {
   border-radius: 12px;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   margin-bottom: 16px;
+  min-width: 300px;
 }
 
 .weight-label {
@@ -416,17 +436,12 @@ body {
   font-size: 18px;
 }
 
-.price-note {
-  font-size: 14px;
-  color: #6b7280;
-  margin-top: 8px;
-}
-
 .weighing-status {
   display: flex;
   align-items: center;
   gap: 8px;
   color: #4b5563;
+  font-size: 16px;
 }
 
 @keyframes bounce {
@@ -530,23 +545,6 @@ body {
   gap: 16px;
 }
 
-.info-box {
-  background-color: #eff6ff;
-  padding: 20px;
-  border-radius: 12px;
-  border: 1px solid #bfdbfe;
-  max-width: 448px;
-}
-
-.info-box p {
-  color: #374151;
-  text-align: center;
-}
-
-.info-box .highlight {
-  color: #3b82f6;
-}
-
 /* Pickup Lockers Page */
 .pickup-grid {
   flex: 1;
@@ -627,6 +625,7 @@ body {
   justify-content: center;
   background-color: #f9fafb;
   padding: 0 48px;
+  position: relative;
 }
 
 .pin-content {
@@ -653,6 +652,19 @@ body {
 .pin-locker {
   font-size: 18px;
   color: #4b5563;
+}
+
+.pin-transaction {
+  font-size: 13px;
+  color: #4b5563;
+  background-color: #f3f4f6;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  display: inline-block;
+  margin-top: 8px;
+  margin-bottom: 16px;
+  font-weight: 500;
+  border: 1px solid #e5e7eb;
 }
 
 .pin-demo {
@@ -831,101 +843,6 @@ body {
   padding-right: 32px;
 }
 
-.cash-payment-container {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.cash-instruction {
-  background-color: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.cash-instruction-title {
-  font-size: 24px;
-  color: #1f2937;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.cash-instruction-text {
-  font-size: 16px;
-  color: #4b5563;
-}
-
-.cash-inserted-card {
-  background-color: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-}
-
-.cash-inserted-label {
-  font-size: 16px;
-  color: #4b5563;
-  margin-bottom: 8px;
-}
-
-.cash-inserted-amount {
-  font-size: 36px;
-  color: #10b981;
-  margin-bottom: 12px;
-}
-
-.cash-balance {
-  display: flex;
-  justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
-  font-size: 18px;
-}
-
-.cash-balance-label {
-  color: #4b5563;
-}
-
-.cash-balance-value {
-  color: #dc2626;
-}
-
-.cash-balance-value.complete {
-  color: #10b981;
-}
-
-.cash-coins-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.coin-button {
-  padding: 16px;
-  background-color: #f59e0b;
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-size: 18px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-}
-
-.coin-button:hover {
-  background-color: #d97706;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.coin-button:active {
-  transform: translateY(0);
-}
-
 .payment-actions {
   display: flex;
   gap: 12px;
@@ -964,79 +881,6 @@ body {
 .btn-confirm:disabled {
   background-color: #9ca3af;
   cursor: not-allowed;
-}
-
-.payment-method-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px;
-  background-color: white;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  width: 192px;
-  height: 192px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-}
-
-.payment-method-button:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-.payment-method-button.card:hover {
-  border-color: #3b82f6;
-}
-
-.payment-method-button.mobile:hover {
-  border-color: #10b981;
-}
-
-.payment-method-button .icon {
-  color: #3b82f6;
-}
-
-.payment-method-button.mobile .icon {
-  color: #10b981;
-}
-
-.payment-method-title {
-  font-size: 20px;
-  color: #1f2937;
-  margin-bottom: 4px;
-}
-
-.payment-method-desc {
-  font-size: 14px;
-  color: #4b5563;
-}
-
-.payment-processing {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: #f9fafb;
-  padding: 32px;
-}
-
-.processing-icon {
-  color: #3b82f6;
-  margin-bottom: 32px;
-}
-
-.processing-title {
-  font-size: 36px;
-  color: #1f2937;
-  margin-bottom: 16px;
-}
-
-.processing-subtitle {
-  font-size: 20px;
-  color: #4b5563;
 }
 
 /* Thank You Page */

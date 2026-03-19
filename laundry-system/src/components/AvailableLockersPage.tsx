@@ -20,14 +20,15 @@ export function AvailableLockersPage({ lockers, onSelectLocker, onBack }: Availa
       padding: '12px', 
       backgroundColor: '#f9fafb',
       position: 'relative', 
-      overflow: 'hidden'    
+      overflowX: 'hidden',
+      overflowY: 'auto',
     }}>
       
       {/* 1. Background Layer */}
       <BackgroundBubbles variant="tinted" />
 
       {/* 2. Content Layer */}
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         
         {/* Header Section */}
         <div className="available-lockers-container" style={{ 

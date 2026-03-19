@@ -8,14 +8,13 @@ interface ProcessSelectionPageProps {
 
 export function ProcessSelectionPage({ onSelect, onBack }: ProcessSelectionPageProps) {
   return (
-    /* 1. Added relative/hidden here to keep bubbles contained */
-    <div className="process-selection-page" style={{ position: 'relative', overflow: 'hidden' }}>
+    <div className="process-selection-page" style={{ position: 'relative', overflowX: 'hidden', overflowY: 'auto' }}>
       
       {/* 2. Place component at the top of the container */}
       <BackgroundBubbles variant="tinted" />
 
       {/* 3. Wrap existing content in a relative div to stay ABOVE bubbles */}
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
         <div className="page-header">
           <h2 className="page-title">Select Service</h2>
           <p className="page-subtitle">What would you like to do?</p>
