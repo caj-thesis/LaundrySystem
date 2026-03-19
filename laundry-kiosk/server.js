@@ -779,20 +779,29 @@ function startRemoteTransactionSyncListener() {
     });
 }
 
-function executePrintCommand(data) {
-    // Dynamically find the printer port
+function writeReceiptToPrinter(receiptText) {
     const printerPorts = ['/dev/usb/lp0', '/dev/usb/lp1', '/dev/usb/lp2'];
-    const PRINTER_PATH = printerPorts.find(p => fs.existsSync(p));
+    const PRINTER_PATH = printerPorts.find((printerPath) => fs.existsSync(printerPath));
 
     if (!PRINTER_PATH) {
-        console.error("❌ No USB Printer detected in /dev/usb/");
-        return;
+        console.error('❌ No USB Printer detected in /dev/usb/');
+        return false;
     }
 
-    // Extract receiptFootnote here
+    fs.writeFile(PRINTER_PATH, receiptText, (error) => {
+        if (error) {
+            console.error('Printer Error:', error);
+        } else {
+            console.log(`📝 Printed directly to ${PRINTER_PATH}`);
+        }
+    });
+
+    return true;
+}
+
+function executePrintCommand(data) {
     const { transactionId, pin, processType, weight, price, shopName, receiptFootnote } = data;
-    
-    // We use actual empty lines at the bottom to feed the paper
+
     const receiptText = `
    ${shopName}
    --------------------------
@@ -811,14 +820,7 @@ function executePrintCommand(data) {
 
 `;
 
-    // 🚀 Use Node.js native file system to write directly to the printer
-    fs.writeFile(PRINTER_PATH, receiptText, (error) => {
-        if (error) {
-            console.error("Printer Error:", error);
-        } else {
-            console.log(`📝 Printed directly to ${PRINTER_PATH}`);
-        }
-    });
+    writeReceiptToPrinter(receiptText);
 }
 
 // ==========================================================
@@ -1031,7 +1033,7 @@ connectFirebaseAuth();
 // ==========================================================
 
 app.get('/api/status', (req, res) => res.json(systemState));
-app.get('/api/lockers', (req, res) => res.json(getLocalLockers()));
+app.get('/api/lockers', (req, res) => res.json(getLocalLockers().filter((locker) => locker.isConnected !== false)));
 app.get('/api/settings', (req, res) => res.json(localSettings));
 app.get('/api/admin/overview', (req, res) => res.json(getAdminOverview()));
 app.post('/api/settings', async (req, res) => {
@@ -1169,6 +1171,31 @@ app.post('/api/admin/transaction/print', (req, res) => {
         shopName: localSettings.laundryShopName || 'Laundry Management System',
         receiptFootnote: localSettings.receiptFootnote || 'Thank you for using our service!',
     });
+
+    res.json({ success: true });
+});
+
+app.post('/api/print-receipt', (req, res) => {
+    const { lockerUnit, weight, totalDue, date } = req.body || {};
+    const receiptText = `
+   ${(localSettings.laundryShopName || 'Laundry Management System').toUpperCase()}
+   --------------------------
+   Date: ${date || new Date().toLocaleDateString('en-GB')}
+   Locker: ${lockerUnit ?? 'N/A'}
+   --------------------------
+   Weight: ${Number(weight || 0).toFixed(2)} kg
+   Total:  PHP ${Number(totalDue || 0).toFixed(2)}
+   --------------------------
+   ${localSettings.receiptFootnote || 'Thank you for using our service!'}
+
+
+
+`;
+
+    const printed = writeReceiptToPrinter(receiptText);
+    if (!printed) {
+        return res.status(503).json({ success: false, message: 'Printer unavailable.' });
+    }
 
     res.json({ success: true });
 });

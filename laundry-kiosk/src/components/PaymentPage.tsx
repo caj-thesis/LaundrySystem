@@ -9,7 +9,7 @@ interface PaymentPageProps {
   onCancel: () => void;
 }
 
-export function PaymentPage({ lockerId, price, weight, onComplete, onCancel }: PaymentPageProps) {
+export function PaymentPage({ lockerId, price, onComplete, onCancel }: PaymentPageProps) {
   const [cashInserted, setCashInserted] = useState(0);
   const [connectionError, setConnectionError] = useState(false);
   const pollInterval = useRef<number | null>(null);
