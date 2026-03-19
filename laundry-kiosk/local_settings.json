@@ -5,5 +5,10 @@
   "minClothesPrice": 50,
   "minBedSheetPrice": 125,
   "overdueHours": 48,
-  "receiptFootnote": "Thank you for using our service!"
+  "receiptFootnote": "Thank you for using our service!",
+  "sync": {
+    "settingsSynced": true,
+    "lastError": null,
+    "updatedAt": null
+  }
 }
