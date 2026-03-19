@@ -41,20 +41,76 @@ def log_gsm(message):
         pass
 
 # --- FIREBASE SETUP ---
-key_path = "serviceAccountKey.json" 
+key_path = "serviceAccountKey.json"
+FIREBASE_RETRY_INTERVAL = RECONNECT_INTERVAL
 
-if not os.path.exists(key_path):
-    print(f"❌ Error: {key_path} not found.")
-    db = None
-else:
+firestore_listeners_started = False
+firestore_listener_handles = []
+last_firebase_attempt = 0
+_firebase_unavailable_logged = False
+
+def connect_firebase_if_needed():
+    global _firebase_unavailable_logged
+
+    if not os.path.exists(key_path):
+        if not _firebase_unavailable_logged:
+            print(f"⚠️ [FIREBASE] Firebase unavailable: {key_path} not found.")
+            _firebase_unavailable_logged = True
+        return None
+
     try:
-        cred = credentials.Certificate(key_path)
-        firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        print("✅ [FIREBASE] Authenticated")
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+        client = firestore.client()
+        if _firebase_unavailable_logged:
+            print("✅ [FIREBASE] Firebase connection restored.")
+        else:
+            print("✅ [FIREBASE] Authenticated")
+        _firebase_unavailable_logged = False
+        return client
     except Exception as e:
-        print(f"⚠️ [FIREBASE] Init Error: {e}")
-        db = None
+        if not _firebase_unavailable_logged:
+            print(f"⚠️ [FIREBASE] Firebase unavailable: {e}")
+            _firebase_unavailable_logged = True
+        return None
+
+def stop_firebase_listeners():
+    global firestore_listeners_started, firestore_listener_handles
+
+    for unsubscribe in firestore_listener_handles:
+        try:
+            unsubscribe()
+        except Exception:
+            pass
+
+    firestore_listener_handles = []
+    firestore_listeners_started = False
+
+def start_firebase_listeners(db_client):
+    global firestore_listeners_started, firestore_listener_handles
+
+    if not db_client:
+        return False
+
+    if firestore_listeners_started:
+        return True
+
+    try:
+        firestore_listener_handles = [
+            db_client.collection('transactions').where('laundryStatus', 'in', ['Dropped', 'Pending', 'Done']).on_snapshot(on_transaction_snapshot),
+            db_client.collection('lockers').on_snapshot(on_locker_snapshot),
+            db_client.collection('settings').document('general').on_snapshot(on_settings_snapshot),
+        ]
+        firestore_listeners_started = True
+        print("✅ [FIREBASE] Firebase listeners restored.")
+        return True
+    except Exception as e:
+        stop_firebase_listeners()
+        print(f"⚠️ [FIREBASE] Listener registration failed: {e}")
+        return False
+
+db = connect_firebase_if_needed()
 
 # --- DYNAMIC PORT DISCOVERY ---
 def find_ports():
@@ -351,16 +407,7 @@ def on_locker_snapshot(col_snapshot, changes, read_time):
 
 if db:
     print("🎧 Listening for Firebase updates...")
-    try:
-        # Start Listeners
-        db.collection('transactions').where('laundryStatus', 'in', ['Dropped', 'Pending', 'Done']).on_snapshot(on_transaction_snapshot)
-        db.collection('lockers').on_snapshot(on_locker_snapshot)
-        
-        # New Settings Listener
-        db.collection('settings').document('general').on_snapshot(on_settings_snapshot)
-        
-    except Exception as e:
-        print(f"Listener Error: {e}")
+    start_firebase_listeners(db)
 
 
 
@@ -410,6 +457,15 @@ last_reconnect_attempt = 0
 
 while True:
     arduino, last_reconnect_attempt = reconnect_arduino_if_needed(arduino, last_reconnect_attempt)
+
+    now = time.time()
+    if db is None or not firestore_listeners_started:
+        if now - last_firebase_attempt >= FIREBASE_RETRY_INTERVAL:
+            last_firebase_attempt = now
+            print("🔁 [FIREBASE] Retrying Firebase connection...")
+            db = connect_firebase_if_needed()
+            if db:
+                start_firebase_listeners(db)
     consume_local_actions()
 
     if arduino and arduino.in_waiting:
