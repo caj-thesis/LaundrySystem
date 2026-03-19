@@ -1,97 +1,131 @@
 #!/bin/bash
 
+set -u
+
 # --- 1. LOGGING & CLEANUP ---
-# Direct all output to a singular 'system_logs.log' file
 exec > /home/caj/system_logs.log 2>&1
 echo "--- Kiosk System Starting: $(date) ---"
 
-echo "🧹 Cleaning up old processes..."
+echo "Cleaning up old processes..."
 pkill -f "node server.js" || true
-pkill -f "python3 hardware_bridge.py" || true
+pkill -f "python3 -u hardware_bridge.py" || true
 pkill -f "chromium" || true
-fuser -k 5173/tcp 3000/tcp 2>/dev/null || true 
+fuser -k 5173/tcp 3000/tcp 2>/dev/null || true
 
 # --- 2. ENVIRONMENT SETUP ---
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-if ! command -v npm &> /dev/null; then
-    echo "NVM failed. Using manual path fallback..."
+if ! command -v npm >/dev/null 2>&1; then
+    echo "NVM lookup failed. Using manual Node path fallback..."
     export PATH="/home/caj/.config/nvm/versions/node/v24.12.0/bin:$PATH"
 fi
 
-if ! command -v npm &> /dev/null; then
+if ! command -v npm >/dev/null 2>&1; then
     echo "CRITICAL ERROR: Node/NPM not found."
     exit 1
 fi
 
-# --- 3. SYSTEM & PROJECT CHECKS ---
-KIOSK_APP_DIR="/home/caj/laundry-kiosk"
-cd "$KIOSK_APP_DIR" || { echo "Directory not found"; exit 1; }
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "CRITICAL ERROR: python3 not found."
+    exit 1
+fi
 
-# Check for system packages
-DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
-for pkg in "${DEPENDENCIES[@]}"; do
-    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-        echo "Installing missing package: $pkg"
-        sudo apt-get update && sudo apt-get install -y "$pkg"
+# --- 3. PROJECT CHECKS ---
+KIOSK_APP_DIR="/home/caj/laundry-kiosk"
+cd "$KIOSK_APP_DIR" || { echo "CRITICAL ERROR: $KIOSK_APP_DIR not found."; exit 1; }
+
+REQUIRED_FILES=("package.json" "server.js" "hardware_bridge.py")
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -f "$file" ]; then
+        echo "CRITICAL ERROR: required file missing: $file"
+        exit 1
     fi
 done
 
-# Ensure Node modules are installed
+DEPENDENCIES=(unclutter x11-xserver-utils chromium libudev-dev)
+MISSING_PACKAGES=()
+for pkg in "${DEPENDENCIES[@]}"; do
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+        MISSING_PACKAGES+=("$pkg")
+    fi
+done
+
+if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
+    echo "Installing missing system packages: ${MISSING_PACKAGES[*]}"
+    sudo apt-get update
+    sudo apt-get install -y "${MISSING_PACKAGES[@]}"
+fi
+
 if [ ! -d "node_modules" ]; then
     echo "Installing Node dependencies..."
-    npm install
+    if [ -f "package-lock.json" ]; then
+        npm ci
+    else
+        npm install
+    fi
 fi
+
+[ -f "locker_actions.json" ] || echo "[]" > locker_actions.json
+[ -f "local_transactions.json" ] || echo "[]" > local_transactions.json
+[ -f "local_settings.json" ] || echo "{}" > local_settings.json
+[ -f "sys_state.json" ] || echo '{"raw_data":"","timestamp":0}' > sys_state.json
+
+wait_for_port() {
+    local host="$1"
+    local port="$2"
+    local label="$3"
+    local timeout_seconds="${4:-30}"
+    local elapsed=0
+
+    while [ "$elapsed" -lt "$timeout_seconds" ]; do
+        if (echo > "/dev/tcp/${host}/${port}") >/dev/null 2>&1; then
+            echo "$label is ready on ${host}:${port}"
+            return 0
+        fi
+
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    echo "CRITICAL ERROR: Timed out waiting for $label on ${host}:${port}"
+    return 1
+}
 
 # --- 4. HARDWARE & BACKEND STARTUP ---
-# Start Python Hardware Bridge
-if [ -f "hardware_bridge.py" ]; then
-    # --- AUTO-FIX: Create venv if missing ---
-    if [ ! -d "venv" ]; then
-        echo "⚠️  Virtual Environment (venv) not found. Creating it now..."
-        python3 -m venv venv
-        source venv/bin/activate
-        
-        echo "📦 Installing required Python libraries..."
-        pip install --upgrade pip
-        pip install pyserial
-        
-        if [ $? -eq 0 ]; then
-            echo "✅ Python environment created and dependencies installed."
-        else
-            echo "❌ Error installing Python dependencies."
-            exit 1
-        fi
-    else
-        # Just activate if it already exists
-        source venv/bin/activate
-    fi
-    # ----------------------------------------
-
-    echo "Starting Hardware Bridge..."
-    # -u ensures output is unbuffered and appears immediately in the log
-    python3 -u hardware_bridge.py &
-else
-    echo "CRITICAL ERROR: hardware_bridge.py not found in $(pwd)"
+if [ ! -d "venv" ]; then
+    echo "Python virtual environment not found. Creating it..."
+    python3 -m venv venv || { echo "CRITICAL ERROR: failed to create venv"; exit 1; }
 fi
 
-# Start Node Backend
-echo "Starting Backend Server..."
-node server.js &
+source venv/bin/activate
 
-# Start React Frontend
-echo "Starting React Frontend..."
+if ! python3 -c "import serial" >/dev/null 2>&1; then
+    echo "Installing Python runtime dependencies..."
+    pip install --upgrade pip
+    pip install pyserial || { echo "CRITICAL ERROR: failed to install pyserial"; exit 1; }
+fi
+
+echo "Starting hardware bridge..."
+python3 -u hardware_bridge.py &
+HARDWARE_PID=$!
+
+echo "Starting backend server..."
+node server.js &
+BACKEND_PID=$!
+
+wait_for_port "127.0.0.1" "3000" "Backend Server" 30 || exit 1
+
+echo "Starting React frontend..."
 npm run dev -- --port 5173 --strictPort &
 FRONTEND_PID=$!
+
+wait_for_port "127.0.0.1" "5173" "React Frontend" 60 || exit 1
 
 # --- 5. DISPLAY & BROWSER ---
 export DISPLAY=:0
 xset s off && xset -dpms && xset s noblank
 unclutter -idle 0.5 -root &
-
-echo "Waiting 20 seconds for full initialization..."
-sleep 20
 
 echo "Launching Chromium..."
 chromium --no-sandbox \
@@ -107,6 +141,7 @@ chromium --no-sandbox \
          --disable-sync \
          --disable-features=TranslateUI,OptimizationHints,MediaRouter \
          http://localhost:5173 &
+CHROMIUM_PID=$!
 
 echo "--- Kiosk fully initialized. ---"
 wait $FRONTEND_PID

@@ -10,10 +10,16 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite
 *.local
 laundry.db
 laundry.db-shm
 laundry.db-wal
+gsm_logs.log
+local_settings.json
+local_transactions.json
+locker_actions.json
+sys_state.json
 
 # Editor directories and files
 .vscode/*
