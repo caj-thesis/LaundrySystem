@@ -367,8 +367,9 @@ function syncOverdueLogForTransaction(transactionOrId, overrides = {}, options =
   if (!transaction) return;
 
   const current = getOverdueLogEntry(transaction.transactionId);
+  const qualifiesByArchivedStatus = transaction.status === TRANSACTION_STATUS.ARCHIVED;
   const shouldCreate = options.createIfMissing
-    ?? Boolean(current || hasOverdueSignal(transaction));
+    ?? Boolean(current || hasOverdueSignal(transaction) || qualifiesByArchivedStatus);
 
   if (!shouldCreate && !current) {
     return;
@@ -383,9 +384,18 @@ function reconcileOverdueLogsFromTransactions() {
      FROM transactions t
      LEFT JOIN overdue_logs o
        ON o.originalTransactionId = t.transactionId
-     WHERE t.doneAt IS NOT NULL
-       AND t.laundryStatus IN ('Done', 'Ready for Pick-up')
-       AND (t.reminderSent = 1 OR t.triggerReminder = 1 OR o.logId IS NOT NULL)`,
+     WHERE (
+       (
+         t.doneAt IS NOT NULL
+         AND t.laundryStatus IN ('Done', 'Ready for Pick-up')
+         AND (t.reminderSent = 1 OR t.triggerReminder = 1 OR o.logId IS NOT NULL)
+       )
+       OR (
+         t.status = ?
+         AND t.archivedAt IS NOT NULL
+       )
+     )`,
+    TRANSACTION_STATUS.ARCHIVED,
   );
 
   for (const transaction of rows) {
@@ -421,6 +431,7 @@ function getOverdueLogsForAdmin() {
      FROM overdue_logs o
      LEFT JOIN transactions t
        ON t.transactionId = o.originalTransactionId
+     WHERE o.status IN (?, ?)
      ORDER BY
        CASE o.status
          WHEN 'Pending' THEN 0
@@ -428,6 +439,8 @@ function getOverdueLogsForAdmin() {
          ELSE 2
        END,
        COALESCE(o.archivedAt, t.doneAt) DESC`,
+    TRANSACTION_STATUS.PENDING,
+    TRANSACTION_STATUS.ARCHIVED,
   ).map((row) => ({
     id: row.originalTransactionId,
     transactionDocId: row.logId,
@@ -907,7 +920,7 @@ function executePrintCommand(data) {
    Service: ${String(data.processType || 'dropoff').toUpperCase()}
    --------------------------
    Weight: ${Number(data.weight || 0).toFixed(2)} kg
-   Price:  PHP ${Number(data.price || 0).toFixed(2)}
+   Price:  ₱${Number(data.price || 0).toFixed(2)}
    --------------------------
    ${data.processType === 'dropoff' ? `PIN: ${data.pin}` : 'Status: PAID'}
    --------------------------
@@ -1286,7 +1299,7 @@ app.post('/api/print-receipt', (req, res) => {
    Locker: ${lockerUnit ?? 'N/A'}
    --------------------------
    Weight: ${Number(weight || 0).toFixed(2)} kg
-   Total:  PHP ${Number(totalDue || 0).toFixed(2)}
+   Total:  ₱${Number(totalDue || 0).toFixed(2)}
    --------------------------
    ${settings.receiptFootnote || 'Thank you for using our service!'}
 

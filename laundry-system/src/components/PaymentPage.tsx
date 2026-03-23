@@ -98,18 +98,18 @@ export function PaymentPage({ lockerId, price, onComplete, onCancel }: PaymentPa
         <div className="payment-left">
           <div className="payment-amount-card">
             <div className="payment-amount-label">Total Due</div>
-            <div className="payment-amount-value">PHP {price.toFixed(2)}</div>
+            <div className="payment-amount-value">₱{price.toFixed(2)}</div>
           </div>
         </div>
 
         <div className="payment-right">
           <div className="cash-inserted-card">
             <div className="cash-inserted-label">Cash Inserted</div>
-            <div className="cash-inserted-amount">PHP {cashInserted.toFixed(2)}</div>
+            <div className="cash-inserted-amount">₱{cashInserted.toFixed(2)}</div>
             <div className="cash-balance">
               <span>Remaining:</span>
               <span className={isPaymentComplete ? 'complete' : ''}>
-                PHP {remainingBalance.toFixed(2)}
+                ₱{remainingBalance.toFixed(2)}
               </span>
             </div>
           </div>

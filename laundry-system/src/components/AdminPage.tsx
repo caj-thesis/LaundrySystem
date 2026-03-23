@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, Settings, Save, LayoutDashboard, History, BarChart3, Search, Filter } from 'lucide-react';
+import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, ArrowUp, ArrowDown, X, Settings, Save, LayoutDashboard, History, BarChart3, Search, Filter } from 'lucide-react';
 import { BackgroundBubbles } from '../components/BackgroundBubbles';
 import '../styles/app.css';
 
@@ -113,6 +113,17 @@ const NUMBER_KEYBOARD_ROWS = [
   ['0'],
 ];
 
+function getTextKeyboardRows(isUppercase: boolean) {
+  return TEXT_KEYBOARD_ROWS.map((row) => row.map((key) => (isUppercase ? key : key.toLowerCase())));
+}
+
+function getHistorySearchKeyboardRows(isUppercase: boolean) {
+  return [
+    HISTORY_SEARCH_KEYBOARD_ROWS[0],
+    ...getTextKeyboardRows(isUppercase),
+  ];
+}
+
 const SETTINGS_FIELD_LABELS: Record<SettingsField, string> = {
   shopName: 'Laundry Shop Name',
   clothesPrice: 'Clothes Price Per Kg',
@@ -159,7 +170,7 @@ function createDefaultSalesRange(): SalesRange {
 }
 
 function formatCurrency(value: number) {
-  return `PHP ${Number(value || 0).toFixed(2)}`;
+  return `₱${Number(value || 0).toFixed(2)}`;
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -226,6 +237,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [actionError, setActionError] = useState('');
   const [activeSettingsField, setActiveSettingsField] = useState<SettingsField | null>(null);
   const [keyboardMode, setKeyboardMode] = useState<KeyboardMode>('text');
+  const [isSettingsKeyboardUppercase, setIsSettingsKeyboardUppercase] = useState(true);
   const [adminView, setAdminView] = useState<AdminView>('dashboard');
   const [historyFilters, setHistoryFilters] = useState<TransactionHistoryFilters>(HISTORY_FILTER_DEFAULTS);
   const [appliedHistoryFilters, setAppliedHistoryFilters] = useState<TransactionHistoryFilters>(HISTORY_FILTER_DEFAULTS);
@@ -235,6 +247,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [historyError, setHistoryError] = useState('');
   const [isHistoryFiltersOpen, setIsHistoryFiltersOpen] = useState(false);
   const [isHistorySearchKeyboardOpen, setIsHistorySearchKeyboardOpen] = useState(false);
+  const [isHistorySearchKeyboardUppercase, setIsHistorySearchKeyboardUppercase] = useState(true);
   const [overdueTransactions, setOverdueTransactions] = useState<Transaction[]>([]);
   const [isOverdueTransactionsOpen, setIsOverdueTransactionsOpen] = useState(false);
   const [settlingOverdueTransactionId, setSettlingOverdueTransactionId] = useState<string | null>(null);
@@ -598,9 +611,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setIsSettingsOpen(true);
     setAdminView('settings');
     setActiveSettingsField(null);
+    setIsSettingsKeyboardUppercase(true);
     setIsOverdueTransactionsOpen(false);
     setIsHistoryFiltersOpen(false);
     setIsHistorySearchKeyboardOpen(false);
+    setIsHistorySearchKeyboardUppercase(true);
     setIsSalesFiltersOpen(false);
     void loadSettings();
   };
@@ -608,11 +623,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const closeHistoryFilters = () => {
     setIsHistoryFiltersOpen(false);
     setIsHistorySearchKeyboardOpen(false);
+    setIsHistorySearchKeyboardUppercase(true);
   };
 
   const handleHistorySearchFocus = () => {
     setIsHistoryFiltersOpen(true);
     setIsHistorySearchKeyboardOpen(true);
+    setIsHistorySearchKeyboardUppercase(true);
   };
 
   const handleHistorySearchCharacter = (character: string) => {
@@ -634,6 +651,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const handleSettingsFieldFocus = (field: SettingsField, mode: KeyboardMode) => {
     setActiveSettingsField(field);
     setKeyboardMode(mode);
+    if (mode === 'text') {
+      setIsSettingsKeyboardUppercase(true);
+    }
     setSaveStatus('idle');
   };
 
@@ -699,7 +719,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const renderSettingsKeyboardOverlay = () => {
     if (!activeSettingsField) return null;
 
-    const rows = keyboardMode === 'text' ? TEXT_KEYBOARD_ROWS : NUMBER_KEYBOARD_ROWS;
+    const rows = keyboardMode === 'text'
+      ? getTextKeyboardRows(isSettingsKeyboardUppercase)
+      : NUMBER_KEYBOARD_ROWS;
     const currentValue = getActiveSettingsFieldValue();
 
     return (
@@ -766,16 +788,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
               onClick={() => setActiveSettingsField(null)}
               style={{
                 border: '1px solid #d1d5db',
-                borderRadius: '10px',
+                borderRadius: '999px',
                 backgroundColor: 'white',
                 color: '#374151',
-                padding: '10px 14px',
-                fontSize: '14px',
-                fontWeight: 700,
+                width: '40px',
+                height: '40px',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
               }}
+              aria-label="Close field editor"
+              title="Close"
             >
-              Done
+              <X size={18} strokeWidth={2.4} />
             </button>
           </div>
 
@@ -887,6 +914,30 @@ export function AdminPage({ onBack }: AdminPageProps) {
               {keyboardMode === 'text' && (
                 <button
                   type="button"
+                  onClick={() => setIsSettingsKeyboardUppercase((prev) => !prev)}
+                  style={{
+                    border: `1px solid ${isSettingsKeyboardUppercase ? '#93c5fd' : '#dbe5f1'}`,
+                    borderRadius: '10px',
+                    backgroundColor: isSettingsKeyboardUppercase ? '#dbeafe' : '#f8fafc',
+                    color: isSettingsKeyboardUppercase ? '#1d4ed8' : '#334155',
+                    padding: '10px 0',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                  aria-label={isSettingsKeyboardUppercase ? 'Switch to lowercase' : 'Switch to uppercase'}
+                  title={isSettingsKeyboardUppercase ? 'Switch to lowercase' : 'Switch to uppercase'}
+                >
+                  {isSettingsKeyboardUppercase ? <ArrowDown size={16} strokeWidth={2.4} /> : <ArrowUp size={16} strokeWidth={2.4} />}
+                  <span>{isSettingsKeyboardUppercase ? 'a' : 'A'}</span>
+                </button>
+              )}
+              {keyboardMode === 'text' && (
+                <button
+                  type="button"
                   onClick={() => handleKeyboardCharacter(' ')}
                   style={{
                     border: '1px solid #bfdbfe',
@@ -956,6 +1007,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const renderHistorySearchKeyboardOverlay = () => {
     if (!isHistoryFiltersOpen || !isHistorySearchKeyboardOpen) return null;
 
+    const rows = getHistorySearchKeyboardRows(isHistorySearchKeyboardUppercase);
+
     return (
       <div
         style={{
@@ -1020,16 +1073,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
               onClick={() => setIsHistorySearchKeyboardOpen(false)}
               style={{
                 border: '1px solid #d1d5db',
-                borderRadius: '10px',
+                borderRadius: '999px',
                 backgroundColor: 'white',
                 color: '#374151',
-                padding: '10px 14px',
-                fontSize: '14px',
-                fontWeight: 700,
+                width: '40px',
+                height: '40px',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
               }}
+              aria-label="Close search editor"
+              title="Close"
             >
-              Done
+              <X size={18} strokeWidth={2.4} />
             </button>
           </div>
 
@@ -1099,7 +1157,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Transaction Search</span>
             </div>
 
-            {HISTORY_SEARCH_KEYBOARD_ROWS.map((row, rowIndex) => (
+            {rows.map((row, rowIndex) => (
               <div
                 key={`history-search-overlay-${rowIndex}`}
                 style={{
@@ -1137,6 +1195,28 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 gap: '6px',
               }}
             >
+              <button
+                type="button"
+                onClick={() => setIsHistorySearchKeyboardUppercase((prev) => !prev)}
+                style={{
+                  border: `1px solid ${isHistorySearchKeyboardUppercase ? '#93c5fd' : '#dbe5f1'}`,
+                  borderRadius: '10px',
+                  backgroundColor: isHistorySearchKeyboardUppercase ? '#dbeafe' : '#f8fafc',
+                  color: isHistorySearchKeyboardUppercase ? '#1d4ed8' : '#334155',
+                  padding: '10px 0',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+                aria-label={isHistorySearchKeyboardUppercase ? 'Switch to lowercase' : 'Switch to uppercase'}
+                title={isHistorySearchKeyboardUppercase ? 'Switch to lowercase' : 'Switch to uppercase'}
+              >
+                {isHistorySearchKeyboardUppercase ? <ArrowDown size={16} strokeWidth={2.4} /> : <ArrowUp size={16} strokeWidth={2.4} />}
+                <span>{isHistorySearchKeyboardUppercase ? 'a' : 'A'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => handleHistorySearchCharacter(' ')}
@@ -2064,7 +2144,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Clothes Pricing</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (PHP)</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (₱)</label>
                         <input
                           type="text"
                           name="clothesPrice"
@@ -2088,7 +2168,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         />
                       </div>
                       <div>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (PHP)</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (₱)</label>
                         <input
                           type="text"
                           name="minClothesPrice"
@@ -2119,7 +2199,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     <h3 style={{ fontSize: '16px', margin: '0 0 12px 0', color: '#1f2937' }}>Bed Sheets Pricing</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (PHP)</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Price per kg (₱)</label>
                         <input
                           type="text"
                           name="bedSheetPrice"
@@ -2143,7 +2223,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         />
                       </div>
                       <div>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (PHP)</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '4px' }}>Minimum Total Price (₱)</label>
                         <input
                           type="text"
                           name="minBedSheetPrice"
