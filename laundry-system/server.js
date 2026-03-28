@@ -17,6 +17,8 @@ const STATE_FILE = path.join(__dirname, 'sys_state.json');
 const LOCAL_TRANSACTIONS_FILE = path.join(__dirname, 'local_transactions.json');
 const LOCAL_SETTINGS_FILE = path.join(__dirname, 'local_settings.json');
 const LOCKER_ACTIONS_FILE = path.join(__dirname, 'locker_actions.json');
+const DIST_DIR = path.join(__dirname, 'dist');
+const DIST_INDEX_FILE = path.join(DIST_DIR, 'index.html');
 
 const TRANSACTION_STATUS = {
   PENDING: 'Pending',
@@ -67,7 +69,8 @@ function writeJsonFile(filePath, data) {
 function sanitizeWeight(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, parsed);
+  const safeValue = Math.max(0, parsed);
+  return Math.round((safeValue + Number.EPSILON) * 100) / 100;
 }
 
 function normalizeTransactionStatus(status) {
@@ -1410,6 +1413,19 @@ app.post('/api/lock', (req, res) => {
   updateLockerAction(lockerId, 'lock');
   res.json({ success: true });
 });
+
+if (fs.existsSync(DIST_INDEX_FILE)) {
+  app.use(express.static(DIST_DIR));
+  app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+    // Always revalidate the SPA shell so rebuilt asset hashes are picked up.
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(DIST_INDEX_FILE);
+  });
+} else {
+  console.warn('[SERVER] Frontend build not found at dist/. Run "npm run build" before kiosk startup.');
+}
 
 app.listen(3000, () => {
   console.log(`[SERVER] Laundry kiosk backend running on port 3000 with SQLite at ${DB_FILE}`);

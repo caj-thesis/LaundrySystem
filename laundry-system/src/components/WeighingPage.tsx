@@ -21,17 +21,19 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
 
   // Determine which weight to use: the frozen one (if locked) or the live one
   const displayWeight = frozenWeight !== null ? frozenWeight : safeCurrentWeight;
+  const roundedWeight = Number(displayWeight.toFixed(2));
+  const formattedWeight = roundedWeight.toFixed(2);
 
   // UPDATED: Calculate price based on the passed prop, not a hardcoded value
-  const calculatedPrice = displayWeight * pricePerKg;
+  const calculatedPrice = roundedWeight * pricePerKg;
 
   // If weight > 0, apply the maximum of either the minimum limit or the calculated rate. 
   // If weight is 0, price is 0.
-  const totalPrice = displayWeight > 0 ? Math.max(minimumPrice, calculatedPrice) : 0;
+  const totalPrice = roundedWeight > 0 ? Math.max(minimumPrice, calculatedPrice) : 0;
 
   // --- NEW: Weight Limit Logic ---
   const MAX_WEIGHT = 20.0;
-  const isOverweight = displayWeight > MAX_WEIGHT;
+  const isOverweight = roundedWeight > MAX_WEIGHT;
 
   // 1. Auto-Unlock on Mount
   useEffect(() => {
@@ -228,7 +230,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                    <span>Current Weight</span>
                 </div>
                 <div style={{ fontSize: '72px', fontWeight: '800', lineHeight: '1', whiteSpace: 'nowrap' }}>
-                   {displayWeight.toFixed(1)} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
+                   {formattedWeight} <span style={{ fontSize: '32px', fontWeight: '500' }}>kg</span>
                 </div>
                 
                 {/* Warning Message */}
@@ -262,7 +264,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                 </div>
                 
                 {/* --- NEW: Minimum Price UI Indicator --- */}
-                {displayWeight > 0 && calculatedPrice < minimumPrice && (
+                {roundedWeight > 0 && calculatedPrice < minimumPrice && (
                    <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9, fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '12px' }}>
                       (Minimum ₱{minimumPrice} applied)
                    </div>
@@ -408,14 +410,14 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                      {/* --- UPDATED: Rate with Minimum Price Indicator --- */}
                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span>Rate: ₱{pricePerKg.toFixed(2)} / kg</span>
-                        {displayWeight > 0 && calculatedPrice < minimumPrice && (
+                        {roundedWeight > 0 && calculatedPrice < minimumPrice && (
                            <span style={{ color: '#d97706', fontWeight: 'bold', backgroundColor: '#fef3c7', padding: '2px 6px', borderRadius: '4px', fontSize: '10px' }}>
                              MIN ₱{minimumPrice}
                            </span>
                         )}
                      </div>
                   </div>
-                  <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{displayWeight.toFixed(1)} kg</span>
+                  <span style={{ fontSize: '20px', fontWeight: '600', color: '#1e293b' }}>{formattedWeight} kg</span>
               </div>
 
               <div style={{ width: '100%', height: '2px', borderTop: '2px dashed #cbd5e1', margin: '16px 0' }}></div>
@@ -524,7 +526,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
           flexShrink: 0 
       }}>
         <button 
-          onClick={() => onComplete(totalPrice, displayWeight, customerPhone)} 
+          onClick={() => onComplete(totalPrice, roundedWeight, customerPhone)} 
           disabled={!isValidInput}
           className={`btn-full shadow-lg text-white ${
             isValidInput 

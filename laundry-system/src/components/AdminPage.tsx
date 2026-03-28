@@ -173,18 +173,15 @@ function formatCurrency(value: number) {
   return `₱${Number(value || 0).toFixed(2)}`;
 }
 
+function formatWeight(value: number) {
+  return `${Number(value || 0).toFixed(2)} kg`;
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return 'N/A';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'N/A';
   return date.toLocaleString();
-}
-
-function formatDateOnly(value: string | null | undefined) {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'N/A';
-  return date.toLocaleDateString();
 }
 
 function mapTransactionRecord(raw: any): Transaction {
@@ -1639,7 +1636,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       <div style={{ fontWeight: 700, color: '#1f2937' }}>{item.status}</div>
                       <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.laundryStatus}</div>
                     </td>
-                    <td style={{ padding: '12px', verticalAlign: 'top', color: '#374151' }}>{item.weight.toFixed(2)} kg</td>
+                    <td style={{ padding: '12px', verticalAlign: 'top', color: '#374151' }}>{formatWeight(item.weight)}</td>
                     <td style={{ padding: '12px', verticalAlign: 'top', color: '#111827', fontWeight: 700 }}>{formatCurrency(item.price)}</td>
                     <td style={{ padding: '12px', verticalAlign: 'top', color: '#374151' }}>
                       <div>{item.phoneNumber || 'N/A'}</div>
@@ -2650,7 +2647,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7 }}>
                             <p><strong>TRN-ID:</strong> {transaction.id}</p>
                             <p><strong>Pin Code:</strong> {transaction.pinCode}</p>
-                            <p><strong>Weight:</strong> {transaction.weight} kg</p>
+                            <p><strong>Weight:</strong> {formatWeight(transaction.weight)}</p>
                             <p><strong>Price:</strong> {formatCurrency(transaction.price)}</p>
                             <p><strong>Type:</strong> {transaction.laundryType}</p>
                             <p>

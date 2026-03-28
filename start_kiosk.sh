@@ -66,6 +66,11 @@ if [ ! -d "node_modules" ] || [ ! -d "node_modules/sql.js" ]; then
     fi
 fi
 
+if [ ! -f "dist/index.html" ]; then
+    echo "Frontend build not found. Building production frontend..."
+    npm run build || { echo "CRITICAL ERROR: frontend build failed"; exit 1; }
+fi
+
 [ -f "locker_actions.json" ] || echo "[]" > locker_actions.json
 [ -f "local_transactions.json" ] || echo "[]" > local_transactions.json
 [ -f "local_settings.json" ] || echo "{}" > local_settings.json
@@ -142,12 +147,7 @@ node server.js &
 BACKEND_PID=$!
 
 wait_for_http "http://127.0.0.1:3000/api/status" "Backend Server" 30 || exit 1
-
-echo "Starting React frontend..."
-npm run dev -- --host 0.0.0.0 --port 5173 --strictPort &
-FRONTEND_PID=$!
-
-wait_for_http "http://127.0.0.1:5173" "React Frontend" 60 || exit 1
+wait_for_http "http://127.0.0.1:3000" "Kiosk Frontend" 10 || exit 1
 
 # --- 5. DISPLAY & BROWSER ---
 export DISPLAY=:0
@@ -167,8 +167,9 @@ chromium --no-sandbox \
          --disable-background-networking \
          --disable-sync \
          --disable-features=TranslateUI,OptimizationHints,MediaRouter \
-         http://localhost:5173 &
+         http://localhost:3000 &
 CHROMIUM_PID=$!
 
 echo "--- Kiosk fully initialized. ---"
-wait $FRONTEND_PID
+wait $BACKEND_PID
+127.0.0.1

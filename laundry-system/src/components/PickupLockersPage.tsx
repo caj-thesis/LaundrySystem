@@ -143,7 +143,7 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
                     
                     <div className="pickup-locker-right" style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                         {locker.weight?.toFixed(1) || 0} kg
+                         {Number(locker.weight || 0).toFixed(2)} kg
                       </div>
                       {isReady && (
                         <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563eb' }}>

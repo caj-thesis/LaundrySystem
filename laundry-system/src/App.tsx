@@ -48,6 +48,7 @@ export default function App() {
   const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
   const [lastWeight, setLastWeight] = useState<number>(0); 
   const [lastPrice, setLastPrice] = useState<number>(0);   
+  const [activePaymentTransactionId, setActivePaymentTransactionId] = useState<string | null>(null);
 
   const selectedLocker = lockers.find(l => l.id === selectedLockerId);
 
@@ -173,6 +174,7 @@ export default function App() {
   
   const handlePickupLockerSelect = (lockerId: number) => {
     setSelectedLockerId(lockerId);
+    setActivePaymentTransactionId(lockers.find((locker) => locker.id === lockerId)?.currentTransactionId || null);
     setCurrentScreen('pin-entry');
   };
 
@@ -207,16 +209,19 @@ export default function App() {
         });
 
         // 6. SUCCESS: Move to Thank You screen ONLY after updates succeed
+        setActivePaymentTransactionId(null);
         setCurrentScreen('thank-you');
 
       } catch (e) {
         console.error("Error completing payment:", e);
         alert("Payment completed, but local sync service had an issue.");
         // Still show thank you to user since they paid
+        setActivePaymentTransactionId(null);
         setCurrentScreen('thank-you'); 
       }
     } else {
         // Fallback if no locker selected
+        setActivePaymentTransactionId(null);
         setCurrentScreen('thank-you');
     }
   };
@@ -239,6 +244,7 @@ export default function App() {
     setProcessType(null);
     setLastGeneratedPin(null);
     setLastTransactionId(null);
+    setActivePaymentTransactionId(null);
     setSelectedPricePerKg(25);
     setSelectedLaundryType('Clothes');
   }, [processType, selectedLockerId]);
@@ -311,6 +317,7 @@ export default function App() {
         {currentScreen === 'payment' && selectedLocker && (
           <PaymentPage 
             lockerId={selectedLocker.id}
+            transactionId={activePaymentTransactionId || selectedLocker.currentTransactionId || `locker-${selectedLocker.id}`}
             price={selectedLocker.price || 0}
             weight={selectedLocker.weight || 0}
             onComplete={handlePaymentComplete}
