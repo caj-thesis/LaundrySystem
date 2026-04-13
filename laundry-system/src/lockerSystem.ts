@@ -1,17 +1,12 @@
 import { useState, useEffect } from 'react';
 import type { Locker } from './types';
+import { normalizeWeight } from './utils/weight';
 
 export const INITIAL_LOCKERS: Locker[] = [
   { id: 1, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED', isConnected: true },
   { id: 2, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED', isConnected: true },
   { id: 3, capacity: '20 kg', status: 'available', weight: 0, doorStatus: 'CLOSED', isConnected: true },
 ];
-
-function normalizeWeight(value: unknown) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.round((Math.max(0, parsed) + Number.EPSILON) * 100) / 100;
-}
 
 function normalizeLocker(locker: Locker): Locker {
   return {
@@ -32,7 +27,7 @@ export function useLockerSystem() {
         if (Array.isArray(data)) {
           setLockers(data.map((locker) => normalizeLocker(locker as Locker)));
         }
-      } catch (error) {
+      } catch {
         // Offline-first local polling fallback
       }
     };

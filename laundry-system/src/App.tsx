@@ -9,6 +9,7 @@ import { PinCodePage } from './components/PinCodePage';
 import { PaymentPage } from './components/PaymentPage';
 import { ThankYouPage } from './components/ThankYouPage';
 import { AdminPage } from './components/AdminPage';
+import { normalizeWeight } from './utils/weight';
 import './styles/app.css';
 
 import { useLockerSystem } from './lockerSystem'; 
@@ -66,7 +67,7 @@ export default function App() {
           minClothesPrice: data.minClothesPrice !== undefined ? data.minClothesPrice : 50,     
           minBedSheetPrice: data.minBedSheetPrice !== undefined ? data.minBedSheetPrice : 50   
         });
-      } catch (error) {
+      } catch {
         // Keep defaults in offline mode
       }
     };
@@ -116,11 +117,12 @@ export default function App() {
   const handleDropOffComplete = async (finalPrice: number, finalWeight: number, phoneNumber?: string) => { 
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     const newTransactionId = `TRX-${Math.floor(Date.now() / 1000)}`;
+    const normalizedFinalWeight = normalizeWeight(finalWeight);
     
     // 1. Set the data for the Thank You page (don't navigate yet)
     setLastGeneratedPin(newPin);
     setLastTransactionId(newTransactionId);
-    setLastWeight(finalWeight);
+    setLastWeight(normalizedFinalWeight);
     setLastPrice(finalPrice);
 
     // 2. Check for Locker ID
@@ -147,7 +149,7 @@ export default function App() {
           lockerId: selectedLockerId,
           pin: newPin,
           price: finalPrice,
-          weight: finalWeight,
+          weight: normalizedFinalWeight,
           pricePerKg: selectedPricePerKg,
           phoneNumber: phoneNumber || 'N/A',
           type: selectedLaundryType,
@@ -189,7 +191,7 @@ export default function App() {
     setLastTransactionId(paymentId);
 
     if (selectedLocker) {
-      setLastWeight(selectedLocker.weight || 0);
+      setLastWeight(normalizeWeight(selectedLocker.weight || 0));
       setLastPrice(selectedLocker.price || 0);
     }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, AlertTriangle } from 'lucide-react';
+import { normalizeWeight } from '../utils/weight';
 
 interface WeighingPageProps {
   lockerId: number;
@@ -11,17 +12,120 @@ interface WeighingPageProps {
   onBack: () => void;
 }
 
+type WarningTone = 'warning' | 'danger';
+
+interface WarningDialogState {
+  title: string;
+  message: string;
+  tone: WarningTone;
+}
+
+interface WeighingWarningDialogProps {
+  warning: WarningDialogState | null;
+  onClose: () => void;
+}
+
+function WeighingWarningDialog({ warning, onClose }: WeighingWarningDialogProps) {
+  if (!warning) {
+    return null;
+  }
+
+  const accentColor = warning.tone === 'danger' ? '#dc2626' : '#d97706';
+  const accentBackground = warning.tone === 'danger' ? '#fef2f2' : '#fff7ed';
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        backgroundColor: 'rgba(15, 23, 42, 0.58)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="weighing-warning-title"
+        aria-describedby="weighing-warning-message"
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '420px',
+          backgroundColor: '#ffffff',
+          borderRadius: '28px',
+          padding: '28px 24px 24px',
+          boxShadow: '0 32px 64px rgba(15, 23, 42, 0.24)',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: '72px',
+            height: '72px',
+            borderRadius: '999px',
+            margin: '0 auto 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: accentBackground,
+            color: accentColor,
+          }}
+        >
+          <AlertTriangle size={36} />
+        </div>
+
+        <h3
+          id="weighing-warning-title"
+          style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' }}
+        >
+          {warning.title}
+        </h3>
+        <p
+          id="weighing-warning-message"
+          style={{ fontSize: '17px', lineHeight: 1.5, color: '#475569', marginBottom: '22px' }}
+        >
+          {warning.message}
+        </p>
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            width: '100%',
+            border: 'none',
+            borderRadius: '18px',
+            padding: '16px',
+            backgroundColor: accentColor,
+            color: '#ffffff',
+            fontSize: '18px',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice, doorStatus, onComplete, onBack }: WeighingPageProps) {
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
   const [isReturning, setIsReturning] = useState(false);
-  const safeCurrentWeight = Math.max(0, currentWeight);
+  const [warningDialog, setWarningDialog] = useState<WarningDialogState | null>(null);
+  const safeCurrentWeight = normalizeWeight(currentWeight);
 
   // State to freeze the weight when the user locks the locker
   const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
 
   // Determine which weight to use: the frozen one (if locked) or the live one
   const displayWeight = frozenWeight !== null ? frozenWeight : safeCurrentWeight;
-  const roundedWeight = Number(displayWeight.toFixed(2));
+  const roundedWeight = normalizeWeight(displayWeight);
   const formattedWeight = roundedWeight.toFixed(2);
 
   // UPDATED: Calculate price based on the passed prop, not a hardcoded value
@@ -34,6 +138,11 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   // --- NEW: Weight Limit Logic ---
   const MAX_WEIGHT = 20.0;
   const isOverweight = roundedWeight > MAX_WEIGHT;
+  const isLockButtonDisabled = roundedWeight <= 0;
+
+  const showWarning = (title: string, message: string, tone: WarningTone = 'warning') => {
+    setWarningDialog({ title, message, tone });
+  };
 
   // 1. Auto-Unlock on Mount
   useEffect(() => {
@@ -61,12 +170,12 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   const handleLock = async () => {
     // --- NEW CHECK: Ensure door is closed ---
     if (doorStatus === 'OPEN') {
-      alert("Please close the locker door before proceeding.");
+      showWarning('Door Still Open', 'Please close the locker door before proceeding to payment.');
       return;
     }
 
     if (isOverweight) {
-      alert("Weight limit exceeded. Please reduce the load to under 20kg.");
+      showWarning('Load Too Heavy', 'Weight limit exceeded. Please reduce the load to under 20 kg.', 'danger');
       return;
     }
 
@@ -176,6 +285,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   // --- RENDER: STEP 2 - UNLOCKED (Live Scale View) ---
   if (step === 'unlocked') {
     return (
+      <>
       <div className="weighing-page" style={{ flexDirection: 'column', justifyContent: 'flex-start', padding: '0', height: '100%', position: 'relative', overflowY: 'auto', overflowX: 'hidden' }}>
         
         {/* Header Section */}
@@ -283,11 +393,11 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
         <div style={{ padding: '16px 24px', width: '100%', borderTop: '1px solid #f3f4f6', backgroundColor: 'white' }}>
           <button 
             onClick={handleLock} 
-            disabled={displayWeight <= 0 || isOverweight}
+            disabled={isLockButtonDisabled}
             className={`btn-full ${
               isOverweight 
-                ? 'bg-red-50 text-red-500 border-2 border-red-100 cursor-not-allowed' // Overweight style
-                : displayWeight > 0 
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : roundedWeight > 0 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -298,7 +408,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                   <AlertTriangle size={24} />
                   <span>Limit Exceeded - Reduce Load</span>
                </div>
-            ) : displayWeight > 0 ? (
+            ) : roundedWeight > 0 ? (
                <div className="flex items-center justify-center gap-3">
                   <Lock size={24} />
                   <span>Lock Locker & Pay</span>
@@ -309,6 +419,8 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
           </button>
         </div>
       </div>
+      <WeighingWarningDialog warning={warningDialog} onClose={() => setWarningDialog(null)} />
+      </>
     );
   }
 

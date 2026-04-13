@@ -1,6 +1,7 @@
 import { PackageCheck, Clock, ArrowLeft, Lock } from 'lucide-react';
 import type { Locker } from '../types';
 import { BackgroundBubbles } from '../components/BackgroundBubbles';
+import { formatWeight } from '../utils/weight';
 
 interface PickupLockersPageProps {
   lockers: Locker[];
@@ -143,7 +144,7 @@ export function PickupLockersPage({ lockers, onSelectLocker, onBack }: PickupLoc
                     
                     <div className="pickup-locker-right" style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                         {Number(locker.weight || 0).toFixed(2)} kg
+                         {formatWeight(locker.weight)}
                       </div>
                       {isReady && (
                         <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563eb' }}>

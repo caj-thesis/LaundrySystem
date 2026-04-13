@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
+import { formatWeight } from '../utils/weight';
 
 interface PaymentPageProps {
   lockerId: number;
@@ -59,7 +60,7 @@ function clearPaymentSession(transactionId: string) {
   }
 }
 
-export function PaymentPage({ lockerId, transactionId, price, onComplete, onCancel }: PaymentPageProps) {
+export function PaymentPage({ lockerId, transactionId, price, weight, onComplete, onCancel }: PaymentPageProps) {
   const [cashInserted, setCashInserted] = useState(0);
   const [connectionError, setConnectionError] = useState(false);
   const pollInterval = useRef<number | null>(null);
@@ -112,7 +113,7 @@ export function PaymentPage({ lockerId, transactionId, price, onComplete, onCanc
               cashInserted: nextCashInserted,
             });
             setConnectionError(false);
-          } catch (e) {
+          } catch {
             setConnectionError(true);
           }
         }, 500);
@@ -169,6 +170,9 @@ export function PaymentPage({ lockerId, transactionId, price, onComplete, onCanc
           <div className="payment-amount-card">
             <div className="payment-amount-label">Total Due</div>
             <div className="payment-amount-value">₱{price.toFixed(2)}</div>
+            <div style={{ marginTop: '10px', fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>
+              Weight: {formatWeight(weight)}
+            </div>
           </div>
         </div>
 

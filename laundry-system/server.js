@@ -199,6 +199,12 @@ database.exec(`
     ON overdue_logs (originalTransactionId, status);
 `);
 
+database.run(`
+  UPDATE transactions
+  SET weight = ROUND(COALESCE(weight, 0), 2)
+  WHERE ABS(COALESCE(weight, 0) - ROUND(COALESCE(weight, 0), 2)) > 0.000001
+`);
+
 persistDatabase();
 
 function run(sql, ...params) {
@@ -684,7 +690,7 @@ function getAdminOverview() {
       transactionDocId: tx.transactionId,
       pinCode: String(tx.pin ?? '0000'),
       price: Number(tx.price || 0),
-      weight: Number(tx.weight || 0),
+      weight: sanitizeWeight(tx.weight),
       laundryType: tx.type || 'N/A',
       laundryStatus: tx.laundryStatus || 'Dropped',
       reminderSent: intToBool(tx.reminderSent),
@@ -718,7 +724,7 @@ function formatTransactionForAdmin(row) {
       : null,
     pin: String(row.pin ?? '0000'),
     price: Number(row.price || 0),
-    weight: Number(row.weight || 0),
+    weight: sanitizeWeight(row.weight),
     pricePerKg: Number(row.pricePerKg || 0),
     phoneNumber: row.phoneNumber || '',
     type: row.type || 'Clothes',
@@ -864,18 +870,18 @@ function getSalesSummary({ startDate = '', endDate = '' } = {}) {
 
   for (const row of rows) {
     const price = Number(row.price || 0);
-    const weight = Number(row.weight || 0);
+    const weight = sanitizeWeight(row.weight);
     const type = row.type || 'Clothes';
     const pickedUpAt = row.pickedUpAt || row.updatedAt || row.droppedAt;
     const pickedUpDate = String(pickedUpAt || '').slice(0, 10) || 'Unknown';
 
     summary.totalSales += price;
-    summary.totalWeight += weight;
+    summary.totalWeight = sanitizeWeight(summary.totalWeight + weight);
 
     const existingType = byTypeMap.get(type) || { type, totalSales: 0, totalTransactions: 0, totalWeight: 0 };
     existingType.totalSales += price;
     existingType.totalTransactions += 1;
-    existingType.totalWeight += weight;
+    existingType.totalWeight = sanitizeWeight(existingType.totalWeight + weight);
     byTypeMap.set(type, existingType);
 
     const existingDay = dailySalesMap.get(pickedUpDate) || { date: pickedUpDate, totalSales: 0, totalTransactions: 0 };
@@ -922,7 +928,7 @@ function executePrintCommand(data) {
    Trans #: ${data.transactionId}
    Service: ${String(data.processType || 'dropoff').toUpperCase()}
    --------------------------
-   Weight: ${Number(data.weight || 0).toFixed(2)} kg
+   Weight: ${sanitizeWeight(data.weight).toFixed(2)} kg
    Price:  ₱${Number(data.price || 0).toFixed(2)}
    --------------------------
    ${data.processType === 'dropoff' ? `PIN: ${data.pin}` : 'Status: PAID'}
@@ -1301,7 +1307,7 @@ app.post('/api/print-receipt', (req, res) => {
    Date: ${date || new Date().toLocaleDateString('en-GB')}
    Locker: ${lockerUnit ?? 'N/A'}
    --------------------------
-   Weight: ${Number(weight || 0).toFixed(2)} kg
+   Weight: ${sanitizeWeight(weight).toFixed(2)} kg
    Total:  ₱${Number(totalDue || 0).toFixed(2)}
    --------------------------
    ${settings.receiptFootnote || 'Thank you for using our service!'}

@@ -1,5 +1,6 @@
 import { CheckCircle } from 'lucide-react';
 import { useEffect } from 'react';
+import { formatWeight } from '../utils/weight';
 
 interface ThankYouPageProps {
   processType: 'dropoff' | 'pickup';
@@ -36,6 +37,9 @@ export function ThankYouPage({ processType, generatedPin, transactionId, price, 
             <p className="thankyou-message">
               {processType === 'dropoff' ? 'Your laundry has been received' : 'Payment successful!'}
             </p>
+            {weight > 0 && (
+              <p className="thankyou-submessage">Recorded weight: {formatWeight(weight)}</p>
+            )}
             {processType === 'dropoff' && generatedPin && (
               <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px dashed currentColor' }}>
                 <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.25rem' }}>Your Pickup PIN:</p>

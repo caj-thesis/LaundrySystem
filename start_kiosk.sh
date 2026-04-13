@@ -66,8 +66,43 @@ if [ ! -d "node_modules" ] || [ ! -d "node_modules/sql.js" ]; then
     fi
 fi
 
-if [ ! -f "dist/index.html" ]; then
-    echo "Frontend build not found. Building production frontend..."
+should_build_frontend() {
+    local build_marker="dist/index.html"
+
+    if [ ! -f "$build_marker" ]; then
+        return 0
+    fi
+
+    local watched_files=(
+        "index.html"
+        "package.json"
+        "package-lock.json"
+        "vite.config.ts"
+        "tsconfig.json"
+        "tsconfig.app.json"
+        "tsconfig.node.json"
+    )
+
+    local file
+    for file in "${watched_files[@]}"; do
+        if [ -f "$file" ] && [ "$file" -nt "$build_marker" ]; then
+            return 0
+        fi
+    done
+
+    if [ -d "src" ] && find src -type f -newer "$build_marker" | grep -q .; then
+        return 0
+    fi
+
+    if [ -d "public" ] && find public -type f -newer "$build_marker" | grep -q .; then
+        return 0
+    fi
+
+    return 1
+}
+
+if should_build_frontend; then
+    echo "Frontend source changed or build missing. Building production frontend..."
     npm run build || { echo "CRITICAL ERROR: frontend build failed"; exit 1; }
 fi
 
@@ -172,4 +207,3 @@ CHROMIUM_PID=$!
 
 echo "--- Kiosk fully initialized. ---"
 wait $BACKEND_PID
-127.0.0.1

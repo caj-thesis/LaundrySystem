@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, ArrowUp, ArrowDown, X, Settings, Save, LayoutDashboard, History, BarChart3, Search, Filter } from 'lucide-react';
 import { BackgroundBubbles } from '../components/BackgroundBubbles';
+import { formatWeight, normalizeWeight } from '../utils/weight';
 import '../styles/app.css';
 
 type LaundryStatus = 'Dropped' | 'Washing' | 'Done' | 'Ready for Pick-up';
@@ -173,10 +174,6 @@ function formatCurrency(value: number) {
   return `₱${Number(value || 0).toFixed(2)}`;
 }
 
-function formatWeight(value: number) {
-  return `${Number(value || 0).toFixed(2)} kg`;
-}
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return 'N/A';
   const date = new Date(value);
@@ -190,7 +187,7 @@ function mapTransactionRecord(raw: any): Transaction {
     transactionDocId: String(raw.transactionDocId ?? raw.transactionId ?? raw.id ?? ''),
     pinCode: String(raw.pinCode ?? raw.pin ?? '0000'),
     price: Number(raw.price || 0),
-    weight: Number(raw.weight || 0),
+    weight: normalizeWeight(raw.weight),
     laundryType: String(raw.laundryType ?? raw.type ?? 'Clothes'),
     laundryStatus: (raw.laundryStatus ?? 'Dropped') as LaundryStatus,
     reminderSent: Boolean(raw.reminderSent),
@@ -351,14 +348,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
         summary: {
           totalSales: Number(data.summary?.totalSales || 0),
           totalTransactions: Number(data.summary?.totalTransactions || 0),
-          totalWeight: Number(data.summary?.totalWeight || 0),
+          totalWeight: normalizeWeight(data.summary?.totalWeight),
           averageSale: Number(data.summary?.averageSale || 0),
         },
         byType: Array.isArray(data.byType) ? data.byType.map((row: any) => ({
           type: String(row.type || 'Unknown'),
           totalSales: Number(row.totalSales || 0),
           totalTransactions: Number(row.totalTransactions || 0),
-          totalWeight: Number(row.totalWeight || 0),
+          totalWeight: normalizeWeight(row.totalWeight),
         })) : [],
         dailySales: Array.isArray(data.dailySales) ? data.dailySales.map((row: any) => ({
           date: String(row.date || ''),
