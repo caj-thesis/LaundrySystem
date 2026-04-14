@@ -148,7 +148,6 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   useEffect(() => {
     const unlockSequence = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 800)); 
         await fetch('http://localhost:3000/api/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -557,7 +556,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
         }}>
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-sm font-bold text-gray-800">SMS Notification</h3>
-              <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Optional</span>
+              <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Add a phone number for optional SMS updates.</span>
             </div>
             
             {/* Display Screen - More Compact */}

@@ -51,7 +51,9 @@ let systemState = {
 function readJsonFile(filePath, fallback) {
   try {
     if (!fs.existsSync(filePath)) return fallback;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const raw = fs.readFileSync(filePath, 'utf8').trim();
+    if (!raw) return fallback;
+    return JSON.parse(raw);
   } catch (error) {
     console.error(`[LOCAL] Failed to read ${path.basename(filePath)}:`, error);
     return fallback;
@@ -59,10 +61,21 @@ function readJsonFile(filePath, fallback) {
 }
 
 function writeJsonFile(filePath, data) {
+  const tempFile = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`,
+  );
+
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tempFile, filePath);
   } catch (error) {
     console.error(`[LOCAL] Failed to write ${path.basename(filePath)}:`, error);
+    try {
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    } catch {
+      // Best-effort cleanup only.
+    }
   }
 }
 
@@ -122,7 +135,9 @@ const database = fs.existsSync(DB_FILE)
   : new SQL.Database();
 
 function persistDatabase() {
-  fs.writeFileSync(DB_FILE, Buffer.from(database.export()));
+  const tempDbFile = `${DB_FILE}.tmp`;
+  fs.writeFileSync(tempDbFile, Buffer.from(database.export()));
+  fs.renameSync(tempDbFile, DB_FILE);
 }
 
 database.exec(`
@@ -600,10 +615,23 @@ function getPendingTransactions() {
 }
 
 function enqueueLockerAction(lockerId, action) {
-  const queue = readJsonFile(LOCKER_ACTIONS_FILE, []);
+  const lockerKey = String(lockerId);
+  const normalizedAction = String(action).toUpperCase() === 'UNLOCK' ? 'UNLOCK' : 'LOCK';
+  const existingQueue = readJsonFile(LOCKER_ACTIONS_FILE, []);
+  const queue = Array.isArray(existingQueue) ? existingQueue : [];
+  const lastQueuedForLocker = [...queue].reverse().find((entry) => String(entry?.lockerId) === lockerKey);
+  const currentAction = String(systemState[`l${lockerKey}`]?.action || 'lock').toUpperCase();
+
+  if (
+    (lastQueuedForLocker && String(lastQueuedForLocker.action).toUpperCase() === normalizedAction)
+    || (!lastQueuedForLocker && currentAction === normalizedAction)
+  ) {
+    return;
+  }
+
   queue.push({
-    lockerId: String(lockerId),
-    action: String(action).toUpperCase(),
+    lockerId: lockerKey,
+    action: normalizedAction,
     ts: Date.now(),
   });
   writeJsonFile(LOCKER_ACTIONS_FILE, queue);
@@ -1021,7 +1049,20 @@ function updateStateFromFile() {
 
   try {
     const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    if (!data.raw_data || !String(data.raw_data).startsWith('DATA')) return;
+
+    if (data.locker_actions && typeof data.locker_actions === 'object') {
+      for (const [lockerId, action] of Object.entries(data.locker_actions)) {
+        const key = `l${lockerId}`;
+        if (systemState[key]) {
+          systemState[key].action = String(action).toLowerCase() === 'unlock' ? 'unlock' : 'lock';
+        }
+      }
+    }
+
+    if (!data.raw_data || !String(data.raw_data).startsWith('DATA')) {
+      systemState.lastUpdated = Number(data.timestamp) || Date.now();
+      return;
+    }
 
     const parts = String(data.raw_data).split('|');
     for (const part of parts) {
@@ -1145,6 +1186,61 @@ app.post('/api/settings', (req, res) => {
 
   SYSTEM_SETTINGS.overdueLimitMs = Number(updatedSettings.overdueHours) * 60 * 60 * 1000;
   res.json({ success: true, settings: getSettings() });
+});
+
+app.post('/api/bridge/sms-confirmed', (req, res) => {
+  const transactionId = String(req.body.transactionId || '').trim();
+  const kind = String(req.body.kind || '').trim().toLowerCase();
+  const tx = findTransaction(transactionId);
+
+  if (!transactionId || !tx) {
+    return res.status(404).json({ success: false, message: 'Transaction not found.' });
+  }
+
+  const now = toIso();
+
+  if (kind === 'reminder') {
+    run(
+      `UPDATE transactions
+       SET triggerReminder = 0,
+           reminderSent = 1,
+           reminderSentAt = COALESCE(reminderSentAt, ?),
+           updatedAt = ?
+       WHERE transactionId = ?`,
+      now,
+      now,
+      transactionId,
+    );
+
+    syncOverdueLogForTransaction(
+      transactionId,
+      {
+        status: tx.status || TRANSACTION_STATUS.PENDING,
+        reason: 'Overdue pickup',
+      },
+      { createIfMissing: true },
+    );
+  } else if (kind === 'code') {
+    run(
+      `UPDATE transactions
+       SET codeSmsSent = 1, updatedAt = ?
+       WHERE transactionId = ?`,
+      now,
+      transactionId,
+    );
+  } else if (kind === 'done') {
+    run(
+      `UPDATE transactions
+       SET doneSmsSent = 1, updatedAt = ?
+       WHERE transactionId = ?`,
+      now,
+      transactionId,
+    );
+  } else {
+    return res.status(400).json({ success: false, message: 'Unsupported SMS kind.' });
+  }
+
+  res.json({ success: true });
 });
 
 app.post('/api/admin/transaction/status', (req, res) => {
