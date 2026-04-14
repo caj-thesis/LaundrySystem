@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, ArrowUp, ArrowDown, X, Settings, Save, LayoutDashboard, History, BarChart3, Search, Filter } from 'lucide-react';
+import { Lock, Unlock, Printer, RefreshCw, AlertCircle, Info, ArrowLeft, ArrowUp, ArrowDown, X, Settings, Save, LayoutDashboard, History, BarChart3, Search, Filter, Scale } from 'lucide-react';
 import { BackgroundBubbles } from '../components/BackgroundBubbles';
 import { formatWeight, normalizeWeight } from '../utils/weight';
 import '../styles/app.css';
@@ -9,6 +9,7 @@ type PriceField = 'clothesPrice' | 'bedSheetPrice' | 'minClothesPrice' | 'minBed
 type SettingsField = 'shopName' | PriceField;
 type KeyboardMode = 'text' | 'number';
 type AdminView = 'dashboard' | 'history' | 'sales' | 'settings';
+type DetailsView = 'locker' | 'transaction';
 
 interface Transaction {
   id: string;
@@ -37,6 +38,10 @@ interface Locker {
   isLocked: boolean;
   isConnected: boolean;
   status: 'available' | 'occupied';
+  weight?: number;
+  liveWeight?: number;
+  grossWeight?: number;
+  tareWeight?: number;
   currentTransactionId?: string;
 }
 
@@ -87,6 +92,7 @@ interface SalesData {
 }
 
 const ADMIN_PIN = '1000';
+const OWNER_PIN = '0000';
 const DEFAULT_SETTINGS = {
   laundryShopName: 'Laundry Management System',
   clothesPrice: 25,
@@ -170,6 +176,15 @@ function createDefaultSalesRange(): SalesRange {
   };
 }
 
+function createTodaySalesRange(): SalesRange {
+  const today = toDateInputValue(new Date());
+
+  return {
+    startDate: today,
+    endDate: today,
+  };
+}
+
 function formatCurrency(value: number) {
   return `₱${Number(value || 0).toFixed(2)}`;
 }
@@ -208,14 +223,19 @@ function mapTransactionRecord(raw: any): Transaction {
 
 export function AdminPage({ onBack }: AdminPageProps) {
   const defaultSalesRange = useMemo(() => createDefaultSalesRange(), []);
+  const staffSalesRange = useMemo(() => createTodaySalesRange(), []);
   const [lockers, setLockers] = useState<Locker[]>([]);
   const [selectedLockerId, setSelectedLockerId] = useState<string | null>(null);
   const [transactionsById, setTransactionsById] = useState<Record<string, Transaction>>({});
   const [loading, setLoading] = useState(true);
-  const [detailsView, setDetailsView] = useState<'locker' | 'transaction'>('locker');
+  const [detailsView, setDetailsView] = useState<DetailsView>('locker');
   const [adminPinInput, setAdminPinInput] = useState('');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [pinError, setPinError] = useState('');
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(false);
+  const [ownerPinInput, setOwnerPinInput] = useState('');
+  const [ownerPinError, setOwnerPinError] = useState('');
+  const [pendingOwnerView, setPendingOwnerView] = useState<Extract<AdminView, 'history' | 'sales'> | null>(null);
 
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -229,6 +249,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [overdueHours, setOverdueHours] = useState(DEFAULT_SETTINGS.overdueHours);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [actionError, setActionError] = useState('');
+  const [tareActionLockerId, setTareActionLockerId] = useState<string | null>(null);
   const [activeSettingsField, setActiveSettingsField] = useState<SettingsField | null>(null);
   const [keyboardMode, setKeyboardMode] = useState<KeyboardMode>('text');
   const [isSettingsKeyboardUppercase, setIsSettingsKeyboardUppercase] = useState(true);
@@ -251,6 +272,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [salesLoading, setSalesLoading] = useState(false);
   const [salesError, setSalesError] = useState('');
   const [isSalesFiltersOpen, setIsSalesFiltersOpen] = useState(false);
+  const [tareDialogLockerId, setTareDialogLockerId] = useState<string | null>(null);
+  const isOwnerMode = isOwnerAuthenticated;
+  const canAccessHistory = isOwnerMode;
+  const canAccessSettings = isOwnerMode;
+  const canFilterSales = isOwnerMode;
+  const activeSalesRange = isOwnerMode ? appliedSalesRange : staffSalesRange;
 
   const loadAdminOverview = useCallback(async () => {
     try {
@@ -392,24 +419,29 @@ export function AdminPage({ onBack }: AdminPageProps) {
   }, [adminView, isAdminAuthenticated, isSettingsOpen, loadAdminOverview]);
 
   useEffect(() => {
-    if (!isAdminAuthenticated || isSettingsOpen || adminView !== 'history') {
+    if (!isAdminAuthenticated || !isOwnerAuthenticated || isSettingsOpen || adminView !== 'history') {
       return;
     }
 
     void loadTransactionHistory(appliedHistoryFilters);
-  }, [adminView, appliedHistoryFilters, isAdminAuthenticated, isSettingsOpen, loadTransactionHistory]);
+  }, [adminView, appliedHistoryFilters, isAdminAuthenticated, isOwnerAuthenticated, isSettingsOpen, loadTransactionHistory]);
 
   useEffect(() => {
     if (!isAdminAuthenticated || isSettingsOpen || adminView !== 'sales') {
       return;
     }
 
-    void loadSalesData(appliedSalesRange);
-  }, [adminView, appliedSalesRange, isAdminAuthenticated, isSettingsOpen, loadSalesData]);
+    void loadSalesData(activeSalesRange);
+  }, [activeSalesRange, adminView, isAdminAuthenticated, isSettingsOpen, loadSalesData]);
 
   const selectedLocker = useMemo(
     () => lockers.find((locker) => locker.id === selectedLockerId) || null,
     [lockers, selectedLockerId],
+  );
+
+  const tareDialogLocker = useMemo(
+    () => lockers.find((locker) => locker.id === tareDialogLockerId) || null,
+    [lockers, tareDialogLockerId],
   );
 
   const transaction = selectedLocker?.currentTransactionId
@@ -547,16 +579,88 @@ export function AdminPage({ onBack }: AdminPageProps) {
     }
   };
 
+  const handleLockerTareUpdate = async (lockerId: string, mode: 'capture' | 'clear') => {
+    setTareActionLockerId(lockerId);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/admin/locker/tare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lockerId: Number(lockerId),
+          captureCurrent: mode === 'capture',
+          clearTare: mode === 'clear',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update locker tare.');
+      }
+
+      const data = await response.json();
+      setLockers(Array.isArray(data.overview?.lockers) ? data.overview.lockers : []);
+      setActionError('');
+    } catch (error) {
+      console.error('Failed to update locker tare:', error);
+      setActionError('Failed to update locker tare.');
+    } finally {
+      setTareActionLockerId(null);
+    }
+  };
+
+  const openTareDialog = (lockerId: string) => {
+    setSelectedLockerId(lockerId);
+    setTareDialogLockerId(lockerId);
+  };
+
+  const closeTareDialog = () => {
+    setTareDialogLockerId(null);
+  };
+
   const handleAdminPinSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
 
     if (adminPinInput === ADMIN_PIN) {
       setIsAdminAuthenticated(true);
+      setIsOwnerAuthenticated(false);
+      setAdminView('dashboard');
+      setIsSettingsOpen(false);
+      setActiveSettingsField(null);
+      setIsOverdueTransactionsOpen(false);
+      setIsHistoryFiltersOpen(false);
+      setIsHistorySearchKeyboardOpen(false);
+      setIsSalesFiltersOpen(false);
+      setPendingOwnerView(null);
+      setOwnerPinInput('');
+      setOwnerPinError('');
+      setSalesRange(staffSalesRange);
+      setAppliedSalesRange(staffSalesRange);
       setPinError('');
+      setAdminPinInput('');
       return;
     }
 
-    setPinError('Invalid admin PIN.');
+    if (adminPinInput === OWNER_PIN) {
+      setIsAdminAuthenticated(true);
+      setIsOwnerAuthenticated(true);
+      setAdminView('dashboard');
+      setIsSettingsOpen(false);
+      setActiveSettingsField(null);
+      setIsOverdueTransactionsOpen(false);
+      setIsHistoryFiltersOpen(false);
+      setIsHistorySearchKeyboardOpen(false);
+      setIsSalesFiltersOpen(false);
+      setPendingOwnerView(null);
+      setOwnerPinInput('');
+      setOwnerPinError('');
+      setSalesRange(defaultSalesRange);
+      setAppliedSalesRange(defaultSalesRange);
+      setPinError('');
+      setAdminPinInput('');
+      return;
+    }
+
+    setPinError('Invalid PIN.');
     setAdminPinInput('');
   };
 
@@ -574,6 +678,54 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const handlePinClear = () => {
     setAdminPinInput('');
     if (pinError) setPinError('');
+  };
+
+  const handleOwnerPinSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
+    if (ownerPinInput === OWNER_PIN) {
+      setIsOwnerAuthenticated(true);
+      setOwnerPinError('');
+
+      if (pendingOwnerView) {
+        setIsSettingsOpen(false);
+        setActiveSettingsField(null);
+        setIsOverdueTransactionsOpen(false);
+        setIsHistoryFiltersOpen(false);
+        setIsHistorySearchKeyboardOpen(false);
+        setIsSalesFiltersOpen(false);
+        setAdminView(pendingOwnerView);
+      }
+
+      setPendingOwnerView(null);
+      setOwnerPinInput('');
+      return;
+    }
+
+    setOwnerPinError('Invalid owner PIN.');
+    setOwnerPinInput('');
+  };
+
+  const handleOwnerPinDigitPress = (digit: string) => {
+    if (ownerPinInput.length >= 4) return;
+    setOwnerPinInput((prev) => `${prev}${digit}`);
+    if (ownerPinError) setOwnerPinError('');
+  };
+
+  const handleOwnerPinDelete = () => {
+    setOwnerPinInput((prev) => prev.slice(0, -1));
+    if (ownerPinError) setOwnerPinError('');
+  };
+
+  const handleOwnerPinClear = () => {
+    setOwnerPinInput('');
+    if (ownerPinError) setOwnerPinError('');
+  };
+
+  const closeOwnerPinPrompt = () => {
+    setPendingOwnerView(null);
+    setOwnerPinInput('');
+    setOwnerPinError('');
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -602,6 +754,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleOpenSettings = () => {
+    if (!canAccessSettings) return;
+
     setIsSettingsOpen(true);
     setAdminView('settings');
     setActiveSettingsField(null);
@@ -1292,6 +1446,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
             return;
           }
 
+          if (view === 'history' || view === 'sales') {
+            if (view === 'history' && !canAccessHistory) {
+              return;
+            }
+
+            setIsSettingsOpen(false);
+            setActiveSettingsField(null);
+            setIsOverdueTransactionsOpen(false);
+            setIsHistoryFiltersOpen(false);
+            setIsHistorySearchKeyboardOpen(false);
+            setIsSalesFiltersOpen(false);
+            setAdminView(view);
+            return;
+          }
+
           setIsSettingsOpen(false);
           setActiveSettingsField(null);
           setIsOverdueTransactionsOpen(false);
@@ -1333,9 +1502,324 @@ export function AdminPage({ onBack }: AdminPageProps) {
   ].filter(Boolean).length;
 
   const salesActiveFilterCount = [
-    salesRange.startDate !== defaultSalesRange.startDate,
-    salesRange.endDate !== defaultSalesRange.endDate,
+    canFilterSales && salesRange.startDate !== defaultSalesRange.startDate,
+    canFilterSales && salesRange.endDate !== defaultSalesRange.endDate,
   ].filter(Boolean).length;
+
+  const renderOwnerPinOverlay = () => {
+    if (!pendingOwnerView) return null;
+
+    const viewLabel = pendingOwnerView === 'history' ? 'Transaction History' : 'Sales';
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 60,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          backgroundColor: 'rgba(15, 23, 42, 0.56)',
+        }}
+      >
+        <form
+          onSubmit={handleOwnerPinSubmit}
+          style={{
+            width: '100%',
+            maxWidth: '360px',
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 18px 40px rgba(15,23,42,0.18)',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          <h2 style={{ margin: 0, color: '#111827' }}>Owner PIN Required</h2>
+          <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
+            Enter the owner PIN to open {viewLabel}.
+          </p>
+          <input
+            type="password"
+            value={ownerPinInput}
+            readOnly
+            placeholder="Enter owner PIN"
+            style={{
+              border: '1px solid #dbe5f1',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '20px',
+              letterSpacing: '6px',
+              textAlign: 'center',
+              backgroundColor: '#f8fbff',
+              color: '#1f2937',
+            }}
+          />
+          {ownerPinError && <p style={{ margin: 0, color: '#dc2626', fontSize: '14px', textAlign: 'center' }}>{ownerPinError}</p>}
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: '8px',
+            }}
+          >
+            {[...'123456789'].map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                onClick={() => handleOwnerPinDigitPress(digit)}
+                style={{
+                  border: '1px solid #dbe5f1',
+                  borderRadius: '8px',
+                  backgroundColor: '#f8fbff',
+                  color: '#1f2937',
+                  padding: '10px',
+                  fontWeight: 700,
+                  fontSize: '18px',
+                }}
+              >
+                {digit}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={handleOwnerPinClear}
+              style={{
+                border: '1px solid #f3d6d6',
+                borderRadius: '8px',
+                backgroundColor: '#fff5f5',
+                color: '#b91c1c',
+                padding: '10px',
+                fontWeight: 600,
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOwnerPinDigitPress('0')}
+              style={{
+                border: '1px solid #dbe5f1',
+                borderRadius: '8px',
+                backgroundColor: '#f8fbff',
+                color: '#1f2937',
+                padding: '10px',
+                fontWeight: 700,
+                fontSize: '18px',
+              }}
+            >
+              0
+            </button>
+            <button
+              type="button"
+              onClick={handleOwnerPinDelete}
+              style={{
+                border: '1px solid #dbe5f1',
+                borderRadius: '8px',
+                backgroundColor: '#eef4ff',
+                color: '#1e3a8a',
+                padding: '10px',
+                fontWeight: 600,
+              }}
+            >
+              Delete
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={closeOwnerPinPrompt}
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                backgroundColor: 'white',
+                color: '#374151',
+                padding: '10px',
+                fontWeight: 600,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                border: 'none',
+                borderRadius: '8px',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                padding: '10px',
+                fontWeight: 600,
+              }}
+            >
+              Unlock {viewLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
+  const renderTareDialog = () => {
+    if (!tareDialogLocker) return null;
+
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 70,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          backgroundColor: 'rgba(15, 23, 42, 0.56)',
+        }}
+      >
+        <button
+          type="button"
+          aria-label="Close tare dialog"
+          onClick={closeTareDialog}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            border: 'none',
+            backgroundColor: 'transparent',
+            cursor: 'pointer',
+          }}
+        />
+
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '420px',
+            backgroundColor: 'white',
+            borderRadius: '18px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 18px 40px rgba(15,23,42,0.18)',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#64748b' }}>
+                Locker Tare
+              </span>
+              <h2 style={{ margin: 0, color: '#111827' }}>Locker {tareDialogLocker.lockerNumber}</h2>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
+                Capture the empty container weight or clear the saved tare.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeTareDialog}
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: '999px',
+                backgroundColor: 'white',
+                color: '#374151',
+                width: '40px',
+                height: '40px',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+              aria-label="Close tare dialog"
+              title="Close"
+            >
+              <X size={18} strokeWidth={2.4} />
+            </button>
+          </div>
+
+          <div
+            style={{
+              border: '1px solid #dbe5f1',
+              borderRadius: '14px',
+              backgroundColor: '#f8fbff',
+              padding: '14px',
+              display: 'grid',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '14px', color: '#334155' }}>
+              <strong>Gross reading</strong>
+              <span>{formatWeight(tareDialogLocker.grossWeight ?? 0)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '14px', color: '#334155' }}>
+              <strong>Saved tare</strong>
+              <span>{formatWeight(tareDialogLocker.tareWeight ?? 0)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '14px', color: '#334155' }}>
+              <strong>Net load</strong>
+              <span>{formatWeight(tareDialogLocker.liveWeight ?? 0)}</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => void handleLockerTareUpdate(tareDialogLocker.id, 'capture')}
+              disabled={tareActionLockerId === tareDialogLocker.id}
+              style={{
+                border: 'none',
+                borderRadius: '10px',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                padding: '12px',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: tareActionLockerId === tareDialogLocker.id ? 'progress' : 'pointer',
+              }}
+            >
+              {tareActionLockerId === tareDialogLocker.id ? 'Saving...' : 'Set Current as Tare'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLockerTareUpdate(tareDialogLocker.id, 'clear')}
+              disabled={tareActionLockerId === tareDialogLocker.id}
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: '10px',
+                backgroundColor: 'white',
+                color: '#374151',
+                padding: '12px',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: tareActionLockerId === tareDialogLocker.id ? 'progress' : 'pointer',
+              }}
+            >
+              Clear Tare
+            </button>
+          </div>
+
+          <div
+            style={{
+              border: '1px solid #e5e7eb',
+              borderRadius: '10px',
+              backgroundColor: '#f9fafb',
+              padding: '12px',
+              color: '#64748b',
+              fontSize: '12px',
+              lineHeight: 1.5,
+            }}
+          >
+            Put only the empty container on the locker scale, then tap <strong>Set Current as Tare</strong>.
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderHistoryView = () => (
     <>
@@ -1661,7 +2145,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
       <div className="available-lockers-container" style={{ marginTop: '12px', marginBottom: '10px' }}>
         <div className="instructions-header" style={{ marginBottom: '8px' }}>
           <h2 style={{ margin: '0 0 4px 0' }}>Sales Report</h2>
-          <p style={{ margin: 0 }}>View completed pickups and sales totals for a selected date range.</p>
+          <p style={{ margin: 0 }}>
+            {canFilterSales
+              ? 'View completed pickups and sales totals for a selected date range.'
+              : 'View today\'s completed pickups and sales totals.'}
+          </p>
         </div>
       </div>
 
@@ -1682,56 +2170,75 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#4b5563' }}>
               <span style={{ fontSize: '14px', fontWeight: 600 }}>
-                {appliedSalesRange.startDate || 'Start'} to {appliedSalesRange.endDate || 'End'}
+                {activeSalesRange.startDate || 'Start'} to {activeSalesRange.endDate || 'End'}
               </span>
               {salesLoading && <span style={{ fontSize: '13px', color: '#6b7280' }}>Loading sales...</span>}
             </div>
 
-            <button
-              type="button"
-              aria-label="Open sales filters"
-              title="Open sales filters"
-              onClick={() => setIsSalesFiltersOpen((prev) => !prev)}
-              style={{
-                position: 'relative',
-                border: '1px solid #d1d5db',
-                borderRadius: '10px',
-                backgroundColor: isSalesFiltersOpen || salesActiveFilterCount > 0 ? '#eff6ff' : 'white',
-                color: isSalesFiltersOpen || salesActiveFilterCount > 0 ? '#1d4ed8' : '#374151',
-                padding: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              <Filter size={18} />
-              {salesActiveFilterCount > 0 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '-6px',
-                    right: '-6px',
-                    minWidth: '18px',
-                    height: '18px',
-                    borderRadius: '999px',
-                    backgroundColor: '#2563eb',
-                    color: 'white',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 4px',
-                  }}
-                >
-                  {salesActiveFilterCount}
-                </span>
-              )}
-            </button>
+            {canFilterSales ? (
+              <button
+                type="button"
+                aria-label="Open sales filters"
+                title="Open sales filters"
+                onClick={() => setIsSalesFiltersOpen((prev) => !prev)}
+                style={{
+                  position: 'relative',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '10px',
+                  backgroundColor: isSalesFiltersOpen || salesActiveFilterCount > 0 ? '#eff6ff' : 'white',
+                  color: isSalesFiltersOpen || salesActiveFilterCount > 0 ? '#1d4ed8' : '#374151',
+                  padding: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <Filter size={18} />
+                {salesActiveFilterCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-6px',
+                      right: '-6px',
+                      minWidth: '18px',
+                      height: '18px',
+                      borderRadius: '999px',
+                      backgroundColor: '#2563eb',
+                      color: 'white',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 4px',
+                    }}
+                  >
+                    {salesActiveFilterCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <div
+                style={{
+                  borderRadius: '999px',
+                  backgroundColor: '#eff6ff',
+                  color: '#1d4ed8',
+                  padding: '8px 12px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <BarChart3 size={16} />
+                Today Only
+              </div>
+            )}
           </div>
 
-          {isSalesFiltersOpen && (
+          {canFilterSales && isSalesFiltersOpen && (
             <div
               style={{
                 backgroundColor: '#f8fbff',
@@ -1896,7 +2403,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               }}
             >
               <h2 style={{ margin: 0, color: '#111827' }}>Admin Security Check</h2>
-              <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Enter admin PIN to access dashboard.</p>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Enter pincode for system access.</p>
               <input
                 type="password"
                 value={adminPinInput}
@@ -1996,7 +2503,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   fontWeight: 600,
                 }}
               >
-                Unlock Admin Page
+                Unlock Access
               </button>
             </form>
           </div>
@@ -2030,6 +2537,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               setAdminView('dashboard');
               setActiveSettingsField(null);
             } else {
+              setIsAdminAuthenticated(false);
+              setIsOwnerAuthenticated(false);
+              closeOwnerPinPrompt();
               onBack();
             }
           }} 
@@ -2054,9 +2564,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
             }}
           >
             {renderAdminNavButton('dashboard', 'Dashboard', <LayoutDashboard size={16} />)}
-            {renderAdminNavButton('history', 'Transactions', <History size={16} />)}
+            {canAccessHistory && renderAdminNavButton('history', 'Transactions', <History size={16} />)}
             {renderAdminNavButton('sales', 'Sales', <BarChart3 size={16} />)}
-            {renderAdminNavButton('settings', 'Settings', <Settings size={16} />)}
+            {canAccessSettings && renderAdminNavButton('settings', 'Settings', <Settings size={16} />)}
           </div>
         </div>
 
@@ -2532,7 +3042,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 }}
               >
                 <h3 style={{ fontSize: '18px', color: '#1f2937', marginBottom: '8px' }}>
-                  {selectedLocker && detailsView === 'transaction' ? 'Transaction Details' : 'Locker Details'}
+                  {selectedLocker && detailsView === 'transaction'
+                    ? 'Transaction Details'
+                    : 'Locker Details'}
                 </h3>
 
                 {!selectedLocker ? (
@@ -2541,7 +3053,47 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   </div>
                 ) : (
                   <>
-                    {detailsView === 'locker' && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                        gap: '8px',
+                        marginBottom: '10px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setDetailsView('locker')}
+                        style={{
+                          border: detailsView === 'locker' ? '1px solid #2563eb' : '1px solid #d1d5db',
+                          borderRadius: '8px',
+                          backgroundColor: detailsView === 'locker' ? '#eff6ff' : '#f8fafc',
+                          color: detailsView === 'locker' ? '#1d4ed8' : '#1f2937',
+                          padding: '10px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                        }}
+                      >
+                        Locker
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDetailsView('transaction')}
+                        style={{
+                          border: detailsView === 'transaction' ? '1px solid #2563eb' : '1px solid #d1d5db',
+                          borderRadius: '8px',
+                          backgroundColor: detailsView === 'transaction' ? '#eff6ff' : '#f8fafc',
+                          color: detailsView === 'transaction' ? '#1d4ed8' : '#1f2937',
+                          padding: '10px',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                        }}
+                      >
+                        Transactions
+                      </button>
+                    </div>
+
+                    {detailsView === 'locker' ? (
                       <div
                         style={{
                           backgroundColor: '#f9fafb',
@@ -2560,86 +3112,52 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             {selectedLocker.isLocked ? 'Secured' : 'Open'}
                           </span>
                         </p>
-                        <button
-                          onClick={toggleLock}
-                          style={{
-                            width: '100%',
-                            backgroundColor: '#1f2937',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '8px 10px',
-                            fontSize: '14px',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            gap: '6px',
-                          }}
-                        >
-                          {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-                          {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
-                        </button>
-                      </div>
-                    )}
-
-                    {transaction && detailsView === 'locker' && (
-                      <button
-                        onClick={() => setDetailsView('transaction')}
-                        style={{
-                          width: '100%',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '8px',
-                          backgroundColor: '#f8fafc',
-                          color: '#1f2937',
-                          padding: '10px',
-                          fontWeight: 600,
-                          marginBottom: '10px',
-                        }}
-                      >
-                        View Transaction Details
-                      </button>
-                    )}
-
-                    {detailsView === 'locker' ? (
-                      <div
-                        style={{
-                          flex: 1,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#9ca3af',
-                          gap: '8px',
-                        }}
-                      >
-                        {transaction ? (
-                          <p style={{ fontSize: '14px', color: '#6b7280' }}>Tap the button above to view transaction details.</p>
-                        ) : (
-                          <>
-                            <AlertCircle size={28} />
-                            <p style={{ fontSize: '14px' }}>No active transaction for this locker.</p>
-                          </>
-                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={toggleLock}
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#1f2937',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '8px 10px',
+                              fontSize: '14px',
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            {selectedLocker.isLocked ? <Unlock size={16} /> : <Lock size={16} />}
+                            {selectedLocker.isLocked ? 'Unlock Door' : 'Lock Door'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openTareDialog(selectedLocker.id)}
+                            style={{
+                              width: '100%',
+                              backgroundColor: '#eff6ff',
+                              color: '#1d4ed8',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: '8px',
+                              padding: '8px 10px',
+                              fontSize: '14px',
+                              fontWeight: 700,
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            <Scale size={16} />
+                            Tare
+                          </button>
+                        </div>
                       </div>
                     ) : transaction ? (
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-                        <button
-                          onClick={() => setDetailsView('locker')}
-                          style={{
-                            alignSelf: 'flex-start',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '8px',
-                            backgroundColor: 'white',
-                            color: '#374151',
-                            padding: '6px 10px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            marginBottom: '8px',
-                          }}
-                        >
-                          Back to Locker Details
-                        </button>
-
                         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <div style={{ fontSize: '14px', color: '#374151', lineHeight: 1.7 }}>
                             <p><strong>TRN-ID:</strong> {transaction.id}</p>
@@ -2787,6 +3305,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         {isSettingsOpen && renderSettingsKeyboardOverlay()}
         {!isSettingsOpen && adminView === 'history' && renderHistorySearchKeyboardOverlay()}
+        {renderTareDialog()}
+        {renderOwnerPinOverlay()}
       </div>
     </div>
   );

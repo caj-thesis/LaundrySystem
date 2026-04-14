@@ -82,8 +82,24 @@ function writeJsonFile(filePath, data) {
 function sanitizeWeight(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  const safeValue = Math.max(0, parsed);
-  return Math.round((safeValue + Number.EPSILON) * 100) / 100;
+  return parsed;
+}
+
+function applyLockerState(target, values) {
+  if (!target || !Array.isArray(values)) return;
+
+  const parsedWeight = Number(values[1]);
+  if (Number.isFinite(parsedWeight)) {
+    target.weight = sanitizeWeight(parsedWeight);
+  }
+
+  if (values[2]) {
+    target.door = values[2];
+  }
+
+  if (values[3] !== undefined) {
+    target.isConnected = values[3].trim() === '1';
+  }
 }
 
 function normalizeTransactionStatus(status) {
@@ -213,6 +229,10 @@ database.exec(`
   CREATE INDEX IF NOT EXISTS idx_overdue_logs_transaction
     ON overdue_logs (originalTransactionId, status);
 `);
+
+if (!all(`PRAGMA table_info(lockers)`).some((column) => column.name === 'tareWeight')) {
+  database.run(`ALTER TABLE lockers ADD COLUMN tareWeight REAL NOT NULL DEFAULT 0`);
+}
 
 database.run(`
   UPDATE transactions
@@ -694,12 +714,18 @@ function getLocalLockers() {
     const lockerRow = get(`SELECT * FROM lockers WHERE id = ?`, id) || {};
     const hardware = systemState[`l${id}`] || {};
     const active = getActiveTransactionByLocker(id);
+    const tareWeight = sanitizeWeight(lockerRow.tareWeight);
+    const grossWeight = sanitizeWeight(hardware.weight);
+    const liveNetWeight = sanitizeWeight(grossWeight - tareWeight);
 
     return {
       id,
       capacity: lockerRow.capacity || '20 kg',
       status: active ? 'occupied' : (lockerRow.status || 'available'),
-      weight: sanitizeWeight(active ? active.weight : hardware.weight),
+      weight: active ? sanitizeWeight(active.weight) : liveNetWeight,
+      liveWeight: liveNetWeight,
+      grossWeight,
+      tareWeight,
       price: active ? Number(active.price) : undefined,
       pin: active?.pin || undefined,
       laundryStatus: active?.laundryStatus || undefined,
@@ -734,6 +760,10 @@ function getAdminOverview() {
       isConnected: locker.isConnected !== false,
       status: locker.status === 'occupied' ? 'occupied' : 'available',
       currentTransactionId: locker.currentTransactionId,
+      liveWeight: locker.liveWeight,
+      tareWeight: locker.tareWeight,
+      grossWeight: locker.grossWeight,
+      weight: locker.weight,
     }))
     .sort((a, b) => a.lockerNumber - b.lockerNumber);
 
@@ -1067,22 +1097,13 @@ function updateStateFromFile() {
     const parts = String(data.raw_data).split('|');
     for (const part of parts) {
       if (part.startsWith('L1:')) {
-        const values = part.split(':');
-        systemState.l1.weight = sanitizeWeight(values[1]);
-        systemState.l1.door = values[2];
-        systemState.l1.isConnected = values[3] !== undefined ? values[3].trim() === '1' : true;
+        applyLockerState(systemState.l1, part.split(':'));
       }
       if (part.startsWith('L2:')) {
-        const values = part.split(':');
-        systemState.l2.weight = sanitizeWeight(values[1]);
-        systemState.l2.door = values[2];
-        systemState.l2.isConnected = values[3] !== undefined ? values[3].trim() === '1' : true;
+        applyLockerState(systemState.l2, part.split(':'));
       }
       if (part.startsWith('L3:')) {
-        const values = part.split(':');
-        systemState.l3.weight = sanitizeWeight(values[1]);
-        systemState.l3.door = values[2];
-        systemState.l3.isConnected = values[3] !== undefined ? values[3].trim() === '1' : true;
+        applyLockerState(systemState.l3, part.split(':'));
       }
       if (part.startsWith('CREDIT:')) {
         const values = part.split(':');
@@ -1391,6 +1412,39 @@ app.post('/api/admin/transaction/mark-paid', (req, res) => {
 
   processPendingPrints();
   res.json({ success: true, overview: getAdminOverview() });
+});
+
+app.post('/api/admin/locker/tare', (req, res) => {
+  const lockerId = Number(req.body?.lockerId);
+
+  if (!Number.isInteger(lockerId) || lockerId < 1 || lockerId > 3) {
+    return res.status(400).json({ success: false, message: 'Invalid locker id.' });
+  }
+
+  const captureCurrent = Boolean(req.body?.captureCurrent);
+  const clearTare = Boolean(req.body?.clearTare);
+  const hardwareWeight = sanitizeWeight(systemState[`l${lockerId}`]?.weight);
+
+  let tareWeight = 0;
+
+  if (clearTare) {
+    tareWeight = 0;
+  } else if (captureCurrent) {
+    tareWeight = hardwareWeight;
+  } else {
+    tareWeight = sanitizeWeight(req.body?.tareWeight);
+  }
+
+  run(
+    `UPDATE lockers
+     SET tareWeight = ?, updatedAt = ?
+     WHERE id = ?`,
+    tareWeight,
+    toIso(),
+    lockerId,
+  );
+
+  res.json({ success: true, tareWeight, overview: getAdminOverview() });
 });
 
 app.post('/api/print-receipt', (req, res) => {

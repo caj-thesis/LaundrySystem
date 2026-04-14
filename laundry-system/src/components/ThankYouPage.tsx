@@ -37,7 +37,7 @@ export function ThankYouPage({ processType, generatedPin, transactionId, price, 
             <p className="thankyou-message">
               {processType === 'dropoff' ? 'Your laundry has been received' : 'Payment successful!'}
             </p>
-            {weight > 0 && (
+            {weight !== 0 && (
               <p className="thankyou-submessage">Recorded weight: {formatWeight(weight)}</p>
             )}
             {processType === 'dropoff' && generatedPin && (

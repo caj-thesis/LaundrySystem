@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Scale, PhilippinePeso, Loader2, ArrowLeft, Lock, DoorOpen, Info, Delete, AlertTriangle } from 'lucide-react';
-import { normalizeWeight } from '../utils/weight';
+import { getChargeableWeight, normalizeWeight } from '../utils/weight';
 
 interface WeighingPageProps {
   lockerId: number;
@@ -19,6 +19,8 @@ interface WarningDialogState {
   message: string;
   tone: WarningTone;
 }
+
+const MAX_WEIGHT = 20.0;
 
 interface WeighingWarningDialogProps {
   warning: WarningDialogState | null;
@@ -118,31 +120,42 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
   const [step, setStep] = useState<'opening' | 'unlocked' | 'weighing' | 'summary'>('opening');
   const [isReturning, setIsReturning] = useState(false);
   const [warningDialog, setWarningDialog] = useState<WarningDialogState | null>(null);
-  const safeCurrentWeight = normalizeWeight(currentWeight);
+  const signedCurrentWeight = normalizeWeight(currentWeight);
 
   // State to freeze the weight when the user locks the locker
   const [frozenWeight, setFrozenWeight] = useState<number | null>(null);
 
   // Determine which weight to use: the frozen one (if locked) or the live one
-  const displayWeight = frozenWeight !== null ? frozenWeight : safeCurrentWeight;
-  const roundedWeight = normalizeWeight(displayWeight);
+  const actualWeight = frozenWeight !== null ? frozenWeight : signedCurrentWeight;
+  const roundedWeight = normalizeWeight(actualWeight);
   const formattedWeight = roundedWeight.toFixed(2);
-
-  // UPDATED: Calculate price based on the passed prop, not a hardcoded value
-  const calculatedPrice = roundedWeight * pricePerKg;
-
-  // If weight > 0, apply the maximum of either the minimum limit or the calculated rate. 
-  // If weight is 0, price is 0.
-  const totalPrice = roundedWeight > 0 ? Math.max(minimumPrice, calculatedPrice) : 0;
-
-  // --- NEW: Weight Limit Logic ---
-  const MAX_WEIGHT = 20.0;
-  const isOverweight = roundedWeight > MAX_WEIGHT;
-  const isLockButtonDisabled = roundedWeight <= 0;
+  const chargeableWeight = getChargeableWeight(actualWeight);
+  const calculatedPrice = chargeableWeight * pricePerKg;
+  const totalPrice = chargeableWeight > 0 ? Math.max(minimumPrice, calculatedPrice) : 0;
+  const isNegativeReading = roundedWeight < 0;
+  const isOverweight = chargeableWeight > MAX_WEIGHT;
+  const isLockButtonDisabled = chargeableWeight <= 0;
 
   const showWarning = (title: string, message: string, tone: WarningTone = 'warning') => {
     setWarningDialog({ title, message, tone });
   };
+
+  // --- STATE & HANDLERS FOR SMS ---
+  // UPDATED: Default to '09'
+  const [customerPhone, setCustomerPhone] = useState('09');
+
+  // UPDATED: Valid if it's just '09' (skipped) OR exactly 11 digits
+  const isSkipped = customerPhone === '09' || customerPhone.length === 0;
+  const isComplete = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
+  const isValidInput = isSkipped || isComplete;
+
+  useEffect(() => {
+    setStep('opening');
+    setIsReturning(false);
+    setWarningDialog(null);
+    setFrozenWeight(null);
+    setCustomerPhone('09');
+  }, [lockerId]);
 
   // 1. Auto-Unlock on Mount
   useEffect(() => {
@@ -178,7 +191,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
       return;
     }
 
-    setFrozenWeight(safeCurrentWeight);
+    setFrozenWeight(roundedWeight);
     setStep('weighing'); 
     
     try {
@@ -205,15 +218,6 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
 
     return () => clearTimeout(timer);
   }, [step]);
-
-  // --- STATE & HANDLERS FOR SMS ---
-  // UPDATED: Default to '09'
-  const [customerPhone, setCustomerPhone] = useState('09');
-
-  // UPDATED: Valid if it's just '09' (skipped) OR exactly 11 digits
-  const isSkipped = customerPhone === '09' || customerPhone.length === 0;
-  const isComplete = customerPhone.length === 11 && /^\d+$/.test(customerPhone);
-  const isValidInput = isSkipped || isComplete;
 
   const handleKeypadPress = (digit: string) => {
     if (customerPhone.length < 11) {
@@ -322,7 +326,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
              
              {/* Weight Card - UPDATED WITH WARNING */}
              <div style={{ 
-                 backgroundColor: isOverweight ? '#ef4444' : '#2563eb', // Red if overweight, Blue otherwise
+                 backgroundColor: isOverweight ? '#ef4444' : (isNegativeReading ? '#b45309' : '#2563eb'),
                  color: 'white',
                  borderRadius: '24px',
                  padding: '24px',
@@ -349,6 +353,12 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                     <span className="text-sm font-bold">Max 20kg Exceeded!</span>
                   </div>
                 )}
+                {!isOverweight && isNegativeReading && (
+                  <div className="flex items-center gap-2 mt-2 bg-white/20 px-3 py-1 rounded-full">
+                    <AlertTriangle size={18} className="text-white" />
+                    <span className="text-sm font-bold">Negative reading shown as-is</span>
+                  </div>
+                )}
              </div>
 
              {/* Price Card */}
@@ -373,7 +383,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                 </div>
                 
                 {/* --- NEW: Minimum Price UI Indicator --- */}
-                {roundedWeight > 0 && calculatedPrice < minimumPrice && (
+                {chargeableWeight > 0 && calculatedPrice < minimumPrice && (
                    <div style={{ marginTop: '8px', fontSize: '14px', opacity: 0.9, fontWeight: '500', backgroundColor: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '12px' }}>
                       (Minimum ₱{minimumPrice} applied)
                    </div>
@@ -384,7 +394,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
 
           <div className="flex items-center gap-2 text-gray-400 text-xs">
              <Info size={14} />
-             <span>Close door when finished. Maximum load is 20kg.</span>
+             <span>{isNegativeReading ? 'Negative readings are visible, but billing stays at 0.00 until the scale goes positive.' : 'Close door when finished. Maximum load is 20kg.'}</span>
           </div>
         </div>
 
@@ -396,7 +406,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
             className={`btn-full ${
               isOverweight 
                 ? 'bg-red-500 hover:bg-red-600 text-white'
-                : roundedWeight > 0 
+                : chargeableWeight > 0 
                   ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -407,13 +417,13 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                   <AlertTriangle size={24} />
                   <span>Limit Exceeded - Reduce Load</span>
                </div>
-            ) : roundedWeight > 0 ? (
+            ) : chargeableWeight > 0 ? (
                <div className="flex items-center justify-center gap-3">
                   <Lock size={24} />
                   <span>Lock Locker & Pay</span>
                </div>
             ) : (
-               <span>Waiting for items...</span>
+               <span>{isNegativeReading ? 'Scale below zero - recheck load' : 'Waiting for items...'}</span>
             )}
           </button>
         </div>
@@ -521,7 +531,7 @@ export function WeighingPage({ lockerId, currentWeight, pricePerKg, minimumPrice
                      {/* --- UPDATED: Rate with Minimum Price Indicator --- */}
                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span>Rate: ₱{pricePerKg.toFixed(2)} / kg</span>
-                        {roundedWeight > 0 && calculatedPrice < minimumPrice && (
+                        {chargeableWeight > 0 && calculatedPrice < minimumPrice && (
                            <span style={{ color: '#d97706', fontWeight: 'bold', backgroundColor: '#fef3c7', padding: '2px 6px', borderRadius: '4px', fontSize: '10px' }}>
                              MIN ₱{minimumPrice}
                            </span>

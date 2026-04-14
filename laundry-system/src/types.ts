@@ -3,6 +3,9 @@ export interface Locker {
   capacity: string;
   status: 'available' | 'occupied';
   weight?: number;
+  liveWeight?: number;
+  grossWeight?: number;
+  tareWeight?: number;
   price?: number;
   readyTime?: string;
   pin?: string;

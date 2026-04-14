@@ -672,17 +672,22 @@ def process_data_line(line):
     now = time.time()
     last_heartbeat = now
     last_controller_activity = now
-    latest_raw_data = line
 
     parts = line.split("|")
+    parsed_locker_state = False
+
     for part in parts:
         if part.startswith("L") and ":" in part:
             try:
                 locker_data = part.split(":")
+                if len(locker_data) < 3:
+                    continue
+
                 locker_id = locker_data[0].replace("L", "")
                 door_status = locker_data[2]
                 conn_flag = locker_data[3].strip() if len(locker_data) > 3 else None
                 is_hw_connected = (conn_flag == "1") if conn_flag is not None else True
+                parsed_locker_state = True
 
                 if local_connection_states.get(locker_id) != is_hw_connected:
                     local_connection_states[locker_id] = is_hw_connected
@@ -698,6 +703,9 @@ def process_data_line(line):
                 last_known_credit = float(part.split(":", 1)[1])
             except ValueError:
                 pass
+
+    if parsed_locker_state:
+        latest_raw_data = line
 
     write_state_file()
 

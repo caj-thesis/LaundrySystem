@@ -2,8 +2,11 @@ export function normalizeWeight(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
 
-  const safeValue = Math.max(0, parsed);
-  return Math.round((safeValue + Number.EPSILON) * 100) / 100;
+  return parsed;
+}
+
+export function getChargeableWeight(value: unknown): number {
+  return Math.max(0, normalizeWeight(value));
 }
 
 export function formatWeight(value: unknown): string {
